@@ -1,0 +1,58 @@
+name: two_player_default
+source_video: C:\Users\67554\Documents\xwechat_files\wxid_tz4f0gzdrdy022_a355\msg\video\2026-05\d897caba8680caab20558bad9d946e1b.mp4
+source_resolution:
+  width: 960
+  height: 432
+description: 二人对战默认区域模板。坐标均为相对游戏画面的归一化比例，可直接合并到 config/settings.yaml 的 layout 节点。
+layout:
+  self_hand:
+    x: 0.027
+    y: 0.805
+    w: 0.9
+    h: 0.195
+    pad_x: 0.0
+    meld_unit_w: 0.12
+  discard:
+    self:
+      x: 0.29
+      y: 0.56
+      w: 0.42
+      h: 0.19
+      rows: 3
+      cols: 10
+    across:
+      x: 0.34
+      y: 0.31
+      w: 0.34
+      h: 0.17
+      rows: 3
+      cols: 10
+    left:
+      x: 0.01
+      y: 0.42
+      w: 0.1
+      h: 0.12
+      rows: 1
+      cols: 1
+    right:
+      x: 0.89
+      y: 0.42
+      w: 0.1
+      h: 0.12
+      rows: 1
+      cols: 1
+  remaining_tiles:
+    x: 0.5
+    y: 0.31
+    w: 0.12
+    h: 0.11
+  decision_buttons:
+    x: 0.58
+    y: 0.64
+    w: 0.38
+    h: 0.22
+  game_overlay:
+    x: 0.24
+    y: 0.15
+    w: 0.62
+    h: 0.72

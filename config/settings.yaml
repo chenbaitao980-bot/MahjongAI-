@@ -1,0 +1,84 @@
+app:
+  capture_interval_ms: 500
+  match_threshold: 0.8
+  output_dir: data
+  template_dir: templates
+  version: 1.0.0
+battle:
+  ai_recognition_enabled: false
+deepseek:
+  api_key: sk-1287db910c9146e8aba8240f6e01c053
+  model: deepseek-chat
+event_reference:
+  image: C:\MahjongAI\data\event_reference\current.png
+game_window:
+  height: 870
+  left: 2
+  top: 42
+  width: 1551
+layout:
+  decision_buttons:
+    h: 0.217593
+    w: 0.288542
+    x: 0.63125
+    y: 0.550926
+  discard:
+    across:
+      cols: 10
+      h: 0.173611
+      rows: 3
+      w: 0.4875
+      x: 0.270833
+      y: 0.208333
+    left:
+      cols: 1
+      h: 0.12
+      rows: 1
+      w: 0.1
+      x: 0.01
+      y: 0.42
+    right:
+      cols: 1
+      h: 0.12
+      rows: 1
+      w: 0.1
+      x: 0.89
+      y: 0.42
+    self:
+      cols: 7
+      h: 0.231982
+      rows: 3
+      w: 0.478646
+      x: 0.232292
+      y: 0.513514
+  game_overlay:
+    h: 0.611111
+    w: 0.603125
+    x: 0.197917
+    y: 0.143519
+  meld:
+    meld_gap: 0.004
+    meld_tile_w: 0.035
+    self_right_edge: 0.92
+  remaining_tiles:
+    h: 0.11
+    w: 0.12
+    x: 0.5
+    y: 0.31
+  self_hand:
+    h: 0.222222
+    meld_unit_w: 0.12
+    pad_x: 0.0
+    w: 0.997904
+    x: 0.001398
+    y: 0.777778
+layout_reference:
+  image: D:\claude\project\MahjongAI\MahjongAI\data\layout_reference\current.png
+vision:
+  glm:
+    api_key: ''
+    model: glm-4.6v-flash
+  provider: qwen
+  qwen:
+    api_key: ''
+    model: qwen-vl-plus-latest

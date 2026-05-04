@@ -168,6 +168,7 @@ class BattleService:
         self._session: "GameSession | None" = None
         self._last_hand_strip: np.ndarray | None = None
         self._last_match_rois: list[np.ndarray] = []
+        self._last_capture_debug: dict[str, Any] = {}
 
     def analyze_opening(self, state: BattleState) -> tuple[BattleState, BattleAdvice]:
         return self._analyze(state, "start")
@@ -198,6 +199,14 @@ class BattleService:
             rois=match_rois,
             matches=local_tiles,
         )
+        self._persist_capture_debug(
+            provider="local",
+            model="hog",
+            hand_strip=_hand_strip,
+            raw_hand_rois=rois,
+            prepared_hand_rois=match_rois,
+            hand_matches=local_tiles,
+        )
         return tiles, "local"
 
     def capture_self_hand_with_vision(self, state: BattleState) -> tuple[list[TileMatch], str]:
@@ -213,6 +222,14 @@ class BattleService:
         match_rois = [self._prepare_roi_for_local_match(roi) for roi in rois]
         local_tiles = [self._tile_recognizer.match_tile(roi) for roi in match_rois]
         local_ids = [match.tile_id or "" for match in local_tiles]
+        self._persist_capture_debug(
+            provider=provider,
+            model="hog",
+            hand_strip=hand_strip,
+            raw_hand_rois=rois,
+            prepared_hand_rois=match_rois,
+            hand_matches=local_tiles,
+        )
         model = self._get_vision_model(provider)
         endpoint = self._get_vision_endpoint(provider)
         if provider == "volc" and not model:
@@ -252,7 +269,15 @@ class BattleService:
         full_hand_rect = self._layout.hand_region(0)
         full_hand_strip = self._capture.grab_from_frame(frame, full_hand_rect)
         full_tile_layout = self._extract_tile_layout(full_hand_strip)
-        detected_melds = self._detect_self_melds(frame, strip=full_hand_strip, tile_layout=full_tile_layout)
+        detected_melds, meld_debug = self._detect_self_melds(frame, strip=full_hand_strip, tile_layout=full_tile_layout)
+        debug: dict[str, Any] = {
+            "capture_path": "layout-fallback",
+            "full_strip_shape": self._image_shape_list(full_hand_strip),
+            "split_runs_count": len(full_tile_layout[0]) if full_tile_layout else 0,
+            "split_runs": [list(run) for run in full_tile_layout[0]] if full_tile_layout else [],
+            "tile_row_bounds": [full_tile_layout[1], full_tile_layout[2]] if full_tile_layout else [],
+            "meld_debug": meld_debug,
+        }
         # Always refresh self_melds from the current frame so stale auto-detected
         # melds do not stick around until the user manually clicks undo.
         state.self_melds = detected_melds
@@ -263,7 +288,16 @@ class BattleService:
                 len(detected_melds) * 3,
             )
             if dynamic_capture is not None:
-                return dynamic_capture
+                hand_strip, rois = dynamic_capture
+                debug["capture_path"] = "dynamic-full-strip"
+                debug["hand_strip_shape"] = self._image_shape_list(hand_strip)
+                debug["hand_roi_count"] = len(rois)
+                debug["expected_hand_counts"] = sorted(self._expected_visible_hand_counts(len(detected_melds) * 3))
+                self._last_capture_debug = debug
+                return hand_strip, rois
+            state.self_melds = []
+            debug["capture_path"] = "meld-rejected-fallback"
+            debug["fallback_reason"] = "dynamic_full_strip_invalid"
         meld_groups = len(state.self_melds)
         meld_tiles = meld_groups * 3
         hand_rect = self._layout.hand_region(meld_groups)
@@ -271,12 +305,31 @@ class BattleService:
 
         rois = self._segment_visible_tiles_uniform(hand_strip, meld_tiles)
         if rois:
+            debug["capture_path"] = "uniform-segmentation"
+            debug["hand_strip_shape"] = self._image_shape_list(hand_strip)
+            debug["hand_roi_count"] = len(rois)
+            debug["expected_hand_counts"] = sorted(self._expected_visible_hand_counts(meld_tiles))
+            self._last_capture_debug = debug
             return hand_strip, rois
 
-        expected = max(1, 14 - meld_tiles)
-        rois, _slots = self._hand_region.segment_tiles_with_slots(hand_strip, expected_count=expected)
+        rois, slots, selected_expected = self._segment_hand_strip_with_expected_counts(
+            hand_strip,
+            sorted(self._expected_visible_hand_counts(meld_tiles), reverse=True),
+        )
+        if not rois:
+            debug["capture_path"] = "segmentation-failed"
+            debug["hand_strip_shape"] = self._image_shape_list(hand_strip)
+            debug["expected_hand_counts"] = sorted(self._expected_visible_hand_counts(meld_tiles))
+            self._last_capture_debug = debug
         if not rois:
             raise RuntimeError("未能从当前画面切出我方手牌区域。")
+        debug["capture_path"] = "layout-fallback"
+        debug["hand_strip_shape"] = self._image_shape_list(hand_strip)
+        debug["hand_roi_count"] = len(rois)
+        debug["selected_expected_count"] = selected_expected
+        debug["slot_count"] = len(slots)
+        debug["expected_hand_counts"] = sorted(self._expected_visible_hand_counts(meld_tiles))
+        self._last_capture_debug = debug
         return hand_strip, rois
 
     def _segment_visible_tiles_uniform(self, strip, meld_tiles: int) -> list[np.ndarray]:
@@ -345,8 +398,14 @@ class BattleService:
                 continue
             rois.append(roi)
 
-        if len(rois) in (10, 11):
+        if len(rois) in self._expected_visible_hand_counts(meld_tiles):
             return hand_strip, rois
+        fallback_rois, _slots, _selected = self._segment_hand_strip_with_expected_counts(
+            hand_strip,
+            sorted(self._expected_visible_hand_counts(meld_tiles), reverse=True),
+        )
+        if fallback_rois:
+            return hand_strip, fallback_rois
         return None
 
     def _extract_tile_layout(self, strip) -> tuple[list[tuple[int, int]], int, int] | None:
@@ -419,10 +478,10 @@ class BattleService:
         frame: np.ndarray,
         strip=None,
         tile_layout: tuple[list[tuple[int, int]], int, int] | None = None,
-    ) -> list[MeldGroup]:
+    ) -> tuple[list[MeldGroup], dict[str, Any]]:
         sh = self._layout._layout.get("self_hand", {})
         if str(sh.get("meld_side", "right")).lower() != "left":
-            return []
+            return [], {"reason": "meld_side_not_left"}
 
         if strip is None:
             full_region = self._layout.hand_region(0)
@@ -430,14 +489,29 @@ class BattleService:
         if tile_layout is None:
             tile_layout = self._extract_tile_layout(strip)
         if tile_layout is None:
-            return []
+            return [], {"reason": "no_tile_layout"}
 
         split_runs, y1, y2 = tile_layout
-        meld_tile_count = self._detect_left_meld_tile_count(split_runs)
-        if meld_tile_count <= 0:
-            return []
+        candidate = self._detect_left_meld_candidate(split_runs)
+        debug: dict[str, Any] = {
+            "split_runs_count": len(split_runs),
+            "split_runs": [list(run) for run in split_runs],
+            "row_bounds": [y1, y2],
+            "candidate": candidate,
+        }
+        if not candidate:
+            debug["reason"] = "no_candidate"
+            return [], debug
+        meld_tile_count = int(candidate["meld_tile_count"])
+        if not self._is_reliable_meld_candidate(split_runs, candidate):
+            debug["reason"] = "candidate_failed_structure"
+            return [], debug
+
         melds: list[MeldGroup] = []
         current_tiles: list[TileMatch] = []
+        meld_matches: list[dict[str, Any]] = []
+        raw_meld_rois: list[np.ndarray] = []
+        prepared_meld_rois: list[np.ndarray] = []
         for left, right in split_runs[:meld_tile_count]:
             pad_x = max(1, min(4, int((right - left) * 0.04)))
             x1 = max(0, left + pad_x)
@@ -447,12 +521,23 @@ class BattleService:
             roi = strip[y1:y2, x1:x2]
             if roi.size == 0:
                 continue
-            match = self._tile_recognizer.match_tile(roi)
+            prepared_roi = self._prepare_roi_for_local_match(roi)
+            match = self._tile_recognizer.match_tile(prepared_roi)
+            raw_meld_rois.append(roi)
+            prepared_meld_rois.append(prepared_roi)
             current_tiles.append(
                 TileMatch(
                     tile_id=self._normalize_tile_id(match.tile_id) or None,
                     confidence=float(match.confidence or 0.0),
                 )
+            )
+            meld_matches.append(
+                {
+                    "tile_id": self._normalize_tile_id(match.tile_id) or "",
+                    "confidence": round(float(match.confidence or 0.0), 4),
+                    "raw_shape": self._image_shape_list(roi),
+                    "prepared_shape": self._image_shape_list(prepared_roi),
+                }
             )
             if len(current_tiles) == 3:
                 melds.append(
@@ -462,27 +547,95 @@ class BattleService:
                     )
                 )
                 current_tiles.clear()
-        return melds
 
-    def _detect_left_meld_tile_count(self, split_runs: list[tuple[int, int]]) -> int:
+        avg_conf = float(np.mean([tile.confidence for meld in melds for tile in meld.tiles])) if melds else 0.0
+        debug["avg_confidence"] = round(avg_conf, 4)
+        debug["meld_matches"] = meld_matches
+        debug["raw_meld_rois"] = raw_meld_rois
+        debug["prepared_meld_rois"] = prepared_meld_rois
+        expected_groups = int(candidate["meld_groups"])
+        if len(melds) != expected_groups:
+            debug["reason"] = "group_count_mismatch"
+            return [], debug
+        if any(not tile.tile_id for meld in melds for tile in meld.tiles):
+            debug["reason"] = "empty_tile_id"
+            return [], debug
+        if avg_conf < 0.78:
+            debug["reason"] = "low_confidence"
+            return [], debug
+        debug["reason"] = "accepted"
+        return melds, debug
+
+    def _detect_left_meld_candidate(self, split_runs: list[tuple[int, int]]) -> dict[str, Any] | None:
         if len(split_runs) < 6:
-            return 0
+            return None
         widths = [right - left for left, right in split_runs]
         if not widths:
-            return 0
+            return None
         base_width = float(np.median(widths))
-        gap_threshold = max(8.0, base_width * 0.2)
+        if base_width <= 0:
+            return None
+        gap_threshold = max(10.0, base_width * 0.25)
+        best_candidate: dict[str, Any] | None = None
+        best_score = float("-inf")
         for meld_groups in range(1, min(4, len(split_runs) // 3) + 1):
             meld_tile_count = meld_groups * 3
             if len(split_runs) <= meld_tile_count:
                 break
             remaining_tiles = len(split_runs) - meld_tile_count
-            if remaining_tiles not in (10, 11):
+            expected_hand_counts = self._expected_visible_hand_counts(meld_tile_count)
+            if remaining_tiles not in expected_hand_counts:
                 continue
             gap = split_runs[meld_tile_count][0] - split_runs[meld_tile_count - 1][1]
-            if gap >= gap_threshold:
-                return meld_tile_count
-        return 0
+            if gap < gap_threshold:
+                continue
+            left_widths = widths[:meld_tile_count]
+            width_ratio = (max(left_widths) / max(1.0, min(left_widths))) if left_widths else 999.0
+            inside_gaps = [
+                split_runs[idx + 1][0] - split_runs[idx][1]
+                for idx in range(max(0, meld_tile_count - 1))
+            ]
+            max_internal_gap = max(inside_gaps) if inside_gaps else 0.0
+            score = (meld_groups * 1000.0) + gap - (width_ratio * 10.0) - max_internal_gap
+            candidate = {
+                "meld_groups": meld_groups,
+                "meld_tile_count": meld_tile_count,
+                "remaining_tiles": remaining_tiles,
+                "expected_hand_counts": sorted(expected_hand_counts),
+                "gap": round(float(gap), 2),
+                "gap_threshold": round(float(gap_threshold), 2),
+                "base_width": round(float(base_width), 2),
+                "left_widths": [int(value) for value in left_widths],
+                "width_ratio": round(float(width_ratio), 4),
+                "inside_gaps": [int(value) for value in inside_gaps],
+                "max_internal_gap": round(float(max_internal_gap), 2),
+            }
+            if score > best_score:
+                best_score = score
+                best_candidate = candidate
+        return best_candidate
+
+    def _is_reliable_meld_candidate(self, split_runs: list[tuple[int, int]], candidate: dict[str, Any]) -> bool:
+        meld_tile_count = int(candidate.get("meld_tile_count") or 0)
+        if meld_tile_count <= 0 or len(split_runs) <= meld_tile_count:
+            return False
+        width_ratio = float(candidate.get("width_ratio") or 0.0)
+        if width_ratio > 1.7:
+            return False
+        gap = float(candidate.get("gap") or 0.0)
+        max_internal_gap = float(candidate.get("max_internal_gap") or 0.0)
+        if gap <= max_internal_gap * 1.1:
+            return False
+        left_widths = [float(value) for value in candidate.get("left_widths", [])]
+        if not left_widths:
+            return False
+        base_width = float(candidate.get("base_width") or 0.0)
+        if base_width <= 0:
+            return False
+        if any(abs(width - base_width) > base_width * 0.65 for width in left_widths):
+            return False
+        remaining_tiles = len(split_runs) - meld_tile_count
+        return remaining_tiles in self._expected_visible_hand_counts(meld_tile_count)
 
     def _infer_meld_type(self, tile_ids: list[str]) -> str:
         ids = [tile_id for tile_id in tile_ids if tile_id]
@@ -935,6 +1088,28 @@ class BattleService:
             return clean_img
         return self._prepare_roi_for_vision(roi)
 
+    def _expected_visible_hand_counts(self, meld_tiles: int) -> set[int]:
+        return {
+            max(1, 13 - meld_tiles),
+            max(1, 14 - meld_tiles),
+        }
+
+    def _segment_hand_strip_with_expected_counts(self, hand_strip, expected_counts: list[int]) -> tuple[list[np.ndarray], list[tuple[int, int, int, int]], int | None]:
+        seen: set[int] = set()
+        for expected in expected_counts:
+            if expected in seen or expected <= 0:
+                continue
+            seen.add(expected)
+            rois, slots = self._hand_region.segment_tiles_with_slots(hand_strip, expected_count=expected)
+            if rois:
+                return rois, slots, expected
+        return [], [], None
+
+    def _image_shape_list(self, image) -> list[int]:
+        if image is None or getattr(image, "size", 0) == 0:
+            return []
+        return [int(dim) for dim in image.shape]
+
     def _refresh_local_recognizer_from_disk(self) -> None:
         model_path = os.path.join(data_path(), "models", "tile_svm.xml")
         if os.path.exists(model_path):
@@ -998,6 +1173,67 @@ class BattleService:
             self._prune_picture_directory(picture_dir, limit=300)
         return record
 
+    def _persist_capture_debug(
+        self,
+        provider: str,
+        model: str,
+        hand_strip,
+        raw_hand_rois: list[np.ndarray],
+        prepared_hand_rois: list[np.ndarray],
+        hand_matches: list[Any],
+    ) -> None:
+        debug_root = self._battle_data_dir("picture_debug")
+        os.makedirs(debug_root, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        debug_dir = os.path.join(debug_root, f"{timestamp}_capture_debug")
+        os.makedirs(debug_dir, exist_ok=True)
+
+        debug = dict(self._last_capture_debug or {})
+        debug.update(
+            {
+                "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "provider": provider,
+                "model": model,
+                "hand_match_count": len(hand_matches),
+                "hand_matches": [
+                    {
+                        "tile_id": self._normalize_tile_id(getattr(match, "tile_id", "") or "") or "",
+                        "confidence": round(float(getattr(match, "confidence", 0.0) or 0.0), 4),
+                    }
+                    for match in hand_matches
+                ],
+            }
+        )
+
+        hand_strip_path = os.path.join(debug_dir, "hand_strip.png")
+        if hand_strip is not None and getattr(hand_strip, "size", 0) != 0:
+            cv2.imwrite(hand_strip_path, hand_strip)
+            debug["hand_strip_path"] = hand_strip_path
+
+        def _write_roi_series(prefix: str, rois: list[np.ndarray]) -> list[str]:
+            paths: list[str] = []
+            for index, roi in enumerate(rois, start=1):
+                if roi is None or getattr(roi, "size", 0) == 0:
+                    continue
+                path = os.path.join(debug_dir, f"{prefix}_{index:02d}.png")
+                cv2.imwrite(path, roi)
+                paths.append(path)
+            return paths
+
+        debug["raw_hand_roi_paths"] = _write_roi_series("hand_raw", raw_hand_rois)
+        debug["prepared_hand_roi_paths"] = _write_roi_series("hand_prepared", prepared_hand_rois)
+
+        meld_debug = debug.get("meld_debug") or {}
+        raw_meld_rois = meld_debug.pop("raw_meld_rois", []) if isinstance(meld_debug, dict) else []
+        prepared_meld_rois = meld_debug.pop("prepared_meld_rois", []) if isinstance(meld_debug, dict) else []
+        if isinstance(meld_debug, dict):
+            meld_debug["raw_meld_roi_paths"] = _write_roi_series("meld_raw", raw_meld_rois)
+            meld_debug["prepared_meld_roi_paths"] = _write_roi_series("meld_prepared", prepared_meld_rois)
+            debug["meld_debug"] = meld_debug
+
+        self._write_json_file(debug_dir, debug, "capture_debug.json")
+        self._prune_subdirectories(debug_root, limit=80)
+
     def _write_capped_json(self, subdir: str, payload: dict[str, Any], filename: str | None = None) -> None:
         target_dir = self._battle_data_dir(subdir)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
@@ -1043,6 +1279,28 @@ class BattleService:
                         os.remove(stale_path)
                 except OSError:
                     pass
+
+    def _prune_subdirectories(self, directory: str, limit: int) -> None:
+        subdirs: list[str] = []
+        for name in os.listdir(directory):
+            path = os.path.join(directory, name)
+            if os.path.isdir(path):
+                subdirs.append(path)
+        subdirs.sort(key=self._safe_mtime, reverse=True)
+        for stale_dir in subdirs[limit:]:
+            try:
+                for root, _dirs, files in os.walk(stale_dir, topdown=False):
+                    for file_name in files:
+                        try:
+                            os.remove(os.path.join(root, file_name))
+                        except OSError:
+                            pass
+                    try:
+                        os.rmdir(root)
+                    except OSError:
+                        pass
+            except OSError:
+                pass
 
     def _safe_mtime(self, path: str) -> float:
         try:

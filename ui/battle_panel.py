@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import html
 from copy import deepcopy
 
-from PyQt6.QtCore import pyqtSignal, QUrl
+from PyQt6.QtCore import pyqtSignal, QUrl, Qt
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
     QCheckBox,
@@ -18,11 +19,19 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QPlainTextEdit,
+    QScrollArea,
+    QTextEdit,
     QSpinBox,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
 
+from battle.service import (
+    QWEN_VISION_SYSTEM_PROMPT,
+    QWEN_VISION_USER_PROMPT_TEMPLATE,
+    VOLC_VISION_PROMPT_TEMPLATE,
+)
 from battle.state import BattleAdvice, BattleState, meld_from_ids, tile_from_id
 from game.state import ALL_TILE_IDS, MeldGroup
 
@@ -67,9 +76,31 @@ MELD_TYPE_OPTIONS = [
 
 CONSOLE_LINKS = {
     "deepseek": ("DeepSeek 控制台", "https://platform.deepseek.com/api_keys"),
+    "volc": ("火山方舟控制台", "https://console.volcengine.com/ark"),
     "qwen": ("阿里百炼控制台", "https://bailian.console.aliyun.com/"),
     "glm": ("智谱控制台", "https://open.bigmodel.cn/usercenter/apikeys"),
 }
+
+PROVIDER_LABELS = {
+    "auto": "智能选择（火山优先）",
+    "volc": "火山方舟 Doubao",
+    "qwen": "阿里百炼 Qwen",
+    "glm": "智谱 GLM",
+}
+
+# 阿里百炼视觉模型列表（可在此处追加新模型）
+QWEN_VISION_MODELS = [
+    "qwen3-vl-plus",
+    "qwen-vl-plus-latest",
+    "qwen-vl-plus",
+    "qwen-vl-max-latest",
+    "qwen-vl-max",
+    "qwen2.5-vl-72b-instruct",
+    "qwen2.5-vl-7b-instruct",
+    "qwen2.5-vl-3b-instruct",
+    "qwen2-vl-72b-instruct",
+    "qwen2-vl-7b-instruct",
+]
 
 
 def tile_display(tile_id: str) -> str:
@@ -190,17 +221,24 @@ class ApiConfigDialog(QDialog):
     def __init__(self, config: dict, parent=None):
         super().__init__(parent)
         self.setWindowTitle("API 设置")
-        self.resize(620, 420)
+        self.resize(660, 560)
         self._config = deepcopy(config)
-
-        root = QVBoxLayout(self)
-        form = QFormLayout()
 
         deepseek_cfg = self._config.setdefault("deepseek", {})
         vision_cfg = self._config.setdefault("vision", {})
+        volc_cfg = vision_cfg.setdefault("volc", {})
         qwen_cfg = vision_cfg.setdefault("qwen", {})
         glm_cfg = vision_cfg.setdefault("glm", {})
         battle_cfg = self._config.setdefault("battle", {})
+
+        root = QVBoxLayout(self)
+        tabs = QTabWidget()
+        root.addWidget(tabs)
+
+        # ── Tab 1: API 设置 ──────────────────────────────────────────────
+        api_tab = QWidget()
+        api_layout = QVBoxLayout(api_tab)
+        form = QFormLayout()
 
         self._deepseek_key = QLineEdit(deepseek_cfg.get("api_key", ""))
         self._deepseek_key.setEchoMode(QLineEdit.EchoMode.Password)
@@ -210,17 +248,39 @@ class ApiConfigDialog(QDialog):
         form.addRow("DeepSeek 模型", self._deepseek_model)
 
         self._vision_provider = QComboBox()
+        self._vision_provider.addItem("智能选择（火山优先）", "auto")
+        self._vision_provider.addItem("火山方舟 Doubao", "volc")
         self._vision_provider.addItem("阿里百炼 Qwen", "qwen")
         self._vision_provider.addItem("智谱 GLM", "glm")
-        provider = vision_cfg.get("provider", "qwen")
+        provider = vision_cfg.get("provider", "auto")
         self._vision_provider.setCurrentIndex(max(0, self._vision_provider.findData(provider)))
         form.addRow("默认视觉提供方", self._vision_provider)
+
+        self._volc_key = QLineEdit(volc_cfg.get("api_key", ""))
+        self._volc_key.setEchoMode(QLineEdit.EchoMode.Password)
+        form.addRow("火山 API Key", self._volc_key)
+
+        self._volc_model = QLineEdit(volc_cfg.get("model", ""))
+        self._volc_model.setPlaceholderText("填写火山推理接入点 ID，例如 ep-2026xxxxxxxx")
+        form.addRow("火山接入点 ID", self._volc_model)
+
+        self._volc_endpoint = QLineEdit(
+            volc_cfg.get("endpoint", "https://ark.cn-beijing.volces.com/api/v3/chat/completions")
+        )
+        form.addRow("火山 API 地址", self._volc_endpoint)
 
         self._qwen_key = QLineEdit(qwen_cfg.get("api_key", ""))
         self._qwen_key.setEchoMode(QLineEdit.EchoMode.Password)
         form.addRow("Qwen API Key", self._qwen_key)
 
-        self._qwen_model = QLineEdit(qwen_cfg.get("model", "qwen-vl-plus-latest"))
+        self._qwen_model = QComboBox()
+        self._qwen_model.setEditable(True)
+        current_qwen_model = qwen_cfg.get("model", "qwen-vl-plus-latest")
+        models = list(QWEN_VISION_MODELS)
+        if current_qwen_model not in models:
+            models.insert(0, current_qwen_model)
+        self._qwen_model.addItems(models)
+        self._qwen_model.setCurrentText(current_qwen_model)
         form.addRow("Qwen 模型", self._qwen_model)
 
         self._glm_key = QLineEdit(glm_cfg.get("api_key", ""))
@@ -231,19 +291,50 @@ class ApiConfigDialog(QDialog):
         form.addRow("GLM 模型", self._glm_model)
 
         self._ai_recognition_enabled = QCheckBox("默认开启 AI 识别")
-        self._ai_recognition_enabled.setChecked(bool(battle_cfg.get("ai_recognition_enabled", True)))
+        self._ai_recognition_enabled.setChecked(bool(battle_cfg.get("ai_recognition_enabled", False)))
         form.addRow("识别开关", self._ai_recognition_enabled)
-        root.addLayout(form)
+        api_layout.addLayout(form)
 
         link_box = QGroupBox("控制台快捷入口")
         link_layout = QHBoxLayout(link_box)
-        for key in ("deepseek", "qwen", "glm"):
+        for key in ("deepseek", "volc", "qwen", "glm"):
             label, url = CONSOLE_LINKS[key]
             btn = QPushButton(label)
             btn.clicked.connect(lambda _=None, target=url: self._open_url(target))
             link_layout.addWidget(btn)
         link_layout.addStretch()
-        root.addWidget(link_box)
+        api_layout.addWidget(link_box)
+        api_layout.addStretch()
+        tabs.addTab(api_tab, "API 设置")
+
+        # ── Tab 2: 提示词 ────────────────────────────────────────────────
+        prompt_scroll = QScrollArea()
+        prompt_scroll.setWidgetResizable(True)
+        prompt_inner = QWidget()
+        prompt_layout = QVBoxLayout(prompt_inner)
+        prompt_layout.setSpacing(12)
+
+        self._qwen_sys_edit, _ = self._make_prompt_group(
+            prompt_layout,
+            "Qwen 系统提示词（system prompt）",
+            qwen_cfg.get("system_prompt", QWEN_VISION_SYSTEM_PROMPT),
+            QWEN_VISION_SYSTEM_PROMPT,
+        )
+        self._qwen_user_edit, _ = self._make_prompt_group(
+            prompt_layout,
+            "Qwen 用户提示词模板  |  占位符：{tile_index}  {local_guess}",
+            qwen_cfg.get("user_prompt", QWEN_VISION_USER_PROMPT_TEMPLATE),
+            QWEN_VISION_USER_PROMPT_TEMPLATE,
+        )
+        self._volc_prompt_edit, _ = self._make_prompt_group(
+            prompt_layout,
+            "火山 / GLM 提示词模板  |  占位符：{tile_index}  {local_guess}",
+            vision_cfg.get("volc_prompt", VOLC_VISION_PROMPT_TEMPLATE),
+            VOLC_VISION_PROMPT_TEMPLATE,
+        )
+        prompt_layout.addStretch()
+        prompt_scroll.setWidget(prompt_inner)
+        tabs.addTab(prompt_scroll, "提示词")
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
@@ -251,6 +342,25 @@ class ApiConfigDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         root.addWidget(buttons)
+
+    def _make_prompt_group(
+        self,
+        parent_layout: QVBoxLayout,
+        title: str,
+        current_value: str,
+        default_value: str,
+    ) -> tuple[QPlainTextEdit, QPushButton]:
+        box = QGroupBox(title)
+        box_layout = QVBoxLayout(box)
+        editor = QPlainTextEdit(current_value)
+        editor.setFixedHeight(110)
+        box_layout.addWidget(editor)
+        reset_btn = QPushButton("恢复默认")
+        reset_btn.setMaximumWidth(100)
+        reset_btn.clicked.connect(lambda: editor.setPlainText(default_value))
+        box_layout.addWidget(reset_btn)
+        parent_layout.addWidget(box)
+        return editor, reset_btn
 
     def _open_url(self, url: str) -> None:
         if not QDesktopServices.openUrl(QUrl(url)):
@@ -260,6 +370,7 @@ class ApiConfigDialog(QDialog):
         config = deepcopy(self._config)
         config.setdefault("deepseek", {})
         config.setdefault("vision", {})
+        config["vision"].setdefault("volc", {})
         config["vision"].setdefault("qwen", {})
         config["vision"].setdefault("glm", {})
         config.setdefault("battle", {})
@@ -267,12 +378,104 @@ class ApiConfigDialog(QDialog):
         config["deepseek"]["api_key"] = self._deepseek_key.text().strip()
         config["deepseek"]["model"] = self._deepseek_model.text().strip() or "deepseek-chat"
         config["vision"]["provider"] = str(self._vision_provider.currentData())
+        config["vision"]["volc"]["api_key"] = self._volc_key.text().strip()
+        config["vision"]["volc"]["model"] = self._volc_model.text().strip()
+        config["vision"]["volc"]["endpoint"] = (
+            self._volc_endpoint.text().strip() or "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
+        )
         config["vision"]["qwen"]["api_key"] = self._qwen_key.text().strip()
-        config["vision"]["qwen"]["model"] = self._qwen_model.text().strip() or "qwen-vl-plus-latest"
+        config["vision"]["qwen"]["model"] = self._qwen_model.currentText().strip() or "qwen-vl-plus-latest"
         config["vision"]["glm"]["api_key"] = self._glm_key.text().strip()
         config["vision"]["glm"]["model"] = self._glm_model.text().strip() or "glm-4.6v-flash"
         config["battle"]["ai_recognition_enabled"] = self._ai_recognition_enabled.isChecked()
+
+        # 提示词：空白时移除 key（使用代码默认值）
+        qwen_sys = self._qwen_sys_edit.toPlainText().strip()
+        if qwen_sys and qwen_sys != QWEN_VISION_SYSTEM_PROMPT:
+            config["vision"]["qwen"]["system_prompt"] = qwen_sys
+        else:
+            config["vision"]["qwen"].pop("system_prompt", None)
+
+        qwen_user = self._qwen_user_edit.toPlainText().strip()
+        if qwen_user and qwen_user != QWEN_VISION_USER_PROMPT_TEMPLATE:
+            config["vision"]["qwen"]["user_prompt"] = qwen_user
+        else:
+            config["vision"]["qwen"].pop("user_prompt", None)
+
+        volc_prompt = self._volc_prompt_edit.toPlainText().strip()
+        if volc_prompt and volc_prompt != VOLC_VISION_PROMPT_TEMPLATE:
+            config["vision"]["volc_prompt"] = volc_prompt
+        else:
+            config["vision"].pop("volc_prompt", None)
+
         return config
+
+
+SUIT_LABEL_MAP = {"m": "万", "p": "筒", "s": "条", "z": "字"}
+SUIT_TILES = {
+    "m": [f"{i}m" for i in range(1, 10)],
+    "p": [f"{i}p" for i in range(1, 10)],
+    "s": [f"{i}s" for i in range(1, 10)],
+    "z": [f"{i}z" for i in range(1, 8)],
+}
+
+
+class _TileCorrectDialog(QDialog):
+    """两级下拉纠错对话框：先选牌型，再选具体牌。"""
+
+    def __init__(self, current_tile_id: str, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("纠正牌型")
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
+        self.resize(240, 120)
+        self._result_tile_id: str | None = None
+
+        layout = QVBoxLayout(self)
+        row = QHBoxLayout()
+
+        self._suit_combo = QComboBox()
+        for suit, label in SUIT_LABEL_MAP.items():
+            self._suit_combo.addItem(label, suit)
+        # pre-select current suit
+        if current_tile_id and len(current_tile_id) >= 2:
+            suit = current_tile_id[-1]
+            idx = self._suit_combo.findData(suit)
+            if idx >= 0:
+                self._suit_combo.setCurrentIndex(idx)
+
+        self._tile_combo = QComboBox()
+        self._populate_tile_combo()
+        # pre-select current tile
+        if current_tile_id:
+            idx = self._tile_combo.findData(current_tile_id)
+            if idx >= 0:
+                self._tile_combo.setCurrentIndex(idx)
+
+        self._suit_combo.currentIndexChanged.connect(self._populate_tile_combo)
+        row.addWidget(self._suit_combo)
+        row.addWidget(self._tile_combo)
+        layout.addLayout(row)
+
+        btns = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        btns.accepted.connect(self._on_ok)
+        btns.rejected.connect(self.reject)
+        layout.addWidget(btns)
+
+    def _populate_tile_combo(self):
+        suit = self._suit_combo.currentData() or "m"
+        self._tile_combo.clear()
+        for tid in SUIT_TILES[suit]:
+            self._tile_combo.addItem(TILE_NAME_MAP.get(tid, tid), tid)
+
+    def _on_ok(self):
+        self._result_tile_id = self._tile_combo.currentData()
+        self.accept()
+
+    @property
+    def selected_tile_id(self) -> str | None:
+        return self._result_tile_id
 
 
 class BattlePanel(QWidget):
@@ -281,13 +484,14 @@ class BattlePanel(QWidget):
     state_changed = pyqtSignal(object)
     analysis_requested = pyqtSignal(str)
     config_requested = pyqtSignal()
+    tile_correction_requested = pyqtSignal(int, str)  # (tile_index, correct_tile_id)
 
     def __init__(self, config: dict, parent=None):
         super().__init__(parent)
         self._config = deepcopy(config)
         self._state = BattleState(
-            ai_recognition_enabled=bool(self._config.get("battle", {}).get("ai_recognition_enabled", True)),
-            vision_provider=self._config.get("vision", {}).get("provider", "qwen"),
+            ai_recognition_enabled=bool(self._config.get("battle", {}).get("ai_recognition_enabled", False)),
+            vision_provider=self._config.get("vision", {}).get("provider", "auto"),
         )
         self._setup_ui()
         self._render_state()
@@ -325,16 +529,22 @@ class BattlePanel(QWidget):
         left = QVBoxLayout()
         left.addWidget(self._build_player_group("敌方牌区", enemy=True))
         left.addWidget(self._build_player_group("我方牌区", enemy=False))
-        content.addLayout(left, 5)
+        content.addLayout(left, 1)
 
+        center_box = self._build_center_group()
+        center_box.setMaximumWidth(520)
         center = QVBoxLayout()
-        center.addWidget(self._build_center_group())
+        center.addWidget(center_box)
         center.addStretch()
-        content.addLayout(center, 4)
+        content.addLayout(center, 1)
 
         right = QVBoxLayout()
         right.addWidget(self._build_advice_group())
-        content.addLayout(right, 5)
+        self._train_success_label = QLabel("")
+        self._train_success_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom)
+        self._train_success_label.setStyleSheet("color:#888888; font-size:11px;")
+        right.addWidget(self._train_success_label)
+        content.addLayout(right, 1)
 
     def _build_player_group(self, title: str, enemy: bool) -> QGroupBox:
         box = QGroupBox(title)
@@ -389,12 +599,21 @@ class BattlePanel(QWidget):
         layout = QVBoxLayout(box)
 
         form = QFormLayout()
-        self._baida_combo = QComboBox()
-        self._baida_combo.addItem("未设置", "")
-        for tile_id in ALL_TILE_IDS:
-            self._baida_combo.addItem(tile_display(tile_id), tile_id)
-        self._baida_combo.currentIndexChanged.connect(self._on_baida_changed)
-        form.addRow("财神", self._baida_combo)
+        baida_widget = QWidget()
+        baida_layout = QHBoxLayout(baida_widget)
+        baida_layout.setContentsMargins(0, 0, 0, 0)
+        self._baida_suit_combo = QComboBox()
+        self._baida_suit_combo.addItem("未设置", "")
+        for code, label in SUIT_OPTIONS:
+            self._baida_suit_combo.addItem(label, code)
+        self._baida_suit_combo.currentIndexChanged.connect(self._on_baida_suit_changed)
+        baida_layout.addWidget(self._baida_suit_combo)
+
+        self._baida_value_combo = QComboBox()
+        self._baida_value_combo.currentIndexChanged.connect(self._on_baida_changed)
+        baida_layout.addWidget(self._baida_value_combo)
+        self._reload_baida_values()
+        form.addRow("财神", baida_widget)
 
         self._remaining_spin = QSpinBox()
         self._remaining_spin.setRange(0, 136)
@@ -402,8 +621,13 @@ class BattlePanel(QWidget):
         self._remaining_spin.valueChanged.connect(self._on_remaining_changed)
         form.addRow("剩余张数", self._remaining_spin)
 
-        self._provider_label = QLabel(self._provider_text())
-        form.addRow("视觉模型", self._provider_label)
+        self._provider_combo = QComboBox()
+        self._provider_combo.addItem(PROVIDER_LABELS["auto"], "auto")
+        self._provider_combo.addItem(PROVIDER_LABELS["volc"], "volc")
+        self._provider_combo.addItem(PROVIDER_LABELS["qwen"], "qwen")
+        self._provider_combo.addItem(PROVIDER_LABELS["glm"], "glm")
+        self._provider_combo.currentIndexChanged.connect(self._on_provider_changed)
+        form.addRow("视觉模型", self._provider_combo)
         layout.addLayout(form)
 
         hand_top = QHBoxLayout()
@@ -420,9 +644,11 @@ class BattlePanel(QWidget):
         hand_top.addWidget(hand_clear)
         layout.addLayout(hand_top)
 
-        self._hand_label = QLabel("（空）")
-        self._hand_label.setWordWrap(True)
-        layout.addWidget(self._hand_label)
+        self._hand_tiles_container = QWidget()
+        self._hand_tiles_layout = QGridLayout(self._hand_tiles_container)
+        self._hand_tiles_layout.setContentsMargins(0, 0, 0, 0)
+        self._hand_tiles_layout.setSpacing(4)
+        layout.addWidget(self._hand_tiles_container)
 
         self._recognition_label = QLabel("识别来源：manual")
         layout.addWidget(self._recognition_label)
@@ -432,15 +658,25 @@ class BattlePanel(QWidget):
         box = QGroupBox("AI 建议")
         layout = QVBoxLayout(box)
 
+        # DeepSeek 分析开关
+        self._deepseek_checkbox = QCheckBox("开启 DeepSeek 分析")
+        self._deepseek_checkbox.setChecked(self._state.deepseek_enabled)
+        self._deepseek_checkbox.toggled.connect(self._on_deepseek_toggle)
+        layout.addWidget(self._deepseek_checkbox)
+
         self._recommended_label = QLabel("当前推荐出牌：--")
         self._recommended_label.setWordWrap(True)
         layout.addWidget(self._recommended_label)
+
+        self._strategy_label = QLabel("策略类型：--")
+        self._strategy_label.setWordWrap(True)
+        layout.addWidget(self._strategy_label)
 
         self._state_summary_label = QLabel("当前牌局摘要：--")
         self._state_summary_label.setWordWrap(True)
         layout.addWidget(self._state_summary_label)
 
-        self._summary_edit = QPlainTextEdit()
+        self._summary_edit = QTextEdit()
         self._summary_edit.setReadOnly(True)
         self._summary_edit.setPlaceholderText("推荐理由摘要会显示在这里")
         layout.addWidget(self._summary_edit, 1)
@@ -464,8 +700,37 @@ class BattlePanel(QWidget):
         return box
 
     def _provider_text(self) -> str:
-        provider = self._config.get("vision", {}).get("provider", "qwen")
-        return "阿里百炼 Qwen" if provider == "qwen" else "智谱 GLM"
+        provider = self._config.get("vision", {}).get("provider", "auto")
+        return PROVIDER_LABELS.get(provider, provider)
+
+    def _on_provider_changed(self) -> None:
+        provider = str(self._provider_combo.currentData() or "auto")
+        self._config.setdefault("vision", {})["provider"] = provider
+        self._state.vision_provider = provider
+        self._record_and_emit("set_vision_provider", {"provider": provider})
+
+    def _reload_baida_values(self) -> None:
+        suit = str(self._baida_suit_combo.currentData() or "")
+        self._baida_value_combo.blockSignals(True)
+        self._baida_value_combo.clear()
+        if not suit:
+            self._baida_value_combo.addItem("未设置", "")
+            self._baida_value_combo.setEnabled(False)
+        elif suit == "z":
+            for tile_id, label in HONOR_OPTIONS:
+                self._baida_value_combo.addItem(f"{label} ({tile_id})", tile_id)
+            self._baida_value_combo.setEnabled(True)
+        else:
+            suit_name = dict(SUIT_OPTIONS).get(suit, suit)
+            for value in range(1, 10):
+                tile_id = f"{value}{suit}"
+                self._baida_value_combo.addItem(f"{value}{suit_name} ({tile_id})", tile_id)
+            self._baida_value_combo.setEnabled(True)
+        self._baida_value_combo.blockSignals(False)
+
+    def _on_baida_suit_changed(self) -> None:
+        self._reload_baida_values()
+        self._on_baida_changed()
 
     def _record_and_emit(self, action: str, detail: dict | None = None) -> None:
         self._state.append_operation(action, detail or {})
@@ -476,6 +741,10 @@ class BattlePanel(QWidget):
         self._state.ai_recognition_enabled = checked
         self._record_and_emit("toggle_ai_recognition", {"enabled": checked})
 
+    def _on_deepseek_toggle(self, checked: bool) -> None:
+        self._state.deepseek_enabled = checked
+        self._record_and_emit("toggle_deepseek", {"enabled": checked})
+
     def _on_start_clicked(self) -> None:
         self._state.append_operation("start_analysis", {"trigger": "start"})
         self.start_requested.emit()
@@ -483,7 +752,7 @@ class BattlePanel(QWidget):
         self.analysis_requested.emit("start")
 
     def _on_baida_changed(self) -> None:
-        self._state.baida_tile = str(self._baida_combo.currentData() or "")
+        self._state.baida_tile = str(self._baida_value_combo.currentData() or "")
         self._record_and_emit("set_baida_tile", {"tile": self._state.baida_tile})
 
     def _on_remaining_changed(self, value: int) -> None:
@@ -576,6 +845,57 @@ class BattlePanel(QWidget):
         melds.clear()
         self._record_and_emit("clear_enemy_melds" if enemy else "clear_self_melds", {"count": count})
 
+    _HAND_COLS = 8  # tiles per row before wrapping
+
+    def _rebuild_hand_tile_buttons(self, tiles) -> None:
+        layout = self._hand_tiles_layout
+        while layout.count():
+            item = layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        if not tiles:
+            layout.addWidget(QLabel("（空）"), 0, 0)
+            return
+
+        col = 0
+        row = 0
+        for idx, tile in enumerate(tiles):
+            if not tile.tile_id:
+                continue
+            conf = float(getattr(tile, "confidence", 1.0) or 1.0)
+            label = tile_display(tile.tile_id)
+            btn = QPushButton(label)
+            btn.setFixedWidth(70)
+            btn.setToolTip(f"置信度: {conf:.0%}  点击纠正")
+            if conf < 0.9:
+                btn.setStyleSheet("color: red; font-weight: bold;")
+            else:
+                btn.setStyleSheet("color: black;")
+            btn.clicked.connect(
+                lambda _checked, i=idx, t=tile.tile_id: self._on_tile_correction_click(i, t)
+            )
+            layout.addWidget(btn, row, col)
+            col += 1
+            if col >= self._HAND_COLS:
+                col = 0
+                row += 1
+
+    def _on_tile_correction_click(self, tile_index: int, current_tile_id: str) -> None:
+        dlg = _TileCorrectDialog(current_tile_id, parent=self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        correct_id = dlg.selected_tile_id
+        if not correct_id:
+            return
+        # Always update: sets confidence=1.0 and possibly changes tile_id
+        if tile_index < len(self._state.self_hand):
+            self._state.self_hand[tile_index] = tile_from_id(correct_id)
+            self._rebuild_hand_tile_buttons(self._state.self_hand)
+            self._record_and_emit("correct_tile", {"index": tile_index, "tile": correct_id})
+        if correct_id != current_tile_id:
+            self.tile_correction_requested.emit(tile_index, correct_id)
+
     def _format_tiles(self, tiles) -> str:
         if not tiles:
             return "（空）"
@@ -585,6 +905,7 @@ class BattlePanel(QWidget):
         if not melds:
             return "（空）"
         type_map = dict(MELD_TYPE_OPTIONS)
+        type_map["auto"] = "自动"
         parts: list[str] = []
         for meld in melds:
             label = type_map.get(meld.meld_type, meld.meld_type)
@@ -593,21 +914,29 @@ class BattlePanel(QWidget):
         return "  ".join(parts)
 
     def _render_state(self) -> None:
-        self._baida_combo.blockSignals(True)
-        self._baida_combo.setCurrentIndex(max(0, self._baida_combo.findData(self._state.baida_tile)))
-        self._baida_combo.blockSignals(False)
+        baida_tile = self._state.baida_tile or ""
+        baida_suit = baida_tile[-1] if baida_tile else ""
+        self._baida_suit_combo.blockSignals(True)
+        self._baida_suit_combo.setCurrentIndex(max(0, self._baida_suit_combo.findData(baida_suit)))
+        self._baida_suit_combo.blockSignals(False)
+        self._reload_baida_values()
+        self._baida_value_combo.blockSignals(True)
+        self._baida_value_combo.setCurrentIndex(max(0, self._baida_value_combo.findData(baida_tile)))
+        self._baida_value_combo.blockSignals(False)
 
         self._remaining_spin.blockSignals(True)
         self._remaining_spin.setValue(self._state.remaining_tiles)
         self._remaining_spin.blockSignals(False)
 
-        self._hand_label.setText(self._format_tiles(self._state.self_hand))
+        self._rebuild_hand_tile_buttons(self._state.self_hand)
         self._self_discard_label.setText(self._format_tiles(self._state.self_discards))
         self._enemy_discard_label.setText(self._format_tiles(self._state.enemy_discards))
         self._self_meld_label.setText(self._format_melds(self._state.self_melds))
         self._enemy_meld_label.setText(self._format_melds(self._state.enemy_melds))
         self._recognition_label.setText(f"识别来源：{self._state.recognition_source}")
-        self._provider_label.setText(self._provider_text())
+        self._provider_combo.blockSignals(True)
+        self._provider_combo.setCurrentIndex(max(0, self._provider_combo.findData(self._state.vision_provider)))
+        self._provider_combo.blockSignals(False)
         self._state_summary_label.setText(
             f"当前牌局摘要：我方手牌{len(self._state.self_hand)}张 | "
             f"我方弃牌{len(self._state.self_discards)}张 | "
@@ -616,13 +945,46 @@ class BattlePanel(QWidget):
         )
 
     def _render_advice(self, advice: BattleAdvice) -> None:
-        self._recommended_label.setText(f"当前推荐出牌：{advice.recommended_discard or '--'}")
-        self._summary_edit.setPlainText(advice.reasoning_summary or advice.risk_notes or "")
+        discard = advice.recommended_discard or "--"
+        self._recommended_label.setText(f"当前推荐出牌：{discard}")
+        self._recommended_label.setStyleSheet(
+            "color:#27ae60; font-weight:bold;" if advice.recommended_discard else ""
+        )
+
+        _TYPE_COLORS = {"攻牌": "#27ae60", "守牌": "#e67e22", "平衡": "#2980b9"}
+        st = advice.strategy_type or ""
+        color = _TYPE_COLORS.get(st, "#555555")
+        self._strategy_label.setText(f"策略类型：{st or '--'}")
+        self._strategy_label.setStyleSheet(f"color:{color}; font-weight:bold;" if st else "")
+
+        parts: list[str] = []
+        if advice.reasoning_summary:
+            parts.append(
+                f'<p style="color:#2c3e50;margin:2px 0">{html.escape(advice.reasoning_summary)}</p>'
+            )
+        if advice.forbidden_discards:
+            fd = html.escape("、".join(advice.forbidden_discards))
+            parts.append(f'<p style="color:#e74c3c;margin:2px 0">⚠ 禁止出牌：{fd}</p>')
+        if advice.risk_notes:
+            parts.append(
+                f'<p style="color:#e67e22;margin:2px 0">⚡ 风险：{html.escape(advice.risk_notes)}</p>'
+            )
+        self._summary_edit.setHtml("".join(parts))
+
         candidates = " / ".join(advice.candidate_actions) if advice.candidate_actions else "--"
         self._candidate_label.setText(f"候选动作：{candidates}")
+        self._candidate_label.setStyleSheet("color:#16a085;" if advice.candidate_actions else "")
         if self._state.last_analysis_at:
+            duration_parts: list[str] = []
+            if self._state.last_recognition_duration_ms > 0:
+                duration_parts.append(f"图片识别：{self._state.last_recognition_duration_ms} ms")
+            if self._state.last_advice_duration_ms > 0:
+                duration_parts.append(f"AI建议：{self._state.last_advice_duration_ms} ms")
+            if self._state.last_analysis_duration_ms > 0:
+                duration_parts.append(f"总计：{self._state.last_analysis_duration_ms} ms")
+            duration_text = f" | {' | '.join(duration_parts)}" if duration_parts else ""
             self._meta_label.setText(
-                f"最近一次分析：{self._state.last_analysis_at} | 触发原因：{self._state.last_trigger_reason}"
+                f"最近一次分析：{self._state.last_analysis_at} | 触发原因：{self._state.last_trigger_reason}{duration_text}"
             )
         else:
             self._meta_label.setText("最近一次分析：--")
@@ -632,10 +994,16 @@ class BattlePanel(QWidget):
 
     def set_state(self, state: BattleState) -> None:
         self._state = deepcopy(state)
+        self._deepseek_checkbox.blockSignals(True)
+        self._deepseek_checkbox.setChecked(self._state.deepseek_enabled)
+        self._deepseek_checkbox.blockSignals(False)
         self._render_state()
 
     def set_advice(self, advice: BattleAdvice) -> None:
         self._render_advice(advice)
+
+    def set_train_success_message(self, message: str) -> None:
+        self._train_success_label.setText(message)
 
     def set_error(self, message: str) -> None:
         self._error_label.setText(message)
@@ -658,8 +1026,8 @@ class BattlePanel(QWidget):
 
     def apply_config(self, config: dict) -> None:
         self._config = deepcopy(config)
-        self._state.ai_recognition_enabled = bool(self._config.get("battle", {}).get("ai_recognition_enabled", True))
-        self._state.vision_provider = self._config.get("vision", {}).get("provider", "qwen")
+        self._state.ai_recognition_enabled = bool(self._config.get("battle", {}).get("ai_recognition_enabled", False))
+        self._state.vision_provider = self._config.get("vision", {}).get("provider", "auto")
         self._ai_checkbox.blockSignals(True)
         self._ai_checkbox.setChecked(self._state.ai_recognition_enabled)
         self._ai_checkbox.blockSignals(False)

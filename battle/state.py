@@ -36,8 +36,10 @@ def melds_to_payload(melds: list[MeldGroup]) -> list[dict]:
 @dataclass
 class BattleAdvice:
     recommended_discard: str = ""
+    strategy_type: str = ""
     reasoning_summary: str = ""
     risk_notes: str = ""
+    forbidden_discards: list[str] = field(default_factory=list)
     candidate_actions: list[str] = field(default_factory=list)
     raw_response: str = ""
 
@@ -45,9 +47,10 @@ class BattleAdvice:
 @dataclass
 class BattleState:
     ai_recognition_enabled: bool = True
-    vision_provider: str = "qwen"
+    deepseek_enabled: bool = True
+    vision_provider: str = "auto"
     baida_tile: str = ""
-    remaining_tiles: int = 84
+    remaining_tiles: int = 108
     self_hand: list[TileMatch] = field(default_factory=list)
     self_discards: list[TileMatch] = field(default_factory=list)
     self_melds: list[MeldGroup] = field(default_factory=list)
@@ -55,12 +58,18 @@ class BattleState:
     enemy_melds: list[MeldGroup] = field(default_factory=list)
     last_trigger_reason: str = ""
     last_analysis_at: str = ""
+    last_analysis_duration_ms: int = 0
+    last_recognition_duration_ms: int = 0
+    last_advice_duration_ms: int = 0
     recognition_source: str = "manual"
     operation_logs: list[dict] = field(default_factory=list)
 
     def mark_analysis(self, trigger_reason: str) -> None:
         self.last_trigger_reason = trigger_reason
         self.last_analysis_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.last_analysis_duration_ms = 0
+        self.last_recognition_duration_ms = 0
+        self.last_advice_duration_ms = 0
 
     def append_operation(self, action: str, detail: dict | None = None) -> None:
         self.operation_logs.append(
@@ -85,7 +94,7 @@ class BattleState:
 
     def reset_round(self) -> None:
         self.baida_tile = ""
-        self.remaining_tiles = 84
+        self.remaining_tiles = 108
         self.self_hand.clear()
         self.self_discards.clear()
         self.self_melds.clear()
@@ -93,8 +102,12 @@ class BattleState:
         self.enemy_melds.clear()
         self.last_trigger_reason = ""
         self.last_analysis_at = ""
+        self.last_analysis_duration_ms = 0
+        self.last_recognition_duration_ms = 0
+        self.last_advice_duration_ms = 0
         self.recognition_source = "manual"
         self.operation_logs.clear()
+        self.deepseek_enabled = True
 
     def to_payload(self) -> dict:
         remaining = self.remaining_tiles

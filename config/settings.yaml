@@ -12,10 +12,10 @@ deepseek:
 event_reference:
   image: C:\MahjongAI\data\event_reference\current.png
 game_window:
-  height: 870
-  left: 2
-  top: 42
-  width: 1551
+  height: 855
+  left: 210
+  top: 58
+  width: 1516
 layout:
   decision_buttons:
     h: 0.217593
@@ -67,6 +67,7 @@ layout:
     y: 0.31
   self_hand:
     h: 0.222222
+    meld_side: left
     meld_unit_w: 0.12
     pad_x: 0.0
     w: 0.997904
@@ -76,9 +77,13 @@ layout_reference:
   image: D:\claude\project\MahjongAI\MahjongAI\data\layout_reference\current.png
 vision:
   glm:
-    api_key: ''
+    api_key: 1c11cc76a4a242b0be30acae10d21f1d.o9Pebs7w3FibolNo
     model: glm-4.6v-flash
   provider: qwen
   qwen:
-    api_key: ''
+    api_key: sk-6cd1e408ea5745dc83cf3c1d39f2e5e1
     model: qwen-vl-plus-latest
+  volc:
+    api_key: ark-6d746870-18d4-430d-8b54-3a7f728bf421-52073
+    endpoint: https://ark.cn-beijing.volces.com/api/v3/chat/completions
+    model: ep-20260504102151-8dfzg

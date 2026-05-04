@@ -3,9 +3,11 @@ import os
 import yaml
 import glob
 import time
+import math
 import shutil
 import json
 from copy import deepcopy
+from datetime import datetime
 
 from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal, QSize
 from PyQt6.QtGui import QFont, QCloseEvent, QPixmap, QImage
@@ -123,16 +125,20 @@ def _ensure_battle_config_defaults(config: dict) -> dict:
     deepseek_cfg.setdefault("model", "deepseek-chat")
 
     vision_cfg = config.setdefault("vision", {})
-    vision_cfg.setdefault("provider", "qwen")
+    vision_cfg.setdefault("provider", "auto")
+    vision_cfg.setdefault("volc", {})
     vision_cfg.setdefault("glm", {})
     vision_cfg.setdefault("qwen", {})
+    vision_cfg["volc"].setdefault("api_key", "")
+    vision_cfg["volc"].setdefault("model", "")
+    vision_cfg["volc"].setdefault("endpoint", "https://ark.cn-beijing.volces.com/api/v3/chat/completions")
     vision_cfg["glm"].setdefault("api_key", "")
     vision_cfg["glm"].setdefault("model", "glm-4.6v-flash")
     vision_cfg["qwen"].setdefault("api_key", "")
     vision_cfg["qwen"].setdefault("model", "qwen-vl-plus-latest")
 
     battle_cfg = config.setdefault("battle", {})
-    battle_cfg.setdefault("ai_recognition_enabled", True)
+    battle_cfg.setdefault("ai_recognition_enabled", False)
     return config
 
 
@@ -153,6 +159,10 @@ class RoiTrainingDialog(QDialog):
         self.accepted_count = 0
         self.closed_without_training = False
         self.processed_sources = self._extract_processed_sources(roi_paths)
+        self._current_guess = ""
+        self._current_confidence = 0.0
+        self._current_clean_img = None
+        self._current_prepare_ok = False
 
         root = QVBoxLayout(self)
         self._info = QLabel("")
@@ -235,6 +245,10 @@ class RoiTrainingDialog(QDialog):
             return
         result = self._recognizer.match_tile(img)
         ok, clean_img, prepare_reason = self._prepare_fn(img)
+        self._current_guess = result.tile_id or ""
+        self._current_confidence = float(result.confidence or 0.0)
+        self._current_clean_img = clean_img
+        self._current_prepare_ok = bool(ok and clean_img is not None)
         guess = result.tile_id
         if guess:
             pos = self._combo.findData(guess)
@@ -257,22 +271,43 @@ class RoiTrainingDialog(QDialog):
         if self._index >= len(self._roi_paths):
             return
         src = self._roi_paths[self._index]
-        img = cv2.imread(src)
-        if img is None:
+        if not self._current_prepare_ok or self._current_clean_img is None:
+            img = cv2.imread(src)
+            if img is None:
+                self._next()
+                return
+            ok, _clean_img, reason = self._prepare_fn(img)
+            if not ok:
+                QMessageBox.warning(
+                    self,
+                    "坏ROI",
+                    f"这张 ROI 看起来不是完整单张牌，已拒绝加入训练集。\n原因：{reason}\n\n{src}",
+                )
+                self._delete_path(src)
+                self._index += 1
+                self._load_current()
+                return
             self._next()
             return
-        ok, clean_img, reason = self._prepare_fn(img)
-        if not ok:
-            QMessageBox.warning(
-                self,
-                "坏ROI",
-                f"这张 ROI 看起来不是完整单张牌，已拒绝加入训练集。\n原因：{reason}\n\n{src}",
-            )
-            self._delete_path(src)
-            self._index += 1
-            self._load_current()
-            return
         tile_id = self._combo.currentData()
+        if (
+            self._current_guess
+            and tile_id != self._current_guess
+            and self._current_confidence >= 0.78
+        ):
+            ret = QMessageBox.question(
+                self,
+                "标签冲突确认",
+                "当前样本与你选的标签冲突。\n"
+                f"模型当前高置信预测：{TILE_DISPLAY_NAMES.get(self._current_guess, self._current_guess)} ({self._current_guess})，"
+                f"置信度 {self._current_confidence:.3f}\n"
+                f"你当前选择：{TILE_DISPLAY_NAMES.get(tile_id, tile_id)} ({tile_id})\n\n"
+                "如果这是模型识别错了，请继续；如果是手滑选错，建议取消后重新确认。",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if ret != QMessageBox.StandardButton.Yes:
+                return
         if self._save_dir:
             dst_dir = os.path.join(self._save_dir, tile_id)
         else:
@@ -280,9 +315,9 @@ class RoiTrainingDialog(QDialog):
         os.makedirs(dst_dir, exist_ok=True)
         import time
         dst = os.path.join(dst_dir, f"{time.strftime('%Y%m%d_%H%M%S')}_{self.accepted_count:04d}.png")
-        cv2.imwrite(dst, clean_img)
+        cv2.imwrite(dst, self._current_clean_img)
         if hasattr(self._recognizer, "add_training_sample"):
-            self._recognizer.add_training_sample(clean_img, tile_id, source=dst)
+            self._recognizer.add_training_sample(self._current_clean_img, tile_id, source=dst)
         parent = self.parent()
         if parent is not None and hasattr(parent, "_pipeline"):
             parent._pipeline.clear_match_cache()
@@ -357,12 +392,13 @@ class RoiTrainingDialog(QDialog):
         sources: set[str] = set()
         for path in paths:
             name = os.path.basename(path)
-            if not name.startswith("roi_session_"):
-                continue
-            parts = name.split("_")
-            # roi_session_YYYYMMDD_HHMMSS_frame_NNNN_...
-            if len(parts) >= 6 and parts[1] == "session":
-                sources.add(f"session_{parts[2]}_{parts[3]}:{parts[4]}_{parts[5]}")
+            if name.startswith("roi_session_"):
+                parts = name.split("_")
+                # roi_session_YYYYMMDD_HHMMSS_frame_NNNN_...
+                if len(parts) >= 6 and parts[1] == "session":
+                    sources.add(f"session_{parts[2]}_{parts[3]}:{parts[4]}_{parts[5]}")
+            elif name.endswith("_picture_tile_request.png") or name.endswith("_picture_tile_response.png"):
+                sources.add(f"battle_picture:{name}")
         return sources
 
     @property
@@ -488,6 +524,10 @@ class MainWindow(QMainWindow):
         self._session: GameSession | None = None
         self._capture_worker: CaptureWorkerThread | None = None
         self._battle_worker: BattleAnalysisThread | None = None
+        self._battle_analysis_started_at: float | None = None
+        self._hog_train_thread: HOGTrainerThread | None = None
+        self._pending_battle_start = False
+        self._pending_battle_analysis_reason: str | None = None
 
         self.setWindowTitle("台州麻将AI — 视觉识别层 v1.0")
         self.resize(1000, 680)
@@ -946,6 +986,7 @@ class MainWindow(QMainWindow):
         self._battle_panel.state_changed.connect(self._on_battle_state_changed)
         self._battle_panel.analysis_requested.connect(self._on_battle_analysis_requested)
         self._battle_panel.config_requested.connect(self._open_api_config_dialog)
+        self._battle_panel.tile_correction_requested.connect(self._on_battle_tile_correction)
         layout.addWidget(self._battle_panel)
         return w
 
@@ -1174,6 +1215,7 @@ class MainWindow(QMainWindow):
     def _on_hog_train_finished(self, stats: dict):
         self._btn_train_hog.setEnabled(True)
         self._btn_train_hog.setText("🧠 一键训练HOG模型")
+        self._hog_train_thread = None
 
         train_acc = stats.get("train_acc", 0.0) * 100
         n_samples = stats.get("n_samples", 0)
@@ -1187,6 +1229,9 @@ class MainWindow(QMainWindow):
             self._tile_rec._hog_clf.load(model_path)
         else:
             self._tile_rec._hog_clf = TileHOGClassifier(model_path)
+        cleaned_dir = os.path.join(data_path("data"), "tile_samples_cleaned")
+        if hasattr(self._tile_rec, "load_training_samples"):
+            self._tile_rec.load_training_samples(cleaned_dir)
         hog_loaded = bool(self._tile_rec._hog_clf is not None and self._tile_rec._hog_clf.is_ready)
         hog_primary = bool(
             hog_loaded
@@ -1198,6 +1243,12 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(
             f"HOG 模型训练完成：{n_classes} 类，{n_samples} 张，训练准确率 {train_acc:.1f}%，已加载={hog_loaded}，主判={hog_primary}"
         )
+
+        train_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        if hasattr(self, "_battle_panel"):
+            self._battle_panel.set_train_success_message(
+                f"模型已重新训练  {train_ts}"
+            )
 
         # 显示各类样本数
         count_lines = "\n".join([f"  {k}: {v} 张" for k, v in sorted(class_counts.items())])
@@ -1212,22 +1263,85 @@ class MainWindow(QMainWindow):
             f"模型已保存并自动加载：{'是' if hog_loaded else '否'}\n"
             f"是否参与主判：{'是' if hog_primary else '否，需 34 类齐全且每类足量干净样本'}"
         )
+        if self._pending_battle_start:
+            self._pending_battle_start = False
+            self._on_battle_start_requested()
+        if self._pending_battle_analysis_reason:
+            reason = self._pending_battle_analysis_reason
+            self._pending_battle_analysis_reason = None
+            QTimer.singleShot(0, lambda r=reason: self._on_battle_analysis_requested(r))
 
     def _on_hog_train_error(self, err: str):
         self._btn_train_hog.setEnabled(True)
         self._btn_train_hog.setText("🧠 一键训练HOG模型")
+        self._hog_train_thread = None
+        self._pending_battle_start = False
+        self._pending_battle_analysis_reason = None
         self.statusBar().showMessage(f"训练失败：{err}")
         QMessageBox.critical(self, "训练失败", f"HOG 模型训练出错：\n{err}")
+
+    def _is_hog_training_running(self) -> bool:
+        return self._hog_train_thread is not None and self._hog_train_thread.isRunning()
 
     def _collect_historical_roi_paths(self) -> list[str]:
         data_root = data_path("data")
         capture_interval = int(self._config.get("app", {}).get("capture_interval_ms", 500) or 500)
-        return self._hand_region.collect_training_roi_paths(
+        paths = self._hand_region.collect_training_roi_paths(
             data_root,
             capture_interval,
             self._layout_calc,
             self._capture,
         )
+        paths.extend(self._collect_battle_picture_roi_paths(data_root))
+        return paths
+
+    def _collect_battle_picture_roi_paths(self, data_root: str) -> list[str]:
+        """Collect unprocessed individual tile PNGs saved during battle AI recognition."""
+        pic_dir = os.path.join(data_root, "picture")
+        pool_dir = os.path.join(data_root, "training_roi_pool")
+        os.makedirs(pool_dir, exist_ok=True)
+        processed_path = os.path.join(pool_dir, "processed_sources.json")
+        try:
+            with open(processed_path, "r", encoding="utf-8") as f:
+                processed_sources = set(json.load(f))
+        except (OSError, ValueError, TypeError):
+            processed_sources = set()
+        if not os.path.isdir(pic_dir):
+            return []
+        candidates: list[tuple[float, str]] = []
+        for name in sorted(os.listdir(pic_dir)):
+            if not (
+                name.endswith("_picture_tile_request.png")
+                or name.endswith("_picture_tile_response.png")
+            ):
+                continue
+            source_key = f"battle_picture:{name}"
+            if source_key in processed_sources:
+                continue
+            path = os.path.join(pic_dir, name)
+            try:
+                modified_at = os.path.getmtime(path)
+            except OSError:
+                continue
+            img = _read_image(path)
+            if img is None:
+                continue
+            ok, _clean_img, _reason = _prepare_trainable_roi_image(img)
+            if not ok:
+                continue
+            candidates.append((modified_at, path))
+        if not candidates:
+            return []
+
+        candidates.sort(key=lambda item: item[0])
+        latest_ts = candidates[-1][0]
+        batch_window_seconds = 20.0
+        latest_batch = [
+            path
+            for modified_at, path in candidates
+            if latest_ts - modified_at <= batch_window_seconds
+        ]
+        return latest_batch or [candidates[-1][1]]
 
     def _mark_training_sources_processed(self, sources: set[str]) -> None:
         if not sources:
@@ -1247,12 +1361,16 @@ class MainWindow(QMainWindow):
     def _open_roi_training(self):
         roi_paths = self._collect_historical_roi_paths()
         if not roi_paths:
+            pool_dir = os.path.join(data_path("data"), "training_roi_pool")
+            recognition_dir = os.path.join(data_path("data"), "recognition")
+            picture_dir = os.path.join(data_path("data"), "picture")
             QMessageBox.information(
                 self,
                 "数据训练吧",
                 "没有找到可处理的训练 ROI。\n"
-                "训练池位置：C:\\MahjongAI\\data\\training_roi_pool\n"
-                "请先运行识别生成 recognition/roi_*.png。",
+                f"训练池位置：{pool_dir}\n"
+                f"请先运行识别生成 {recognition_dir}\\roi_*.png，"
+                f"或先在正式战斗里跑一轮以生成 {picture_dir}\\*.png。",
             )
             return
         dlg = RoiTrainingDialog(roi_paths, self._tile_rec, self)
@@ -1320,9 +1438,7 @@ class MainWindow(QMainWindow):
 
             for frame_name in selected_frames:
                 source_key = f"{session_name}:{frame_name}"
-                # Always allow the newest session to be re-collected so fixes
-                # to discard cropping/training can be verified immediately.
-                if source_key in processed_sources and session_name != sessions[0]:
+                if source_key in processed_sources:
                     continue
                 frame_dir = os.path.join(rec_dir, frame_name)
                 for fname in sorted(os.listdir(frame_dir)):
@@ -1376,12 +1492,14 @@ class MainWindow(QMainWindow):
     def _open_discard_roi_training(self):
         roi_paths = self._collect_discard_roi_paths()
         if not roi_paths:
+            pool_dir = os.path.join(data_path("data"), "training_roi_pool_discard")
+            recognition_dir = os.path.join(data_path("data"), "discard_recognition")
             QMessageBox.information(
                 self,
                 "弃牌区域训练",
                 "没有找到可处理的弃牌训练 ROI。\n"
-                "训练池位置：data/training_roi_pool_discard\n"
-                "请先运行识别以生成 discard_recognition/roi_*.png。",
+                f"训练池位置：{pool_dir}\n"
+                f"请先运行识别以生成 {recognition_dir}\\roi_*.png。",
             )
             return
         dlg = RoiTrainingDialog(
@@ -1446,12 +1564,27 @@ class MainWindow(QMainWindow):
         self._capture_worker = None
         self._pipeline.stop()
         self._pipeline.disable_debug()
+        session = self._session
         if self._session:
             frames = self._session.frame_count
             path = self._session.frames_path
+            keyframes_dir = self._session.keyframes_dir
+            keyframe_count = self._session.keyframe_count
             self._session.close()
             self._session = None
-            self.statusBar().showMessage(f"已停止，共保存 {frames} 帧 → {path}")
+            if frames <= 0:
+                self.statusBar().showMessage(f"已停止，但本次没有保存任何帧 → {path}")
+                QMessageBox.warning(
+                    self,
+                    "识别未产出帧",
+                    "本次识别 session 没有写入任何帧数据。\n"
+                    f"frames.jsonl: {path}\n"
+                    f"keyframes: {keyframes_dir}\n\n"
+                    "这通常表示识别线程启动后没有真正跑到一帧。\n"
+                    "下次如果再次出现，请保留这次 session 目录，我继续顺着线程启动链路查。",
+                )
+            else:
+                self.statusBar().showMessage(f"已停止，共保存 {frames} 帧 → {path}")
 
         # 如果开始时选择了隐藏/最小化，停止后恢复窗口。
         if self.isMinimized():
@@ -1460,9 +1593,9 @@ class MainWindow(QMainWindow):
             self.activateWindow()
 
         # 提示关键帧保存位置
-        if self._session and self._session.keyframe_count > 0:
-            kdir = self._session.keyframes_dir
-            kcount = self._session.keyframe_count
+        if session and keyframe_count > 0:
+            kdir = keyframes_dir
+            kcount = keyframe_count
             QMessageBox.information(
                 self, "识别完成",
                 f"本次识别共保存 {kcount} 张关键帧\n"
@@ -1475,7 +1608,30 @@ class MainWindow(QMainWindow):
         self._capture_panel.on_frame(state)
 
     def _on_battle_start_requested(self):
-        self.statusBar().showMessage("正式战斗：开始分析当前牌局")
+        if self._is_hog_training_running():
+            self._pending_battle_start = True
+            QMessageBox.information(
+                self,
+                "训练中",
+                "HOG 模型仍在训练和热重载中。\n"
+                "这次“开始”请求已经记下，训练完成后会自动开始正式战斗。",
+            )
+            self.statusBar().showMessage("正式战斗：已排队，等待 HOG 训练完成后自动开始")
+            return
+        # 如果已有战斗 session，先关闭（防止重复开始）
+        if getattr(self, "_battle_session", None) is not None:
+            try:
+                self._battle_session.close()
+            except Exception:
+                pass
+            self._battle_session = None
+            self._battle_service.set_session(None)
+
+        # 新建 battle session（独立于采集识别的那个 session）
+        output = data_path("data")
+        self._battle_session = GameSession(output, self._config)
+        self._battle_service.set_session(self._battle_session)
+        self.statusBar().showMessage(f"正式战斗：已启动，session={self._battle_session.session_id}")
 
     def _on_battle_end_requested(self):
         if self._battle_worker and self._battle_worker.isRunning():
@@ -1488,22 +1644,47 @@ class MainWindow(QMainWindow):
         self._battle_panel.set_state(state)
         self._battle_panel.clear_round_feedback()
         self._battle_panel.clear_error()
-        self.statusBar().showMessage("正式战斗：本轮对话与牌局数据已重置，历史日志已保留")
+
+        # 关闭 battle session
+        if getattr(self, "_battle_session", None) is not None:
+            try:
+                self._battle_session.close()
+            except Exception:
+                pass
+            self._battle_session = None
+            self._battle_service.set_session(None)
+
+        self.statusBar().showMessage("正式战斗：本轮对话与牌局数据已重置，session 已保存")
 
     def _on_battle_state_changed(self, _state: BattleState):
         self._config.setdefault("battle", {})["ai_recognition_enabled"] = bool(
             self._battle_panel.current_state().ai_recognition_enabled
         )
+        self._config.setdefault("vision", {})["provider"] = str(
+            self._battle_panel.current_state().vision_provider or "auto"
+        )
+        self._battle_service._config = self._config
         self._save_config()
         self._battle_panel.clear_error()
 
     def _on_battle_analysis_requested(self, trigger_reason: str):
+        if self._is_hog_training_running():
+            self._pending_battle_analysis_reason = trigger_reason
+            QMessageBox.information(
+                self,
+                "训练中",
+                "HOG 模型仍在训练和热重载中。\n"
+                "这次重新识别请求已经记下，训练完成后会自动补跑这一轮分析。",
+            )
+            self.statusBar().showMessage("正式战斗：已排队，等待 HOG 训练完成后自动分析")
+            return
         if self._battle_worker and self._battle_worker.isRunning():
             self.statusBar().showMessage("正式战斗：上一轮分析仍在进行，请稍候")
             return
         state = self._battle_panel.current_state()
         self._battle_panel.clear_error()
         self._battle_panel.set_busy(True, "分析中...")
+        self._battle_analysis_started_at = time.perf_counter()
         self._battle_worker = BattleAnalysisThread(
             self._battle_service,
             state,
@@ -1521,6 +1702,9 @@ class MainWindow(QMainWindow):
             {
                 "trigger_reason": state.last_trigger_reason,
                 "recommended_discard": advice.recommended_discard,
+                "recognition_duration_ms": state.last_recognition_duration_ms,
+                "advice_duration_ms": state.last_advice_duration_ms,
+                "duration_ms": state.last_analysis_duration_ms,
             },
         )
         self._battle_panel.set_state(state)
@@ -1532,8 +1716,14 @@ class MainWindow(QMainWindow):
 
     def _on_battle_analysis_failed(self, err: str):
         state = self._battle_panel.current_state()
+        if self._battle_analysis_started_at is not None:
+            state.last_analysis_duration_ms = max(
+                1,
+                int(math.ceil((time.perf_counter() - self._battle_analysis_started_at) * 1000)),
+            )
         state.append_operation("analysis_failed", {"error": err})
         self._battle_panel.set_state(state)
+        self._battle_panel.set_advice(BattleAdvice())
         self._battle_panel.set_busy(False, "失败")
         self._battle_panel.set_error(err)
         self.statusBar().showMessage(f"正式战斗：分析失败 - {err}")
@@ -1541,6 +1731,37 @@ class MainWindow(QMainWindow):
     def _on_battle_worker_finished(self):
         if self._battle_worker and not self._battle_worker.isRunning():
             self._battle_worker = None
+        self._battle_analysis_started_at = None
+
+    def _on_battle_tile_correction(self, tile_index: int, correct_tile_id: str) -> None:
+        """用户在手牌区点击纠正了一张牌：保存 ROI 到训练集并后台重训 HOG。"""
+        rois = getattr(self._battle_service, "_last_match_rois", [])
+        if tile_index >= len(rois):
+            self.statusBar().showMessage(f"纠错：未找到第 {tile_index + 1} 张牌的 ROI，跳过保存")
+            return
+        roi = rois[tile_index]
+        if roi is None or roi.size == 0:
+            self.statusBar().showMessage(f"纠错：第 {tile_index + 1} 张牌 ROI 为空，跳过保存")
+            return
+
+        from vision.hand_region_module import prepare_trainable_hand_roi_image
+        ok, clean_img, reason = prepare_trainable_hand_roi_image(roi)
+        save_img = clean_img if ok and clean_img is not None else roi
+
+        dst_dir = os.path.join(data_path("data"), "tile_samples_cleaned", correct_tile_id)
+        os.makedirs(dst_dir, exist_ok=True)
+        filename = f"battle_{time.strftime('%Y%m%d_%H%M%S')}_{tile_index:02d}.png"
+        dst = os.path.join(dst_dir, filename)
+        data = cv2.imencode(".png", save_img)[1].tobytes()
+        with open(dst, "wb") as _f:
+            _f.write(data)
+
+        if hasattr(self._tile_rec, "add_training_sample"):
+            self._tile_rec.add_training_sample(save_img, correct_tile_id, source=dst)
+        self._pipeline.clear_match_cache()
+
+        self.statusBar().showMessage(f"纠错：已保存 {correct_tile_id} 样本，开始后台重训 HOG…")
+        self._start_hog_training(confirm_incomplete=False)
 
     def _open_api_config_dialog(self):
         dlg = ApiConfigDialog(self._config, self)

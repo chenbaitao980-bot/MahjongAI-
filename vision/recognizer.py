@@ -138,6 +138,13 @@ class TileRecognizer:
     def load_training_samples(self, samples_dir: str, max_per_class: int = 4) -> int:
         """Load manually corrected ROI samples as immediate nearest-neighbor memory."""
         self._training_exemplars.clear()
+        self._exemplar_tile_ids = []
+        self._exemplar_sources = []
+        self._exemplar_gray_matrix = None
+        self._exemplar_ink_matrix = None
+        self._exemplar_upper_matrix = None
+        self._exemplar_ink_counts = None
+        self._exemplar_upper_counts = None
         if not os.path.isdir(samples_dir):
             return 0
         loaded = 0

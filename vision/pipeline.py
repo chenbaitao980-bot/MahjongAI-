@@ -195,7 +195,16 @@ class RecognitionPipeline:
             return items
 
         # 区域1: 自家手牌
+        # 先尝试从上一帧状态获取副露组数，若无则通过视觉估算（适用于左侧副露场景）
         meld_count = len(state.self_player.melds) if state.self_player.melds else 0
+        if meld_count == 0 and self._prev_state is not None:
+            prev_meld_count = len(self._prev_state.self_player.melds) if self._prev_state.self_player.melds else 0
+            if prev_meld_count > 0:
+                # 继承上一帧副露数（副露不会自动减少）
+                meld_count = prev_meld_count
+        if meld_count == 0:
+            # 通过视觉估算副露组数（当副露显示在左侧时有效）
+            meld_count = self._detect_self_meld_count_visual(frame)
         hand_region_rect = self._layout.hand_region(meld_count)
         hand_strip = self._capture.grab_from_frame(frame, hand_region_rect)
 
@@ -1705,7 +1714,84 @@ class RecognitionPipeline:
         # 限制在合理范围
         return max(13, min(14, tile_count))
 
-    def _read_remaining_tiles(self, roi: np.ndarray) -> Optional[int]:
+    def _detect_self_meld_count_visual(self, frame: np.ndarray) -> int:
+        """视觉检测自家副露组数（0~4）。
+
+        台州麻将副露显示在手牌左侧。通过检测手牌行左侧区域内
+        存在的白色牌面连通组数量来估算副露组数。
+        每组副露（吃/碰）占3张牌宽度，杠占4张。
+        
+        返回值: 0~4，表示估算的副露组数。
+        """
+        sh = self._layout._layout.get("self_hand", {})
+        meld_side = sh.get("meld_side", "right")
+        if meld_side != "left":
+            # 副露在右侧，暂不自动检测（直接用 state 缓存值）
+            return 0
+
+        # 获取完整手牌行区域（meld_count=0，即全宽）
+        full_region = self._layout.hand_region(0)
+        roi = self._capture.grab_from_frame(frame, full_region)
+        if roi is None or roi.size == 0:
+            return 0
+
+        h, w = roi.shape[:2]
+        if h < 40 or w < 80:
+            return 0
+
+        # 检测白色牌面区域
+        hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV) if len(roi.shape) == 3 else None
+        if hsv is None:
+            return 0
+        y_top = int(h * 0.15)
+        y_bottom = int(h * 0.95)
+        band = hsv[y_top:y_bottom]
+        white = ((band[:, :, 2] > 130) & (band[:, :, 1] < 150)).astype(np.float32)
+        col = cv2.GaussianBlur(white.mean(axis=0).reshape(1, -1), (1, 7), 0).reshape(-1)
+
+        # 找到所有"白色活跃段"
+        active = col > 0.15
+        runs: list[tuple[int, int]] = []
+        start = None
+        for i, v in enumerate(active):
+            if v and start is None:
+                start = i
+            elif not v and start is not None:
+                runs.append((start, i))
+                start = None
+        if start is not None:
+            runs.append((start, w))
+
+        # 过滤极窄的噪声
+        min_tile_px = max(20, w // 30)
+        runs = [(s, e) for s, e in runs if e - s >= min_tile_px]
+        if len(runs) < 3:
+            return 0
+
+        # 估算单张牌宽
+        widths = [e - s for s, e in runs]
+        # 排除最宽（可能是手牌连续段）
+        widths_sorted = sorted(widths)
+        tile_w_est = float(np.median(widths_sorted[:max(1, len(widths_sorted) // 2)]))
+        if tile_w_est <= 0:
+            return 0
+
+        # 手牌正常段总宽约 = 13~14 * tile_w_est
+        # 副露段总宽约 = n_meld_tiles * tile_w_est（每组3张）
+        total_active_w = sum(e - s for s, e in runs)
+        hand_only_w = 13 * tile_w_est  # 保守估计手牌宽
+        meld_w = max(0.0, total_active_w - hand_only_w)
+        # 每组副露约占 3 张
+        meld_count_est = int(round(meld_w / (3 * tile_w_est)))
+        meld_count_est = max(0, min(4, meld_count_est))
+
+        logger.info(
+            "[Frame %d] 视觉副露估算: total_active_w=%d tile_w=%.1f meld_w=%.1f → meld_count=%d",
+            self._frame_index, total_active_w, tile_w_est, meld_w, meld_count_est,
+        )
+        return meld_count_est
+
+
         """从剩余牌数区域读取数字（简单 OCR：找连通区域+比对数字模板）。"""
         if roi is None or roi.size == 0:
             return None

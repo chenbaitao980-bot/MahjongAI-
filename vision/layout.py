@@ -64,16 +64,38 @@ class LayoutCalculator:
         )
 
     def hand_region(self, meld_count: int = 0) -> Rect:
-        """自家手牌整体区域（随副露数量右侧收缩）。"""
+        """自家手牌整体区域（随副露数量收缩）。
+
+        当 meld_side == "left" 时，副露在手牌左侧，
+        手牌区域向右偏移（x 增大），宽度同步缩减。
+        当 meld_side == "right"（默认）时，手牌区域右边界收缩（w 减小）。
+        """
         sh = self._layout.get("self_hand", {})
         x = sh.get("x", 0.08)
         y = sh.get("y", 0.80)
-        w = sh.get("w", 0.72) - meld_count * sh.get("meld_unit_w", 0.12)
+        base_w = sh.get("w", 0.72)
         h = sh.get("h", 0.17)
-        # 左右各外扩 3%，防止最边缘的牌被裁切
+        meld_unit_w = sh.get("meld_unit_w", 0.12)
+        meld_side = sh.get("meld_side", "right")
+
+        shrink = meld_count * meld_unit_w
+        if meld_side == "left":
+            # 副露在左侧：x 向右移动，w 等量缩减
+            x = x + shrink
+            w = base_w - shrink
+        else:
+            # 副露在右侧（默认）：w 右边界收缩
+            w = base_w - shrink
+
+        # 左右各外扩 pad_x，防止最边缘的牌被裁切
         pad = sh.get("pad_x", 0.03)
-        x = max(0.0, x - pad)
-        w = min(1.0 - x, w + pad * 2)
+        if meld_side == "left":
+            # 左侧副露时，只向左扩（不往副露方向扩）
+            x = max(0.0, x - pad)
+            w = min(1.0 - x, w + pad)
+        else:
+            x = max(0.0, x - pad)
+            w = min(1.0 - x, w + pad * 2)
         return self._scale(x, y, max(w, 0.05), h)
 
     def hand_slots(self, tile_count: int, meld_count: int = 0) -> list[Rect]:

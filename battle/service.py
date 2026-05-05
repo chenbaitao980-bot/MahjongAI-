@@ -280,32 +280,38 @@ class BattleService:
             "meld_debug": meld_debug,
         }
         # Refresh self_melds unless the user has manually corrected/locked them.
-        # Auto-unlock when detection returns empty: the round ended or melds are gone,
-        # so the locked correction is now stale and would cause wrong hand-region geometry.
+        # Only auto-unlock locked melds when the strip is clearly empty (round ended).
+        strip_run_count = len(full_tile_layout[0]) if full_tile_layout else 0
         if not detected_melds and state.self_melds_locked:
-            state.self_melds = []
-            state.self_melds_locked = False
+            if strip_run_count < 3:
+                # Strip has virtually no tiles → round likely ended, safe to clear
+                state.self_melds = []
+                state.self_melds_locked = False
+            # else: keep locked melds; detection failed mid-round, not end-of-round
         elif not state.self_melds_locked:
             state.self_melds = detected_melds
-        if detected_melds and not state.self_melds_locked:
+
+        # Determine effective meld count: prefer freshly detected, fall back to state
+        effective_melds = detected_melds if detected_melds else state.self_melds
+        if effective_melds and not state.self_melds_locked:
             dynamic_capture = self._capture_hand_rois_from_full_strip(
                 full_hand_strip,
                 full_tile_layout,
-                len(detected_melds) * 3,
+                len(effective_melds) * 3,
             )
             if dynamic_capture is not None:
                 hand_strip, rois = dynamic_capture
                 debug["capture_path"] = "dynamic-full-strip"
                 debug["hand_strip_shape"] = self._image_shape_list(hand_strip)
                 debug["hand_roi_count"] = len(rois)
-                debug["expected_hand_counts"] = sorted(self._expected_visible_hand_counts(len(detected_melds) * 3))
+                debug["expected_hand_counts"] = sorted(self._expected_visible_hand_counts(len(effective_melds) * 3))
                 self._last_capture_debug = debug
                 return hand_strip, rois
-            if not state.self_melds_locked:
-                state.self_melds = []
-            debug["capture_path"] = "meld-rejected-fallback"
+            # Dynamic capture failed — do NOT clear melds; use known count for hand_region
+            debug["capture_path"] = "meld-detected-fallback"
             debug["fallback_reason"] = "dynamic_full_strip_invalid"
-        meld_groups = len(state.self_melds)
+        # Use effective meld count so hand_region is correctly shifted even on fallback
+        meld_groups = len(effective_melds)
         meld_tiles = meld_groups * 3
         hand_rect = self._layout.hand_region(meld_groups)
         hand_strip = self._capture.grab_from_frame(frame, hand_rect)
@@ -480,6 +486,28 @@ class BattleService:
         y2 = min(h, band_top + int(active_rows[-1]) + 1 + int(h * 0.05))
         return split_runs, y1, y2
 
+    def _compute_run_heights(
+        self,
+        strip: np.ndarray,
+        split_runs: list[tuple[int, int]],
+    ) -> list[int]:
+        """返回每个 split_run 列范围内白色像素的垂直高度（y_max - y_min）。"""
+        if strip is None or strip.size == 0 or not split_runs:
+            return []
+        hsv = cv2.cvtColor(strip, cv2.COLOR_BGR2HSV)
+        white = ((hsv[:, :, 2] > 145) & (hsv[:, :, 1] < 150)).astype(np.uint8)
+        heights: list[int] = []
+        w = strip.shape[1]
+        for left, right in split_runs:
+            col_slice = white[:, max(0, left):min(w, right)]
+            if col_slice.size == 0:
+                heights.append(0)
+                continue
+            row_mean = col_slice.mean(axis=1)
+            active_rows = np.where(row_mean > 0.08)[0]
+            heights.append(int(active_rows[-1] - active_rows[0] + 1) if len(active_rows) >= 2 else 0)
+        return heights
+
     def _detect_self_melds(
         self,
         frame: np.ndarray,
@@ -499,18 +527,20 @@ class BattleService:
             return [], {"reason": "no_tile_layout"}
 
         split_runs, y1, y2 = tile_layout
-        candidate = self._detect_left_meld_candidate(split_runs)
+        run_heights = self._compute_run_heights(strip, split_runs)
+        candidate = self._detect_left_meld_candidate(split_runs, run_heights)
         debug: dict[str, Any] = {
             "split_runs_count": len(split_runs),
             "split_runs": [list(run) for run in split_runs],
             "row_bounds": [y1, y2],
+            "run_heights": run_heights,
             "candidate": candidate,
         }
         if not candidate:
             debug["reason"] = "no_candidate"
             return [], debug
         meld_tile_count = int(candidate["meld_tile_count"])
-        if not self._is_reliable_meld_candidate(split_runs, candidate):
+        if not self._is_reliable_meld_candidate(split_runs, candidate, run_heights):
             debug["reason"] = "candidate_failed_structure"
             return [], debug
 
@@ -574,7 +604,11 @@ class BattleService:
         self._last_meld_rois = list(prepared_meld_rois)
         return melds, debug
 
-    def _detect_left_meld_candidate(self, split_runs: list[tuple[int, int]]) -> dict[str, Any] | None:
+    def _detect_left_meld_candidate(
+        self,
+        split_runs: list[tuple[int, int]],
+        run_heights: list[int] | None = None,
+    ) -> dict[str, Any] | None:
         if len(split_runs) < 6:
             return None
         widths = [right - left for left, right in split_runs]
@@ -605,6 +639,19 @@ class BattleService:
             ]
             max_internal_gap = max(inside_gaps) if inside_gaps else 0.0
             score = (meld_groups * 1000.0) + gap - (width_ratio * 10.0) - max_internal_gap
+
+            # 高度差分：副露牌与手牌高度不同是强信号
+            height_diff_ratio = 0.0
+            if run_heights and len(run_heights) >= meld_tile_count + 1:
+                meld_h_vals = [h for h in run_heights[:meld_tile_count] if h > 0]
+                hand_h_vals = [h for h in run_heights[meld_tile_count:] if h > 0]
+                if meld_h_vals and hand_h_vals:
+                    meld_h = float(np.median(meld_h_vals))
+                    hand_h = float(np.median(hand_h_vals))
+                    if hand_h > 0:
+                        height_diff_ratio = abs(meld_h - hand_h) / hand_h
+                        score += height_diff_ratio * 500.0
+
             candidate = {
                 "meld_groups": meld_groups,
                 "meld_tile_count": meld_tile_count,
@@ -617,22 +664,35 @@ class BattleService:
                 "width_ratio": round(float(width_ratio), 4),
                 "inside_gaps": [int(value) for value in inside_gaps],
                 "max_internal_gap": round(float(max_internal_gap), 2),
+                "height_diff_ratio": round(height_diff_ratio, 3),
             }
             if score > best_score:
                 best_score = score
                 best_candidate = candidate
         return best_candidate
 
-    def _is_reliable_meld_candidate(self, split_runs: list[tuple[int, int]], candidate: dict[str, Any]) -> bool:
+    def _is_reliable_meld_candidate(
+        self,
+        split_runs: list[tuple[int, int]],
+        candidate: dict[str, Any],
+        run_heights: list[int] | None = None,
+    ) -> bool:
         meld_tile_count = int(candidate.get("meld_tile_count") or 0)
         if meld_tile_count <= 0 or len(split_runs) <= meld_tile_count:
             return False
+
+        # 若高度差异显著，宽度/间隙约束可适当放宽
+        height_diff_ratio = float(candidate.get("height_diff_ratio") or 0.0)
+        height_confirms = height_diff_ratio > 0.08
+
         width_ratio = float(candidate.get("width_ratio") or 0.0)
-        if width_ratio > 1.7:
+        width_limit = 2.0 if height_confirms else 1.7
+        if width_ratio > width_limit:
             return False
         gap = float(candidate.get("gap") or 0.0)
         max_internal_gap = float(candidate.get("max_internal_gap") or 0.0)
-        if gap <= max_internal_gap * 1.1:
+        gap_factor = 1.0 if height_confirms else 1.1
+        if gap <= max_internal_gap * gap_factor:
             return False
         left_widths = [float(value) for value in candidate.get("left_widths", [])]
         if not left_widths:
@@ -640,7 +700,8 @@ class BattleService:
         base_width = float(candidate.get("base_width") or 0.0)
         if base_width <= 0:
             return False
-        if any(abs(width - base_width) > base_width * 0.65 for width in left_widths):
+        width_tolerance = 0.80 if height_confirms else 0.65
+        if any(abs(width - base_width) > base_width * width_tolerance for width in left_widths):
             return False
         remaining_tiles = len(split_runs) - meld_tile_count
         return remaining_tiles in self._expected_visible_hand_counts(meld_tile_count)

@@ -21,3 +21,4 @@ models/*.yaml
 *.log
 *.tmp
 *.bak
+.gitnexus

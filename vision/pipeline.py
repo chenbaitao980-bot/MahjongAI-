@@ -236,6 +236,33 @@ class RecognitionPipeline:
             frame_index=self._frame_index,
             debug_dir=self._debug_dir,
         )
+
+        # Y方向高度校验：排除左侧副露溢入
+        # 当 meld_count 被误判为 0 时，hand_region(0) 返回全宽区域，
+        # 左侧副露牌会被一起分割。副露牌高度明显矮于手牌，通过高度差异过滤。
+        sh = self._layout._layout.get("self_hand", {})
+        meld_side = sh.get("meld_side", "right")
+        if meld_side == "left" and len(hand_rois) > 1:
+            roi_heights = [roi.shape[0] for roi in hand_rois if roi is not None and roi.size > 0]
+            if len(roi_heights) >= 4:
+                med_h = float(np.median(roi_heights))
+                height_threshold = med_h * 0.75
+                prune_count = 0
+                for roi in hand_rois:
+                    if roi.shape[0] < height_threshold:
+                        prune_count += 1
+                    else:
+                        break  # 副露从左起连续，首个正常高度手牌即停
+                if prune_count > 0:
+                    logger.info(
+                        "[Frame %d] 左侧副露溢入校验: 删除 %d 个高度异常ROI "
+                        "(med_h=%.1f, threshold=%.1f, heights=%s)",
+                        self._frame_index, prune_count, med_h, height_threshold,
+                        [roi.shape[0] for roi in hand_rois[:prune_count + 1]],
+                    )
+                    hand_rois = hand_rois[prune_count:]
+                    hand_slots = hand_slots[prune_count:]
+
         if 10 <= len(hand_rois) <= 15 and abs(len(hand_rois) - expected_hand) <= 1:
             expected_hand = len(hand_rois)
         state.hand_count = expected_hand
@@ -1743,51 +1770,58 @@ class RecognitionPipeline:
         hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV) if len(roi.shape) == 3 else None
         if hsv is None:
             return 0
-        y_top = int(h * 0.15)
-        y_bottom = int(h * 0.95)
+
+        sh = self._layout._layout.get("self_hand", {})
+        meld_unit_w = sh.get("meld_unit_w", 0.12)
+        meld_unit_px = max(20, int(w * meld_unit_w))
+
+        y_top = int(h * 0.08)
+        y_bottom = int(h * 0.98)
         band = hsv[y_top:y_bottom]
+        band_h = band.shape[0]
         white = ((band[:, :, 2] > 130) & (band[:, :, 1] < 150)).astype(np.float32)
         col = cv2.GaussianBlur(white.mean(axis=0).reshape(1, -1), (1, 7), 0).reshape(-1)
 
-        # 找到所有"白色活跃段"
-        active = col > 0.15
-        runs: list[tuple[int, int]] = []
-        start = None
-        for i, v in enumerate(active):
-            if v and start is None:
-                start = i
-            elif not v and start is not None:
-                runs.append((start, i))
-                start = None
-        if start is not None:
-            runs.append((start, w))
+        # 计算右侧手牌区（最右 50%）的白像素 y 重心，用于高度对比
+        right_x = max(int(w * 0.50), meld_unit_px * 4 + 1)
+        right_white = white[:, right_x:] if right_x < w else white
+        right_row_mean = right_white.mean(axis=1) if right_white.size > 0 else np.zeros(band_h)
+        right_active_rows = np.where(right_row_mean > 0.08)[0]
+        if len(right_active_rows) >= 2:
+            hand_y_center = float(right_active_rows.mean())
+            hand_y_height = float(right_active_rows[-1] - right_active_rows[0] + 1)
+        else:
+            hand_y_center = band_h / 2.0
+            hand_y_height = band_h * 0.7
 
-        # 过滤极窄的噪声
-        min_tile_px = max(20, w // 30)
-        runs = [(s, e) for s, e in runs if e - s >= min_tile_px]
-        if len(runs) < 3:
-            return 0
+        # 逐槽位检测：每个 meld_unit_px 宽的槽位是否有牌面，并用高度差辅助确认
+        count = 0
+        for i in range(4):
+            slot_x1 = i * meld_unit_px
+            slot_x2 = min(w, (i + 1) * meld_unit_px)
+            if slot_x2 <= slot_x1:
+                break
+            slot_col = col[slot_x1:slot_x2]
+            slot_density = float(slot_col.mean()) if slot_col.size > 0 else 0.0
+            if slot_density <= 0.18:
+                break  # 副露从左起连续，首个空槽即停
 
-        # 估算单张牌宽
-        widths = [e - s for s, e in runs]
-        # 排除最宽（可能是手牌连续段）
-        widths_sorted = sorted(widths)
-        tile_w_est = float(np.median(widths_sorted[:max(1, len(widths_sorted) // 2)]))
-        if tile_w_est <= 0:
-            return 0
+            # 高度确认：计算该槽位白像素的 y 中心和高度
+            slot_white = white[:, slot_x1:slot_x2]
+            slot_row_mean = slot_white.mean(axis=1) if slot_white.size > 0 else np.zeros(band_h)
+            slot_active_rows = np.where(slot_row_mean > 0.08)[0]
+            if len(slot_active_rows) >= 2:
+                slot_y_height = float(slot_active_rows[-1] - slot_active_rows[0] + 1)
+                height_diff = abs(slot_y_height - hand_y_height) / max(1.0, hand_y_height)
+                # 若高度几乎一样且密度勉强过阈值，认为是手牌溢出而非真正的副露槽
+                if slot_density < 0.25 and height_diff < 0.05:
+                    break
+            count += 1
 
-        # 手牌正常段总宽约 = 13~14 * tile_w_est
-        # 副露段总宽约 = n_meld_tiles * tile_w_est（每组3张）
-        total_active_w = sum(e - s for s, e in runs)
-        hand_only_w = 13 * tile_w_est  # 保守估计手牌宽
-        meld_w = max(0.0, total_active_w - hand_only_w)
-        # 每组副露约占 3 张
-        meld_count_est = int(round(meld_w / (3 * tile_w_est)))
-        meld_count_est = max(0, min(4, meld_count_est))
-
+        meld_count_est = min(count, 4)
         logger.info(
-            "[Frame %d] 视觉副露估算: total_active_w=%d tile_w=%.1f meld_w=%.1f → meld_count=%d",
-            self._frame_index, total_active_w, tile_w_est, meld_w, meld_count_est,
+            "[Frame %d] 视觉副露估算(逐槽): meld_unit_px=%d → meld_count=%d",
+            self._frame_index, meld_unit_px, meld_count_est,
         )
         return meld_count_est
 

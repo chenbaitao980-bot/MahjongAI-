@@ -556,6 +556,74 @@ class HandRegionModule:
             slots.append((x1, y1, x2 - x1, y2 - y1))
         return rois, slots
 
+    def _segment_tiles_by_white_components(self, strip: np.ndarray, expected_count: int = 13, frame_index: int = 0, debug_dir: str | None = None) -> tuple[list[np.ndarray], list[tuple[int, int, int, int]]]:
+        """Segment visible hand tiles from white or dark tile faces.
+
+        Brightness valleys are fragile when tiles touch or when green glow/text
+        sits on top of the hand. This detector first finds continuous tile
+        blocks (white or dark), then splits wide blocks by the observed tile aspect ratio.
+        """
+        if strip is None or strip.size == 0:
+            return [], []
+        h, w = strip.shape[:2]
+        if len(strip.shape) != 3 or strip.shape[2] != 3:
+            return [], []
+
+        hsv = cv2.cvtColor(strip, cv2.COLOR_BGR2HSV)
+        v_mean = int(hsv[:, :, 2].mean())
+
+        if v_mean > 120:
+            # 亮色界面：白色牌面
+            mask = ((hsv[:, :, 2] > 145) & (hsv[:, :, 1] < 90)).astype(np.uint8) * 255
+        else:
+            # 暗色界面：找有内容的区域（非纯黑背景）
+            mask = ((hsv[:, :, 1] > 25) & (hsv[:, :, 2] > 35)).astype(np.uint8) * 255
+
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3)))
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (9, 5)))
+
+        n_labels, _labels, stats, _centroids = cv2.connectedComponentsWithStats(mask)
+        clusters: list[tuple[int, int, int, int, int]] = []
+        min_area = max(900, int(h * w * 0.002))
+        for label in range(1, n_labels):
+            x, y, bw, bh, area = [int(v) for v in stats[label]]
+            if area < min_area:
+                continue
+            if bh < max(55, int(h * 0.45)) or bw < 30:
+                continue
+            if y < int(h * 0.03) and bh < int(h * 0.55):
+                continue
+            clusters.append((x, y, bw, bh, area))
+
+        clusters.sort(key=lambda b: b[0])
+        rois: list[np.ndarray] = []
+        slots: list[tuple[int, int, int, int]] = []
+
+        for x, y, bw, bh, _area in clusters:
+            # 手牌 ROI 实测宽高比约 0.70，过大会把切口落在两张牌中间。
+            est_tile_w = max(40.0, bh * 0.70)
+            n_tiles = max(1, int(round(bw / est_tile_w)))
+            if n_tiles > 15:
+                continue
+            tile_w = bw / n_tiles
+            for i in range(n_tiles):
+                sx1 = int(round(x + i * tile_w))
+                sx2 = int(round(x + (i + 1) * tile_w))
+                if sx2 - sx1 < max(30, int(est_tile_w * 0.45)):
+                    continue
+                pad_x = max(1, int((sx2 - sx1) * 0.02))
+                pad_y = max(2, int(bh * 0.04))
+                x1 = max(0, sx1 + pad_x)
+                x2 = min(w, sx2 - pad_x)
+                y1 = max(0, y - pad_y)
+                y2 = min(h, y + bh + pad_y)
+                if x2 <= x1 or y2 <= y1:
+                    continue
+                rois.append(strip[y1:y2, x1:x2])
+                slots.append((x1, y1, x2 - x1, y2 - y1))
+
+        return rois, slots
+
     def _segment_tiles(self, strip: np.ndarray, expected_count: int = 13, frame_index: int = 0, debug_dir: str | None = None) -> list[np.ndarray]:
         if strip is None or strip.size == 0:
             return []

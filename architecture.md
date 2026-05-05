@@ -6,7 +6,7 @@
 
 ## 变更日志
 
-### 2026-05-05 — UI 交互 + 识别精度改进
+### 2026-05-05 — UI 交互 + 识别精度改进 + Bug 修复
 
 #### `ui/battle_panel.py`
 - **`MeldSelectionDialog.__init__`**：新增 `existing_meld` 可选参数，打开时自动预填充副露类型和各牌
@@ -44,6 +44,13 @@
 
 #### `vision/hog_classifier.py`
 - **`extract_hog()`**：CLAHE `clipLimit` 2.0 → 3.0，增强万字牌低对比度区域的笔划特征
+
+#### `vision/hand_region_module.py`
+- **Bug 修复**：`_segment_tiles()` 调用 `self._segment_tiles_by_white_components()` 但方法缺失，导致 `AttributeError`。根因：从 `RecognitionPipeline` 重构提取 `HandRegionModule` 时该方法被遗漏
+- **新增 `_segment_tiles_by_white_components(self, strip, expected_count, frame_index, debug_dir)`**：从 `pipeline.py:1511-1577` 搬运，调整签名匹配调用处 4 参数。逻辑：HSV 白色/暗色牌面检测 → 连通域聚类 → 按牌面宽高比 0.70 切分宽块 → 返回 `(rois, slots)`
+
+#### `vision/pipeline.py`
+- **副露溢出修复**：`segment_tiles_with_slots` 返回后插入 Y 方向高度校验后处理，取 ROI 高度中位数为基准，阈值 0.75，从左侧逐个删除高度过低的副露溢入 ROI（仅 `meld_side=left` 时生效），第 240-264 行
 
 ---
 

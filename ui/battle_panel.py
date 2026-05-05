@@ -148,7 +148,7 @@ class TileSelectionDialog(QDialog):
 
 
 class MeldSelectionDialog(QDialog):
-    def __init__(self, title: str, parent=None):
+    def __init__(self, title: str, parent=None, existing_meld=None):
         super().__init__(parent)
         self.setWindowTitle(title)
         self.resize(420, 300)
@@ -189,6 +189,26 @@ class MeldSelectionDialog(QDialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
         self._sync_tile_rows()
+
+        if existing_meld is not None:
+            type_idx = self._type_combo.findData(existing_meld.meld_type)
+            if type_idx >= 0:
+                self._type_combo.setCurrentIndex(type_idx)
+                self._sync_tile_rows()
+            for i, tile in enumerate(existing_meld.tiles[:4]):
+                if not getattr(tile, "tile_id", None):
+                    continue
+                suit = tile.tile_id[-1]
+                suit_combo, value_combo = self._tile_rows[i]
+                suit_idx = suit_combo.findData(suit)
+                if suit_idx >= 0:
+                    suit_combo.blockSignals(True)
+                    suit_combo.setCurrentIndex(suit_idx)
+                    suit_combo.blockSignals(False)
+                    self._reload_value_combo(suit_combo, value_combo)
+                val_idx = value_combo.findData(tile.tile_id)
+                if val_idx >= 0:
+                    value_combo.setCurrentIndex(val_idx)
 
     def _reload_value_combo(self, suit_combo: QComboBox, value_combo: QComboBox) -> None:
         suit = str(suit_combo.currentData())
@@ -484,7 +504,8 @@ class BattlePanel(QWidget):
     state_changed = pyqtSignal(object)
     analysis_requested = pyqtSignal(str)
     config_requested = pyqtSignal()
-    tile_correction_requested = pyqtSignal(int, str)  # (tile_index, correct_tile_id)
+    tile_correction_requested = pyqtSignal(int, str)   # (tile_index, correct_tile_id)
+    meld_correction_requested = pyqtSignal(int, str)   # (flat_meld_tile_index, correct_tile_id)
 
     def __init__(self, config: dict, parent=None):
         super().__init__(parent)
@@ -533,17 +554,18 @@ class BattlePanel(QWidget):
 
         center_box = self._build_center_group()
         center_box.setMaximumWidth(520)
+        self._train_success_label = QLabel("")
+        self._train_success_label.setWordWrap(True)
+        self._train_success_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._train_success_label.setStyleSheet("color:#888888; font-size:12px; padding:4px;")
         center = QVBoxLayout()
         center.addWidget(center_box)
+        center.addWidget(self._train_success_label)
         center.addStretch()
         content.addLayout(center, 1)
 
         right = QVBoxLayout()
         right.addWidget(self._build_advice_group())
-        self._train_success_label = QLabel("")
-        self._train_success_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom)
-        self._train_success_label.setStyleSheet("color:#888888; font-size:11px;")
-        right.addWidget(self._train_success_label)
         content.addLayout(right, 1)
 
     def _build_player_group(self, title: str, enemy: bool) -> QGroupBox:
@@ -582,16 +604,20 @@ class BattlePanel(QWidget):
         meld_row.addWidget(meld_clear)
         layout.addLayout(meld_row)
 
-        meld_label = QLabel("（空）")
-        meld_label.setWordWrap(True)
-        layout.addWidget(meld_label)
+        meld_container = QWidget()
+        meld_layout = QHBoxLayout(meld_container)
+        meld_layout.setContentsMargins(0, 0, 0, 0)
+        meld_layout.setSpacing(4)
+        meld_layout.addWidget(QLabel("（空）"))
+        meld_layout.addStretch()
+        layout.addWidget(meld_container)
 
         if enemy:
             self._enemy_discard_label = discard_label
-            self._enemy_meld_label = meld_label
+            self._enemy_meld_layout = meld_layout
         else:
             self._self_discard_label = discard_label
-            self._self_meld_label = meld_label
+            self._self_meld_layout = meld_layout
         return box
 
     def _build_center_group(self) -> QGroupBox:
@@ -822,6 +848,7 @@ class BattlePanel(QWidget):
             trigger = "enemy_meld_changed"
         else:
             self._state.self_melds.append(meld)
+            self._state.self_melds_locked = True
             action = "add_self_meld"
             trigger = "self_meld_changed"
         self._record_and_emit(action, {"meld_type": meld.meld_type, "tiles": [tile.tile_id for tile in meld.tiles]})
@@ -832,6 +859,8 @@ class BattlePanel(QWidget):
         if not melds:
             return
         meld = melds.pop()
+        if not enemy:
+            self._state.self_melds_locked = True
         self._record_and_emit(
             "undo_enemy_meld" if enemy else "undo_self_meld",
             {"meld_type": meld.meld_type, "tiles": [tile.tile_id for tile in meld.tiles]},
@@ -843,6 +872,8 @@ class BattlePanel(QWidget):
             return
         count = len(melds)
         melds.clear()
+        if not enemy:
+            self._state.self_melds_locked = False
         self._record_and_emit("clear_enemy_melds" if enemy else "clear_self_melds", {"count": count})
 
     _HAND_COLS = 8  # tiles per row before wrapping
@@ -888,13 +919,13 @@ class BattlePanel(QWidget):
         correct_id = dlg.selected_tile_id
         if not correct_id:
             return
-        # Always update: sets confidence=1.0 and possibly changes tile_id
+        # Always update confidence=1.0 and emit training signal (even if tile unchanged,
+        # confirming a correct recognition reinforces the sample).
         if tile_index < len(self._state.self_hand):
             self._state.self_hand[tile_index] = tile_from_id(correct_id)
             self._rebuild_hand_tile_buttons(self._state.self_hand)
             self._record_and_emit("correct_tile", {"index": tile_index, "tile": correct_id})
-        if correct_id != current_tile_id:
-            self.tile_correction_requested.emit(tile_index, correct_id)
+        self.tile_correction_requested.emit(tile_index, correct_id)
 
     def _format_tiles(self, tiles) -> str:
         if not tiles:
@@ -912,6 +943,50 @@ class BattlePanel(QWidget):
             tile_text = ",".join(tile_display(tile.tile_id) for tile in meld.tiles if tile.tile_id)
             parts.append(f"{label}[{tile_text}]")
         return "  ".join(parts)
+
+    def _rebuild_meld_buttons(self, melds, is_enemy: bool, layout) -> None:
+        while layout.count():
+            item = layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        if not melds:
+            layout.addWidget(QLabel("（空）"))
+            layout.addStretch()
+            return
+        type_map = dict(MELD_TYPE_OPTIONS)
+        type_map["auto"] = "自动"
+        for idx, meld in enumerate(melds):
+            label = type_map.get(meld.meld_type, meld.meld_type)
+            tile_text = ",".join(tile_display(tile.tile_id) for tile in meld.tiles if tile.tile_id)
+            btn = QPushButton(f"{label}[{tile_text}]")
+            btn.setToolTip("点击修改")
+            btn.clicked.connect(
+                lambda _checked, i=idx, e=is_enemy, m=meld: self._on_meld_correction_click(i, e, m)
+            )
+            layout.addWidget(btn)
+        layout.addStretch()
+
+    def _on_meld_correction_click(self, meld_index: int, is_enemy: bool, current_meld) -> None:
+        dlg = MeldSelectionDialog("修改副露", parent=self, existing_meld=current_meld)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        new_meld = dlg.selected_meld()
+        melds = self._state.enemy_melds if is_enemy else self._state.self_melds
+        if meld_index < len(melds):
+            melds[meld_index] = new_meld
+            if not is_enemy:
+                self._state.self_melds_locked = True
+            self._record_and_emit(
+                "correct_enemy_meld" if is_enemy else "correct_self_meld",
+                {"index": meld_index, "meld_type": new_meld.meld_type,
+                 "tiles": [t.tile_id for t in new_meld.tiles]},
+            )
+            # Emit training signal for each tile in the corrected meld (flat index).
+            tiles_per_meld = 4 if new_meld.meld_type.startswith("kan") else 3
+            base = meld_index * tiles_per_meld
+            for i, tile in enumerate(new_meld.tiles[:tiles_per_meld]):
+                if tile.tile_id:
+                    self.meld_correction_requested.emit(base + i, tile.tile_id)
 
     def _render_state(self) -> None:
         baida_tile = self._state.baida_tile or ""
@@ -931,8 +1006,8 @@ class BattlePanel(QWidget):
         self._rebuild_hand_tile_buttons(self._state.self_hand)
         self._self_discard_label.setText(self._format_tiles(self._state.self_discards))
         self._enemy_discard_label.setText(self._format_tiles(self._state.enemy_discards))
-        self._self_meld_label.setText(self._format_melds(self._state.self_melds))
-        self._enemy_meld_label.setText(self._format_melds(self._state.enemy_melds))
+        self._rebuild_meld_buttons(self._state.self_melds, False, self._self_meld_layout)
+        self._rebuild_meld_buttons(self._state.enemy_melds, True, self._enemy_meld_layout)
         self._recognition_label.setText(f"识别来源：{self._state.recognition_source}")
         self._provider_combo.blockSignals(True)
         self._provider_combo.setCurrentIndex(max(0, self._provider_combo.findData(self._state.vision_provider)))
@@ -1002,8 +1077,13 @@ class BattlePanel(QWidget):
     def set_advice(self, advice: BattleAdvice) -> None:
         self._render_advice(advice)
 
+    def set_training_in_progress(self) -> None:
+        self._train_success_label.setText("⏳ 正在训练中...")
+        self._train_success_label.setStyleSheet("color: #e67e22; font-size: 11px;")
+
     def set_train_success_message(self, message: str) -> None:
         self._train_success_label.setText(message)
+        self._train_success_label.setStyleSheet("color: #27ae60; font-size: 11px;")
 
     def set_error(self, message: str) -> None:
         self._error_label.setText(message)

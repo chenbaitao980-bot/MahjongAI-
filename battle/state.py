@@ -54,6 +54,7 @@ class BattleState:
     self_hand: list[TileMatch] = field(default_factory=list)
     self_discards: list[TileMatch] = field(default_factory=list)
     self_melds: list[MeldGroup] = field(default_factory=list)
+    self_melds_locked: bool = False   # True when user manually set/corrected melds
     enemy_discards: list[TileMatch] = field(default_factory=list)
     enemy_melds: list[MeldGroup] = field(default_factory=list)
     last_trigger_reason: str = ""
@@ -98,6 +99,7 @@ class BattleState:
         self.self_hand.clear()
         self.self_discards.clear()
         self.self_melds.clear()
+        self.self_melds_locked = False
         self.enemy_discards.clear()
         self.enemy_melds.clear()
         self.last_trigger_reason = ""

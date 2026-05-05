@@ -168,6 +168,7 @@ class BattleService:
         self._session: "GameSession | None" = None
         self._last_hand_strip: np.ndarray | None = None
         self._last_match_rois: list[np.ndarray] = []
+        self._last_meld_rois: list[np.ndarray] = []   # flat list: meld0_tile0, meld0_tile1, ...
         self._last_capture_debug: dict[str, Any] = {}
 
     def analyze_opening(self, state: BattleState) -> tuple[BattleState, BattleAdvice]:
@@ -278,10 +279,15 @@ class BattleService:
             "tile_row_bounds": [full_tile_layout[1], full_tile_layout[2]] if full_tile_layout else [],
             "meld_debug": meld_debug,
         }
-        # Always refresh self_melds from the current frame so stale auto-detected
-        # melds do not stick around until the user manually clicks undo.
-        state.self_melds = detected_melds
-        if detected_melds:
+        # Refresh self_melds unless the user has manually corrected/locked them.
+        # Auto-unlock when detection returns empty: the round ended or melds are gone,
+        # so the locked correction is now stale and would cause wrong hand-region geometry.
+        if not detected_melds and state.self_melds_locked:
+            state.self_melds = []
+            state.self_melds_locked = False
+        elif not state.self_melds_locked:
+            state.self_melds = detected_melds
+        if detected_melds and not state.self_melds_locked:
             dynamic_capture = self._capture_hand_rois_from_full_strip(
                 full_hand_strip,
                 full_tile_layout,
@@ -295,7 +301,8 @@ class BattleService:
                 debug["expected_hand_counts"] = sorted(self._expected_visible_hand_counts(len(detected_melds) * 3))
                 self._last_capture_debug = debug
                 return hand_strip, rois
-            state.self_melds = []
+            if not state.self_melds_locked:
+                state.self_melds = []
             debug["capture_path"] = "meld-rejected-fallback"
             debug["fallback_reason"] = "dynamic_full_strip_invalid"
         meld_groups = len(state.self_melds)
@@ -564,6 +571,7 @@ class BattleService:
             debug["reason"] = "low_confidence"
             return [], debug
         debug["reason"] = "accepted"
+        self._last_meld_rois = list(prepared_meld_rois)
         return melds, debug
 
     def _detect_left_meld_candidate(self, split_runs: list[tuple[int, int]]) -> dict[str, Any] | None:

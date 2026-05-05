@@ -1066,25 +1066,60 @@ class TileRecognizer:
             return img
         if len(img.shape) != 3:
             return img
+        h_img, w_img = img.shape[:2]
         hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+
         # 策略A：白色牌面（亮色界面）
-        white_mask = ((hsv[:, :, 2] > 135) & (hsv[:, :, 1] < 115)).astype(np.uint8)
+        # 用形态学 close 填充字符笔划造成的空洞，再取最大连通域作为牌面区域
+        white_mask = ((hsv[:, :, 2] > 135) & (hsv[:, :, 1] < 120)).astype(np.uint8)
+        ksize = max(5, min(11, int(min(h_img, w_img) * 0.12) | 1))  # 奇数, 约牌面宽度的 12%
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (ksize, ksize))
+        filled = cv2.morphologyEx(white_mask, cv2.MORPH_CLOSE, kernel)
+        n_labels, labels, stats, _ = cv2.connectedComponentsWithStats(filled, connectivity=8)
+        if n_labels > 1:
+            # 取面积最大的连通域（排除背景 label=0）
+            largest = 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))
+            comp_area = stats[largest, cv2.CC_STAT_AREA]
+            # 只有当最大区域面积合理时才使用（避免整个图都是白时误判）
+            if comp_area >= 50 and comp_area <= h_img * w_img * 0.95:
+                ys, xs = np.where(labels == largest)
+                x1 = max(0, int(xs.min()) - 2)
+                x2 = min(w_img, int(xs.max()) + 3)
+                y1 = max(0, int(ys.min()) - 2)
+                y2 = min(h_img, int(ys.max()) + 3)
+                if x2 - x1 >= 10 and y2 - y1 >= 10:
+                    return img[y1:y2, x1:x2]
+        # 降级：直接用白色 mask 的 bounding box
         ys, xs = np.where(white_mask > 0)
         if len(xs) >= 50:
             x1 = max(0, int(xs.min()) - 2)
-            x2 = min(img.shape[1], int(xs.max()) + 3)
+            x2 = min(w_img, int(xs.max()) + 3)
             y1 = max(0, int(ys.min()) - 2)
-            y2 = min(img.shape[0], int(ys.max()) + 3)
+            y2 = min(h_img, int(ys.max()) + 3)
             if x2 > x1 and y2 > y1:
                 return img[y1:y2, x1:x2]
+
         # 策略B：暗色牌面（暗色界面）—— 找高饱和度+中等亮度的区域
         dark_mask = ((hsv[:, :, 1] > 40) & (hsv[:, :, 2] > 50) & (hsv[:, :, 2] < 180)).astype(np.uint8)
+        kernel_d = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+        filled_d = cv2.morphologyEx(dark_mask, cv2.MORPH_CLOSE, kernel_d)
+        nd, ld, sd, _ = cv2.connectedComponentsWithStats(filled_d, connectivity=8)
+        if nd > 1:
+            lg = 1 + int(np.argmax(sd[1:, cv2.CC_STAT_AREA]))
+            if sd[lg, cv2.CC_STAT_AREA] >= 50:
+                ys2, xs2 = np.where(ld == lg)
+                x1 = max(0, int(xs2.min()) - 2)
+                x2 = min(w_img, int(xs2.max()) + 3)
+                y1 = max(0, int(ys2.min()) - 2)
+                y2 = min(h_img, int(ys2.max()) + 3)
+                if x2 - x1 >= 10 and y2 - y1 >= 10:
+                    return img[y1:y2, x1:x2]
         ys2, xs2 = np.where(dark_mask > 0)
         if len(xs2) >= 50:
             x1 = max(0, int(xs2.min()) - 2)
-            x2 = min(img.shape[1], int(xs2.max()) + 3)
+            x2 = min(w_img, int(xs2.max()) + 3)
             y1 = max(0, int(ys2.min()) - 2)
-            y2 = min(img.shape[0], int(ys2.max()) + 3)
+            y2 = min(h_img, int(ys2.max()) + 3)
             if x2 > x1 and y2 > y1:
                 return img[y1:y2, x1:x2]
         # 都失败，返回原图

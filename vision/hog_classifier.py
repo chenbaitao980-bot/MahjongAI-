@@ -41,8 +41,8 @@ def extract_hog(roi: np.ndarray, hog: cv2.HOGDescriptor | None = None) -> np.nda
     if hog is None:
         hog = _make_hog()
     gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY) if len(roi.shape) == 3 else roi.copy()
-    # CLAHE 对比度增强，减少光照影响
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(4, 4))
+    # CLAHE 对比度增强：clipLimit=3.0 对低对比度万字牌面效果更好
+    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(4, 4))
     gray = clahe.apply(gray)
     resized = cv2.resize(gray, _HOG_WIN)
     feat = hog.compute(resized)

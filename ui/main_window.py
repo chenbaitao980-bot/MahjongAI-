@@ -987,6 +987,7 @@ class MainWindow(QMainWindow):
         self._battle_panel.analysis_requested.connect(self._on_battle_analysis_requested)
         self._battle_panel.config_requested.connect(self._open_api_config_dialog)
         self._battle_panel.tile_correction_requested.connect(self._on_battle_tile_correction)
+        self._battle_panel.meld_correction_requested.connect(self._on_battle_meld_correction)
         layout.addWidget(self._battle_panel)
         return w
 
@@ -1208,6 +1209,8 @@ class MainWindow(QMainWindow):
         self._hog_train_thread.finished_ok.connect(self._on_hog_train_finished)
         self._hog_train_thread.finished_err.connect(self._on_hog_train_error)
         self._hog_train_thread.start()
+        if hasattr(self, "_battle_panel"):
+            self._battle_panel.set_training_in_progress()
 
     def _on_hog_train_progress(self, msg: str):
         self.statusBar().showMessage(msg)
@@ -1244,25 +1247,11 @@ class MainWindow(QMainWindow):
             f"HOG 模型训练完成：{n_classes} 类，{n_samples} 张，训练准确率 {train_acc:.1f}%，已加载={hog_loaded}，主判={hog_primary}"
         )
 
-        train_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        train_ts = datetime.now().strftime("%Y年%m月%d日 %H时%M分%S秒")
         if hasattr(self, "_battle_panel"):
             self._battle_panel.set_train_success_message(
-                f"模型已重新训练  {train_ts}"
+                f"{train_ts} 训练结束  准确率 {train_acc:.1f}%  {n_classes}类/{n_samples}张"
             )
-
-        # 显示各类样本数
-        count_lines = "\n".join([f"  {k}: {v} 张" for k, v in sorted(class_counts.items())])
-        QMessageBox.information(
-            self, "训练完成",
-            f"HOG+SVM 模型训练成功！\n\n"
-            f"训练集准确率：{train_acc:.1f}%\n"
-            f"训练目录：{samples_dir}\n"
-            f"样本总数：{n_samples} 张\n"
-            f"类别数：{n_classes} 类\n\n"
-            f"各类样本数：\n{count_lines}\n\n"
-            f"模型已保存并自动加载：{'是' if hog_loaded else '否'}\n"
-            f"是否参与主判：{'是' if hog_primary else '否，需 34 类齐全且每类足量干净样本'}"
-        )
         if self._pending_battle_start:
             self._pending_battle_start = False
             self._on_battle_start_requested()
@@ -1761,6 +1750,36 @@ class MainWindow(QMainWindow):
         self._pipeline.clear_match_cache()
 
         self.statusBar().showMessage(f"纠错：已保存 {correct_tile_id} 样本，开始后台重训 HOG…")
+        self._start_hog_training(confirm_incomplete=False)
+
+    def _on_battle_meld_correction(self, flat_tile_index: int, correct_tile_id: str) -> None:
+        """用户在副露区纠正了一张牌：保存 ROI 到训练集并后台重训 HOG。"""
+        rois = getattr(self._battle_service, "_last_meld_rois", [])
+        if flat_tile_index >= len(rois):
+            self.statusBar().showMessage(f"副露纠错：未找到第 {flat_tile_index + 1} 张牌的 ROI，跳过保存")
+            return
+        roi = rois[flat_tile_index]
+        if roi is None or roi.size == 0:
+            self.statusBar().showMessage(f"副露纠错：第 {flat_tile_index + 1} 张牌 ROI 为空，跳过保存")
+            return
+
+        from vision.hand_region_module import prepare_trainable_hand_roi_image
+        ok, clean_img, reason = prepare_trainable_hand_roi_image(roi)
+        save_img = clean_img if ok and clean_img is not None else roi
+
+        dst_dir = os.path.join(data_path("data"), "tile_samples_cleaned", correct_tile_id)
+        os.makedirs(dst_dir, exist_ok=True)
+        filename = f"meld_{time.strftime('%Y%m%d_%H%M%S')}_{flat_tile_index:02d}.png"
+        dst = os.path.join(dst_dir, filename)
+        data = cv2.imencode(".png", save_img)[1].tobytes()
+        with open(dst, "wb") as _f:
+            _f.write(data)
+
+        if hasattr(self._tile_rec, "add_training_sample"):
+            self._tile_rec.add_training_sample(save_img, correct_tile_id, source=dst)
+        self._pipeline.clear_match_cache()
+
+        self.statusBar().showMessage(f"副露纠错：已保存 {correct_tile_id} 样本，开始后台重训 HOG…")
         self._start_hog_training(confirm_incomplete=False)
 
     def _open_api_config_dialog(self):

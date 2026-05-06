@@ -93,6 +93,69 @@ class BattleState:
         if len(self.operation_logs) > 300:
             self.operation_logs = self.operation_logs[-300:]
 
+    def _compute_analysis(self) -> dict:
+        """
+        本地分析计算。任何异常都安静返回 {}，不阻断主流程。
+        手牌张数：
+          - 13张：只算当前向听数，不算 candidates
+          - 14张：调用 analyze_discard_candidates，得到完整候选列表
+          - 其他：返回 {}
+        """
+        try:
+            from game.tiles import build_visible_tiles, hand_to_counts, tiles_to_ids
+            from game.shanten import calc_shanten
+            from game.evaluator import analyze_discard_candidates
+
+            hand = tiles_to_ids(self.self_hand)
+            baida = self.baida_tile or None
+
+            meld_count = len(self.self_melds)
+
+            self_meld_tiles = []
+            for m in self.self_melds:
+                self_meld_tiles.extend(tiles_to_ids(m.tiles))
+
+            enemy_meld_tiles = []
+            for m in self.enemy_melds:
+                enemy_meld_tiles.extend(tiles_to_ids(m.tiles))
+
+            visible = build_visible_tiles(
+                hand,
+                tiles_to_ids(self.self_discards),
+                self_meld_tiles,
+                tiles_to_ids(self.enemy_discards),
+                enemy_meld_tiles,
+            )
+
+            counts, baida_count = hand_to_counts(hand, baida)
+
+            if len(hand) == 13:
+                shanten = calc_shanten(counts, meld_count, baida_count)
+                return {"shanten": shanten, "candidates": [], "top_recommendation": None}
+
+            elif len(hand) == 14:
+                candidates = analyze_discard_candidates(
+                    hand,
+                    self.self_melds,
+                    baida,
+                    visible,
+                    tiles_to_ids(self.enemy_discards),
+                    self.enemy_melds,
+                    tiles_to_ids(self.self_discards),
+                    self.remaining_tiles,
+                )
+                top = candidates[0]["discard"] if candidates else None
+                shanten = calc_shanten(counts, meld_count, baida_count)
+                return {
+                    "shanten": shanten,
+                    "candidates": candidates[:5],
+                    "top_recommendation": top,
+                }
+
+            return {}
+        except Exception:
+            return {}
+
     def reset_round(self) -> None:
         self.baida_tile = ""
         self.remaining_tiles = 108
@@ -113,13 +176,14 @@ class BattleState:
 
     def to_payload(self) -> dict:
         remaining = self.remaining_tiles
-        phase = "shengjia" if remaining <= 15 else "playing"
+        phase = "shengjia" if remaining <= 30 else "playing"
         return {
             "rules": {
                 "variant": "taizhou_mahjong",
                 "tile_count": 136,
                 "win_shape": "1 pair + 4 groups",
-                "shengjia_threshold": 15,
+                "shengjia_threshold": 30,
+                "huangpai_threshold": 16,
                 "one_shot_multi_win_priority": "lower_seat_first",
                 "baida_tile": self.baida_tile or None,
             },
@@ -130,6 +194,7 @@ class BattleState:
                 "hand": tiles_to_ids(self.self_hand),
                 "discards": tiles_to_ids(self.self_discards),
                 "melds": melds_to_payload(self.self_melds),
+                "analysis": self._compute_analysis(),
             },
             "enemy": {
                 "discards": tiles_to_ids(self.enemy_discards),

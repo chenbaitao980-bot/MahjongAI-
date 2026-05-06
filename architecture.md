@@ -1,10 +1,64 @@
 # MahjongAI 知识图谱
 
-> 自动生成于 2026-05-04 20:49 | 最后人工更新：2026-05-05
+> 自动生成于 2026-05-04 20:49 | 最后人工更新：2026-05-06
 
 ---
 
 ## 变更日志
+
+### 2026-05-06 — 本地分析模块（向听数/进张/危险度）
+
+#### 新增 `game/tiles.py`
+- 牌编码辅助：0~33 整数映射（万/筒/条/字）
+- `tile_to_int()` / `int_to_tile()` / `suit_of()` / `rank_of()` / `is_honor()`
+- `hand_to_counts(hand, baida)`：返回 `(counts[34], baida_count)`，财神在 counts 中被清零
+- `build_visible_tiles(...)`：统计所有可见牌（含自家手牌），用于计算剩余张数
+- `tiles_to_ids(tiles)`：兼容 `TileMatch` 和 `str` 列表的 tile_id 提取
+
+#### 新增 `game/win.py`
+- `is_win(counts, meld_count, baida_count)`：胡牌判断（支持财神替代）
+- 核心约束：**将牌必须由两张相同真实牌组成**，财神不能单独作将
+- 字牌只能组刻子，不能组顺子
+- `_can_form_melds()`：递归拆面子（刻子/顺子），支持 joker 补位
+
+#### 新增 `game/shanten.py`
+- `calc_shanten(counts, meld_count, baida_count)`：向听数计算
+- 算法：枚举将牌 × 递归面子移除 × 搭子统计
+- `_remove_groups_dfs()`：回溯所有面子组合方式
+- `_count_taatsus()` / `_count_taatsus_and_pairs()`：两面/坎张/对子搭子统计
+- 支持财神替代，已胡牌返回 -1
+
+#### 新增 `game/ukeire.py`
+- `calc_ukeire(hand_13, meld_count, baida, visible_tiles)`：有效进张计算
+- 遍历 34 种牌模拟摸牌，计算新向听数是否降低
+- 返回 `{tiles, count, current_shanten}`
+
+#### 新增 `game/danger.py`
+- `calc_tile_danger(tile, enemy_discards, enemy_melds, self_discards, remaining_tiles, turn)`：危险度评分（0~100）
+- 规则：现物 -20、已见张数修正、字牌生张 +15、中张 +15、巡目加成、对手副露数 >=2 +10、生牌阶段生张 +25
+- `danger_level_str(score)`：安全/较安全/中等/危险/极危险
+
+#### 新增 `game/evaluator.py`
+- `analyze_discard_candidates(hand_14, melds, baida, visible_tiles, enemy_discards, enemy_melds, self_discards, remaining_tiles)`
+- 枚举手牌中每种不重复的候选出牌，计算打出后的向听数、进张数、危险度
+- 排序：**shanten_after ASC → ukeire_count DESC**
+- 返回最多按排序后的完整候选列表（调用方取前5）
+
+#### 修改 `battle/state.py`
+- **`BattleState`** 新增 `_compute_analysis()`：
+  - 13张手牌 → 仅返回 `{"shanten": X, "candidates": [], "top_recommendation": None}`
+  - 14张手牌 → 调用 `analyze_discard_candidates()`，返回前5候选 + top_recommendation
+  - 其他张数 → 返回 `{}`
+  - **全程 try/except 包裹**，异常安静返回 `{}`，不阻断主流程
+- **`to_payload()`**：`"self"` 字典内新增 `"analysis": self._compute_analysis()`
+
+#### 修改 `battle/service.py`
+- `TAIZHOU_RULES_PROMPT` 在【最优策略框架】前插入【本地分析数据】段落：
+  - 要求 LLM **必须优先使用** `self.analysis` 中的硬数据
+  - 明确禁止 LLM 自行重新计算向听数或进张数
+  - 给出决策优先级：`shanten_after 最小 → ukeire_count 最多 → danger 最低`
+
+---
 
 ### 2026-05-05 — UI 交互 + 识别精度改进 + Bug 修复
 
@@ -56,10 +110,10 @@
 
 ## 统计概览
 
-- **Python 文件**: 41
+- **Python 文件**: 47
 - **类数量**: 43
-- **函数数量**: 141
-- **依赖关系**: 182
+- **函数数量**: 159
+- **依赖关系**: 200+
 
 ## 模块拓扑
 
@@ -93,8 +147,14 @@
 | `ui\region_selector.py` | 1 | 0 | 7KB |
 | `vision\layout.py` | 2 | 0 | 7KB |
 | `debug_recognition.py` | 0 | 2 | 6KB |
-| `battle\state.py` | 2 | 4 | 4KB |
+| `battle\state.py` | 2 | 5 | 5KB |
 | `game\state.py` | 6 | 0 | 4KB |
+| `game\tiles.py` | 0 | 8 | 3KB |
+| `game\win.py` | 0 | 2 | 3KB |
+| `game\shanten.py` | 0 | 4 | 4KB |
+| `game\ukeire.py` | 0 | 1 | 2KB |
+| `game\danger.py` | 0 | 2 | 2KB |
+| `game\evaluator.py` | 0 | 1 | 2KB |
 
 ## 核心类
 
@@ -140,3 +200,15 @@
 - `diagnose_region.py` → `vision\layout.py`
 - `diagnose_region.py` → `vision\pipeline.py`
 - `game\session.py` → `battle\__init__.py`
+- `battle\state.py` → `game\tiles.py`
+- `battle\state.py` → `game\shanten.py`
+- `battle\state.py` → `game\evaluator.py`
+- `game\evaluator.py` → `game\tiles.py`
+- `game\evaluator.py` → `game\ukeire.py`
+- `game\evaluator.py` → `game\danger.py`
+- `game\ukeire.py` → `game\tiles.py`
+- `game\ukeire.py` → `game\shanten.py`
+- `game\shanten.py` → `game\tiles.py`
+- `game\win.py` → `game\tiles.py`
+- `game\danger.py` → `game\tiles.py`
+- `game\danger.py` → `game\state.py`

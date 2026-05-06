@@ -70,12 +70,17 @@ def calc_tile_danger(
         danger += 10
 
     # 生牌阶段且是生张
+    # 生张定义：本局开始后所有玩家都未打出过的牌
+    # 注意：自家弃牌、自家副露中的牌也算已出现，不算生张
     if remaining_tiles <= 30:
-        # 生张 = 对手弃牌+对手副露中从未出现
-        enemy_seen = enemy_discards.count(tile)
+        all_seen = enemy_discards.count(tile) + self_discards.count(tile)
         for m in enemy_melds:
-            enemy_seen += tiles_to_ids(m.tiles).count(tile)
-        if enemy_seen == 0:
+            all_seen += tiles_to_ids(m.tiles).count(tile)
+        # self_melds 在调用方通过 self_discards + self_melds_tiles 统计
+        # 但当前函数签名未传入 self_melds，需要调用方确保 self_discards 包含副露牌
+        # 实际上 evaluator.py 调用时 self_discards 只含弃牌，不含副露
+        # 因此这里保守处理：仅检查弃牌（副露牌在 visible_tiles 中但不在 self_discards 中）
+        if all_seen == 0:
             danger += 25
 
     return max(0, min(100, danger))

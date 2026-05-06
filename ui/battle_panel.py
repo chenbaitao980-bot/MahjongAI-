@@ -654,6 +654,26 @@ class BattlePanel(QWidget):
         self._provider_combo.addItem(PROVIDER_LABELS["glm"], "glm")
         self._provider_combo.currentIndexChanged.connect(self._on_provider_changed)
         form.addRow("视觉模型", self._provider_combo)
+
+        # ---- 庄家 / 门风 / 暗杠（2人模式） ----
+        self._dealer_combo = QComboBox()
+        self._dealer_combo.addItem("自家", "self")
+        self._dealer_combo.addItem("对手", "across")
+        self._dealer_combo.currentIndexChanged.connect(self._on_dealer_changed)
+        form.addRow("庄家", self._dealer_combo)
+
+        self._wind_combo = QComboBox()
+        self._wind_combo.addItem("东 (1z)", "1z")
+        self._wind_combo.addItem("南 (2z)", "2z")
+        self._wind_combo.currentIndexChanged.connect(self._on_wind_changed)
+        form.addRow("门风", self._wind_combo)
+
+        self._kan_closed_combo = QComboBox()
+        for i in range(5):
+            self._kan_closed_combo.addItem(str(i), i)
+        self._kan_closed_combo.currentIndexChanged.connect(self._on_kan_closed_changed)
+        form.addRow("暗杠次数", self._kan_closed_combo)
+
         layout.addLayout(form)
 
         hand_top = QHBoxLayout()
@@ -780,6 +800,18 @@ class BattlePanel(QWidget):
     def _on_baida_changed(self) -> None:
         self._state.baida_tile = str(self._baida_value_combo.currentData() or "")
         self._record_and_emit("set_baida_tile", {"tile": self._state.baida_tile})
+
+    def _on_dealer_changed(self) -> None:
+        self._state.dealer_seat = str(self._dealer_combo.currentData() or "self")
+        self._record_and_emit("set_dealer", {"dealer_seat": self._state.dealer_seat})
+
+    def _on_wind_changed(self) -> None:
+        self._state.self_wind = str(self._wind_combo.currentData() or "1z")
+        self._record_and_emit("set_wind", {"self_wind": self._state.self_wind})
+
+    def _on_kan_closed_changed(self) -> None:
+        self._state.kan_closed_count = int(self._kan_closed_combo.currentData() or 0)
+        self._record_and_emit("set_kan_closed", {"kan_closed_count": self._state.kan_closed_count})
 
     def _on_remaining_changed(self, value: int) -> None:
         self._state.remaining_tiles = int(value)
@@ -1012,10 +1044,28 @@ class BattlePanel(QWidget):
         self._provider_combo.blockSignals(True)
         self._provider_combo.setCurrentIndex(max(0, self._provider_combo.findData(self._state.vision_provider)))
         self._provider_combo.blockSignals(False)
+
+        # 同步庄家/门风/暗杠显示
+        self._dealer_combo.blockSignals(True)
+        self._dealer_combo.setCurrentIndex(max(0, self._dealer_combo.findData(self._state.dealer_seat)))
+        self._dealer_combo.blockSignals(False)
+
+        self._wind_combo.blockSignals(True)
+        self._wind_combo.setCurrentIndex(max(0, self._wind_combo.findData(self._state.self_wind)))
+        self._wind_combo.blockSignals(False)
+
+        self._kan_closed_combo.blockSignals(True)
+        self._kan_closed_combo.setCurrentIndex(max(0, self._kan_closed_combo.findData(self._state.kan_closed_count)))
+        self._kan_closed_combo.blockSignals(False)
+
+        dealer_text = "自家" if self._state.dealer_seat == "self" else "对手"
+        wind_text = {"1z": "东", "2z": "南"}.get(self._state.self_wind, self._state.self_wind)
         self._state_summary_label.setText(
-            f"当前牌局摘要：我方手牌{len(self._state.self_hand)}张 | "
+            f"当前牌局摘要：庄家={dealer_text} | 门风={wind_text} | "
+            f"我方手牌{len(self._state.self_hand)}张 | "
             f"我方弃牌{len(self._state.self_discards)}张 | "
             f"敌方弃牌{len(self._state.enemy_discards)}张 | "
+            f"暗杠{self._state.kan_closed_count}次 | "
             f"剩余{self._state.remaining_tiles}张"
         )
 

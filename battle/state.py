@@ -51,12 +51,15 @@ class BattleState:
     vision_provider: str = "auto"
     baida_tile: str = ""
     remaining_tiles: int = 108
+    dealer_seat: str = "self"   # 当前庄家座位：self / right / across / left
+    self_wind: str = "1z"       # 自家门风：1z=东 2z=南 3z=西 4z=北
     self_hand: list[TileMatch] = field(default_factory=list)
     self_discards: list[TileMatch] = field(default_factory=list)
     self_melds: list[MeldGroup] = field(default_factory=list)
     self_melds_locked: bool = False   # True when user manually set/corrected melds
     enemy_discards: list[TileMatch] = field(default_factory=list)
     enemy_melds: list[MeldGroup] = field(default_factory=list)
+    kan_closed_count: int = 0   # 暗杠次数（影响基础牌点计算）
     last_trigger_reason: str = ""
     last_analysis_at: str = ""
     last_analysis_duration_ms: int = 0
@@ -129,9 +132,19 @@ class BattleState:
 
             counts, baida_count = hand_to_counts(hand, baida)
 
+            # 统计暗杠数
+            kan_closed_count = sum(
+                1 for m in self.self_melds if m.meld_type == "kan_closed"
+            )
+
             if len(hand) == 13:
                 shanten = calc_shanten(counts, meld_count, baida_count)
-                return {"shanten": shanten, "candidates": [], "top_recommendation": None}
+                return {
+                    "shanten": shanten,
+                    "kan_closed_count": kan_closed_count,
+                    "candidates": [],
+                    "top_recommendation": None,
+                }
 
             elif len(hand) == 14:
                 eval_result = analyze_discard_candidates(
@@ -151,6 +164,7 @@ class BattleState:
                 shanten = calc_shanten(counts, meld_count, baida_count)
                 return {
                     "shanten": shanten,
+                    "kan_closed_count": kan_closed_count,
                     "strategy_mode": mode,
                     "candidates": candidates[:5],
                     "top_recommendation": top,
@@ -164,12 +178,15 @@ class BattleState:
     def reset_round(self) -> None:
         self.baida_tile = ""
         self.remaining_tiles = 108
+        self.dealer_seat = "self"
+        self.self_wind = "1z"
         self.self_hand.clear()
         self.self_discards.clear()
         self.self_melds.clear()
         self.self_melds_locked = False
         self.enemy_discards.clear()
         self.enemy_melds.clear()
+        self.kan_closed_count = 0
         self.last_trigger_reason = ""
         self.last_analysis_at = ""
         self.last_analysis_duration_ms = 0
@@ -181,16 +198,24 @@ class BattleState:
 
     def to_payload(self) -> dict:
         remaining = self.remaining_tiles
-        phase = "shengjia" if remaining <= 30 else "playing"
+        if remaining <= 16:
+            phase = "huangpai"
+        elif remaining <= 30:
+            phase = "shengjia"
+        else:
+            phase = "playing"
         return {
             "rules": {
                 "variant": "taizhou_mahjong",
+                "num_players": 2,
                 "tile_count": 136,
                 "win_shape": "1 pair + 4 groups",
                 "shengjia_threshold": 30,
                 "huangpai_threshold": 16,
                 "one_shot_multi_win_priority": "lower_seat_first",
                 "baida_tile": self.baida_tile or None,
+                "dealer_seat": self.dealer_seat,
+                "self_wind": self.self_wind,
             },
             "phase": phase,
             "remaining_tiles": remaining,

@@ -6,6 +6,48 @@
 
 ## 变更日志
 
+### 2026-05-06 — 游戏规则修复 + 庄家/门风/暗杠输入 + 生牌/黄牌阶段
+
+#### 修复 `game/danger.py` — 生牌判断逻辑
+- `calc_tile_danger()` 的 `is_sheng` 判定原仅检查对手弃牌，现改为检查 **所有玩家已见牌**（含自家弃牌 + 所有副露）
+- 传入参数扩展：`enemy_discards` → `all_seen = enemy_discards + self_discards + enemy_melds`
+
+#### 修改 `game/evaluator.py`
+- `analyze_discard_candidates()` 调用 `calc_tile_danger` 时合并 `self_discards + self_meld_tiles_flat` 传入，确保生牌/熟牌判断覆盖全场
+
+#### 修改 `game/state.py`
+- 新增 `PHASE_HUANGPAI = "huangpai"` — 黄牌阶段（剩余≤16张，约8对）
+- `PHASE_SHENGJIA` 注释补全："生牌阶段（剩余≤30张，约15对）"
+
+#### 修改 `ui/capture_panel.py`
+- 黄牌边缘显示：当 `remaining_tiles <= 16` 时标题追加「黄牌」红色警示
+
+#### 修改 `battle/service.py`
+- `TAIZHOU_RULES_PROMPT` 新增【可选规则】段落，覆盖单局牌点上限100胡、生牌阶段、黄牌边缘≤16张
+- 明确 `num_players: 2` 注入 payload
+
+#### 修改 `battle/state.py`
+- `BattleState` 新增字段：
+  - `dealer_seat: str = "self"` — 庄家位置（"self" | "enemy"）
+  - `self_wind: str = "1z"` — 自家门风（"1z"东 | "2z"南）
+  - `kan_closed_count: int = 0` — 暗杠次数（0~4）
+- `to_payload()` 将上述字段注入 `"self"` 字典，供 LLM 判断门风番、包牌等
+
+#### 修改 `game/simple_state.py`
+- 新增 `winds: list[str]` 字段，默认 `["1z", "2z", "1z", "2z"]`，支持门风传播
+
+#### 修改 `ui/battle_panel.py`
+- `_build_center_group()` 新增三个 `QComboBox`：
+  - **庄家**：自家 / 对手
+  - **门风**：东(1z) / 南(2z)
+  - **暗杠**：0 / 1 / 2 / 3 / 4
+- 新增信号处理：` _on_dealer_changed()` / `_on_wind_changed()` / `_on_kan_closed_changed()`
+- `_render_state()` 同步控件显示，摘要标签更新为 `庄家=XX | 门风=XX | 暗杠X次 | ...`
+
+---
+
+## 变更日志
+
 ### 2026-05-06 — 补足 01/02 阶段（状态结构 + 胡牌判断与合法出牌）
 
 #### 修改 `game/tiles.py`

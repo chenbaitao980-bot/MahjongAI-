@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (
     QSpinBox, QGroupBox, QTextEdit, QCheckBox,
 )
 
-from game.state import GameState, PHASE_PLAYING, PHASE_SHENGJIA, PHASE_LIUJU, PHASE_HUPAI
+from game.state import GameState, PHASE_PLAYING, PHASE_SHENGJIA, PHASE_HUANGPAI, PHASE_LIUJU, PHASE_HUPAI
 from game.state import ALL_TILE_IDS
 
 TILE_DISPLAY = {
@@ -20,6 +20,7 @@ TILE_DISPLAY = {
 PHASE_TEXT = {
     PHASE_PLAYING: "游戏进行中",
     PHASE_SHENGJIA: "⚠ 生牌阶段",
+    PHASE_HUANGPAI: "🔴 黄牌边缘",
     PHASE_LIUJU: "流局",
     PHASE_HUPAI: "胡牌！",
 }
@@ -27,6 +28,7 @@ PHASE_TEXT = {
 PHASE_COLOR = {
     PHASE_PLAYING: "#2d8a2d",
     PHASE_SHENGJIA: "#b05a00",
+    PHASE_HUANGPAI: "#c00",
     PHASE_LIUJU: "#555",
     PHASE_HUPAI: "#c00",
 }

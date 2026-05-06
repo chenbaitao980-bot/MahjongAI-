@@ -58,11 +58,18 @@ def analyze_discard_candidates(
 
         ukeire = calc_ukeire(hand_13, meld_count, baida, visible_tiles)
 
+        # 生牌判断需要包含自家副露牌（被碰/杠/吃的牌也算已出现）
+        self_meld_tiles_flat: list[str] = []
+        for m in melds:
+            self_meld_tiles_flat.extend(tiles_to_ids(m.tiles))
+        # 合并自家弃牌和自家副露牌用于生牌判断
+        self_all_visible = list(self_discards) + self_meld_tiles_flat
+
         danger = calc_tile_danger(
             tile,
             enemy_discards,
             enemy_melds,
-            self_discards,
+            self_all_visible,
             remaining_tiles,
             turn,
         )

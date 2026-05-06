@@ -21,13 +21,15 @@ class SimpleMeld:
 
 @dataclass
 class SimpleGameState:
-    """简化版完整游戏状态"""
+    """简化版完整游戏状态（默认2人模式，列表保持4元素以兼容4人桌语义）"""
     hands: List[List[int]] = field(default_factory=lambda: [[], [], [], []])
     discards: List[List[int]] = field(default_factory=lambda: [[], [], [], []])
     melds: List[List[SimpleMeld]] = field(default_factory=lambda: [[], [], [], []])
     current_player: int = 0
-    dealer: int = 0
+    dealer: int = 0       # 庄家玩家索引（0=东位）
     turn: int = 0
+    num_players: int = 2  # 2或4，影响对手数据分析范围
+    winds: list[str] = field(default_factory=lambda: ["1z", "2z", "1z", "2z"])  # 各玩家门风（2人模式：东-南-东-南）
 
 
 if __name__ == "__main__":
@@ -42,5 +44,7 @@ if __name__ == "__main__":
     assert state.discards[1] == [0, 2]
     assert state.melds[0][0].type == "chi"
     assert state.melds[0][0].tiles == [0, 1, 2]
+    assert state.num_players == 2
+    assert state.winds == ["1z", "2z", "1z", "2z"]
 
     print("simple_state.py smoke-test OK")

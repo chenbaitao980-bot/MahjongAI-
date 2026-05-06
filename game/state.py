@@ -17,7 +17,8 @@ BUTTON_IDS: list[str] = ["碰", "吃", "杠_明", "杠_暗", "杠_补", "胡", "
 
 # 游戏阶段
 PHASE_PLAYING = "playing"
-PHASE_SHENGJIA = "shengjia"   # 生牌阶段（剩余≤15张）
+PHASE_SHENGJIA = "shengjia"   # 生牌阶段（剩余≤30张，约15对）
+PHASE_HUANGPAI = "huangpai"    # 黄牌阶段（剩余≤16张，约8对）
 PHASE_LIUJU = "liuju"          # 流局
 PHASE_HUPAI = "hupai"          # 胡牌结算
 

@@ -104,6 +104,43 @@ def _can_form_melds(counts: list[int], need: int, jokers: int) -> bool:
     return False
 
 
+# ---- 原子笔记 02 阶段简化接口 ----
+
+ENABLE_SEVEN_PAIRS = True
+
+
+def is_standard_win(hand: list[int]) -> bool:
+    """
+    判断 14 张整数ID手牌是否标准胡牌（4面子+1将）。
+    无副露、无财神的最简情况。
+    """
+    if len(hand) != 14:
+        return False
+    from game.tiles import hand_to_counts, int_to_tile
+    counts, _ = hand_to_counts([int_to_tile(t) for t in hand])
+    return is_win(counts, meld_count=0, baida_count=0)
+
+
+def is_seven_pairs(hand: list[int]) -> bool:
+    """判断 14 张牌是否为七对。"""
+    if len(hand) != 14:
+        return False
+    counts = [0] * 34
+    for t in hand:
+        counts[t] += 1
+    pairs = sum(1 for c in counts if c == 2)
+    return pairs == 7
+
+
+def is_win_simple(hand: list[int]) -> bool:
+    """统一胡牌判断（标准胡牌 或 七对）。"""
+    if is_standard_win(hand):
+        return True
+    if ENABLE_SEVEN_PAIRS and is_seven_pairs(hand):
+        return True
+    return False
+
+
 if __name__ == "__main__":
     # ---- smoke tests ----
     from game.tiles import hand_to_counts
@@ -139,5 +176,27 @@ if __name__ == "__main__":
     c6, bc6 = hand_to_counts(hand6, baida="7z")
     # 1m 单张作将？不，将牌需要两张相同。7z 只有1张。所以不能胡。
     assert is_win(c6, 0, bc6) is False
+
+    # ---- 原子笔记简化接口测试 ----
+    from game.tiles import parse_tiles
+
+    # 标准胡牌：1m2m3m + 2p3p4p + 5s6s7s + 东东东 + 白白
+    hand_std = parse_tiles("1m 2m 3m 2p 3p 4p 5s 6s 7s 1z 1z 1z 7z 7z")
+    assert is_standard_win(hand_std) is True
+    assert is_win_simple(hand_std) is True
+
+    # 非胡牌
+    hand_bad = parse_tiles("1m 1m 3m 2p 3p 4p 5s 6s 7s 1z 1z 1z 7z 7z")
+    assert is_standard_win(hand_bad) is False
+    assert is_win_simple(hand_bad) is False
+
+    # 七对
+    hand_7p = parse_tiles("1m 1m 2m 2m 3p 3p 4p 4p 5s 5s 1z 1z 7z 7z")
+    assert is_seven_pairs(hand_7p) is True
+    assert is_win_simple(hand_7p) is True
+
+    # 非七对
+    hand_not_7p = parse_tiles("1m 1m 1m 2m 2m 2m 3p 3p 3p 4p 4p 4p 5s 5s")
+    assert is_seven_pairs(hand_not_7p) is False
 
     print("win.py smoke-test OK")

@@ -6,6 +6,35 @@
 
 ## 变更日志
 
+### 2026-05-06 — 补足 01/02 阶段（状态结构 + 胡牌判断与合法出牌）
+
+#### 修改 `game/tiles.py`
+- 新增 `parse_tiles(tile_str)` — 空格分隔牌名 → 整数ID列表
+- 新增 `format_tiles(tile_ids)` — 整数ID列表 → 空格分隔牌名
+
+#### 新增 `game/simple_state.py`
+- `SimpleMeld` — 简化版副露结构（type/tiles/from_player）
+- `SimpleGameState` — 简化版状态（hands/discards/melds/current_player/dealer/turn）
+- 与现有 `game/state.py` 的 vision-oriented 结构并存
+
+#### 新增 `game/visible.py`
+- `count_visible_tiles(state, my_player)` — 返回34维已见牌数组
+- `count_remaining_tiles(state, my_player)` — 返回34维剩余牌数组（max(0, 4-visible)）
+
+#### 修改 `game/win.py`
+- 新增 `ENABLE_SEVEN_PAIRS = True`
+- 新增 `is_standard_win(hand)` — 14张整数ID手牌标准胡牌判断（无副露无财神包装层）
+- 新增 `is_seven_pairs(hand)` — 七对判断
+- 新增 `is_win_simple(hand)` — 统一胡牌判断（标准 或 七对）
+
+#### 新增 `game/actions.py`
+- `get_discard_actions(hand)` — 枚举可打牌，同种牌去重
+- `get_legal_actions(state, player)` — 14张能胡时含 `{"type": "hu"}` + 所有 discard
+
+---
+
+## 变更日志
+
 ### 2026-05-06 — 攻守转换（04 阶段）
 
 #### 新增 `game/strategy.py`
@@ -182,9 +211,12 @@
 | `game\win.py` | 0 | 2 | 3KB |
 | `game\shanten.py` | 0 | 4 | 4KB |
 | `game\ukeire.py` | 0 | 1 | 2KB |
+| `game\actions.py` | 0 | 2 | 2KB |
 | `game\danger.py` | 0 | 2 | 2KB |
 | `game\evaluator.py` | 0 | 1 | 3KB |
+| `game\simple_state.py` | 2 | 0 | 1KB |
 | `game\strategy.py` | 0 | 3 | 2KB |
+| `game\visible.py` | 0 | 2 | 2KB |
 
 ## 核心类
 
@@ -242,5 +274,9 @@
 - `game\ukeire.py` → `game\shanten.py`
 - `game\shanten.py` → `game\tiles.py`
 - `game\win.py` → `game\tiles.py`
+- `game\actions.py` → `game\simple_state.py`
+- `game\actions.py` → `game\win.py`
 - `game\danger.py` → `game\tiles.py`
 - `game\danger.py` → `game\state.py`
+- `game\visible.py` → `game\simple_state.py`
+- `game\win.py` → `game\tiles.py`

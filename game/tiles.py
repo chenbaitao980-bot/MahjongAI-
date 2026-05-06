@@ -87,6 +87,24 @@ def build_visible_tiles(
     return visible
 
 
+# ---- 原子笔记 01 阶段接口（基于现有编码的包装层） ----
+
+def parse_tiles(tile_str: str) -> list[int]:
+    """
+    将空格分隔的牌名字符串转为整数ID列表。
+    例：parse_tiles("1m 2m 3m") -> [0, 1, 2]
+    """
+    return [tile_to_int(t.strip()) for t in tile_str.split() if t.strip()]
+
+
+def format_tiles(tile_ids: list[int]) -> str:
+    """
+    将整数ID列表转为空格分隔的牌名字符串。
+    例：format_tiles([0, 1, 2]) -> "1m 2m 3m"
+    """
+    return " ".join(int_to_tile(tid) for tid in tile_ids)
+
+
 if __name__ == "__main__":
     # ---- smoke test ----
     assert tile_to_int("1m") == 0
@@ -117,4 +135,13 @@ if __name__ == "__main__":
     )
     assert vis["5m"] == 2
     assert vis["1m"] == 1
+
+    # parse_tiles / format_tiles 测试
+    assert parse_tiles("1m 2m 3m") == [0, 1, 2]
+    assert parse_tiles("1m  2m   3m") == [0, 1, 2]
+    assert parse_tiles("1z 7z") == [27, 33]
+    assert format_tiles([0, 1, 2]) == "1m 2m 3m"
+    assert format_tiles([27, 33]) == "1z 7z"
+    assert parse_tiles(format_tiles([0, 1, 2])) == [0, 1, 2]
+
     print("tiles.py smoke-test OK")

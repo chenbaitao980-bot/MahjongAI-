@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from game.danger import calc_tile_danger, danger_level_str
 from game.state import MeldGroup
+from game.strategy import decide_strategy_mode, rank_candidates, score_candidate
 from game.tiles import build_visible_tiles, tiles_to_ids
 from game.ukeire import calc_ukeire
 
@@ -19,10 +20,25 @@ def analyze_discard_candidates(
     enemy_melds: list[MeldGroup],
     self_discards: list[str],
     remaining_tiles: int,
-) -> list[dict]:
+) -> dict:
     """
     分析14张手牌中每种不重复的候选出牌。
-    返回按 (shanten_after ASC, ukeire_count DESC) 排序的列表。
+
+    返回：
+        {
+            "strategy_mode": "attack" | "balance" | "defense",
+            "candidates": [
+                {
+                    "discard": tile,
+                    "shanten_after": int,
+                    "ukeire_tiles": [...],
+                    "ukeire_count": int,
+                    "danger": int,
+                    "danger_level": str,
+                    "score": float,
+                }
+            ]
+        }
     """
     candidates: list[dict] = []
     meld_count = len(melds)
@@ -60,9 +76,25 @@ def analyze_discard_candidates(
             "danger_level": danger_level_str(danger),
         })
 
-    # 排序：向听数升序 → 进张数降序
+    # 先按原始规则排序，提取最优向听数和对应进张数
     candidates.sort(key=lambda x: (x["shanten_after"], -x["ukeire_count"]))
-    return candidates
+    best_shanten = candidates[0]["shanten_after"] if candidates else 99
+    best_ukeire = candidates[0]["ukeire_count"] if candidates else 0
+
+    # 决定攻守模式
+    mode = decide_strategy_mode(best_shanten, best_ukeire, turn, enemy_meld_count)
+
+    # 为每个候选计算综合评分
+    for c in candidates:
+        c["score"] = round(score_candidate(c, mode), 1)
+
+    # 按综合评分降序重排
+    candidates = rank_candidates(candidates)
+
+    return {
+        "strategy_mode": mode,
+        "candidates": candidates,
+    }
 
 
 if __name__ == "__main__":
@@ -75,11 +107,38 @@ if __name__ == "__main__":
     result = analyze_discard_candidates(
         hand, [], None, visible, [], [], [], 80
     )
-    print("evaluator test1 top candidates:")
-    for c in result[:3]:
-        print(f"  {c}")
-    # 验证基本排序逻辑：向听数小的在前
-    assert result[0]["shanten_after"] <= result[-1]["shanten_after"]
-    assert result[0]["ukeire_count"] >= result[1]["ukeire_count"] or result[0]["shanten_after"] < result[1]["shanten_after"]
+    print("evaluator test1:")
+    print(f"  strategy_mode: {result['strategy_mode']}")
+    print("  top candidates:")
+    for c in result["candidates"][:3]:
+        print(f"    {c}")
+
+    candidates = result["candidates"]
+    # 验证返回结构
+    assert "strategy_mode" in result
+    assert "candidates" in result
+    assert "score" in candidates[0]
+
+    # 验证排序：score 降序
+    for i in range(len(candidates) - 1):
+        assert candidates[i]["score"] >= candidates[i + 1]["score"]
+
+    # test2: 高危险牌在防守模式下应被降权
+    # 构造一个后巡高向听场景，触发 defense 模式
+    hand2 = ["1m", "2m", "3m", "5p", "6p", "7p", "2s", "3s", "4s", "1z", "1z", "7z", "7z", "9m"]
+    visible2 = build_visible_tiles(hand2, [], [], [], [])
+    result2 = analyze_discard_candidates(
+        hand2, [], None, visible2, [], [], [], 20
+    )
+    print("evaluator test2 (defense scenario):")
+    print(f"  strategy_mode: {result2['strategy_mode']}")
+    cands2 = result2["candidates"]
+    for c in cands2[:3]:
+        print(f"    discard={c['discard']}, shanten={c['shanten_after']}, danger={c['danger']}, score={c['score']}")
+    # 后巡 + 剩余20张 → 巡目约58，>=12，若向听>=2 则 defense
+    if result2["strategy_mode"] == "defense":
+        # 危险牌不应排在最前（即使向听低）
+        top = cands2[0]
+        assert top["danger"] < 80, f"defense mode should avoid high danger cards, got danger={top['danger']}"
 
     print("evaluator.py smoke-test OK")

@@ -134,7 +134,7 @@ class BattleState:
                 return {"shanten": shanten, "candidates": [], "top_recommendation": None}
 
             elif len(hand) == 14:
-                candidates = analyze_discard_candidates(
+                eval_result = analyze_discard_candidates(
                     hand,
                     self.self_melds,
                     baida,
@@ -144,12 +144,17 @@ class BattleState:
                     tiles_to_ids(self.self_discards),
                     self.remaining_tiles,
                 )
+                candidates = eval_result.get("candidates", [])
+                mode = eval_result.get("strategy_mode", "balance")
                 top = candidates[0]["discard"] if candidates else None
+                top_score = candidates[0].get("score") if candidates else None
                 shanten = calc_shanten(counts, meld_count, baida_count)
                 return {
                     "shanten": shanten,
+                    "strategy_mode": mode,
                     "candidates": candidates[:5],
                     "top_recommendation": top,
+                    "top_score": top_score,
                 }
 
             return {}

@@ -6,6 +6,35 @@
 
 ## 变更日志
 
+### 2026-05-06 — 攻守转换（04 阶段）
+
+#### 新增 `game/strategy.py`
+- `decide_strategy_mode(best_shanten, best_ukeire, turn, enemy_meld_count)` → `"attack" | "balance" | "defense"`
+- 规则：听牌→进攻；一向听+进张≥16+前巡→进攻；后巡+高向听→防守；对手副露≥2+高向听→防守；否则平衡
+- `score_candidate(candidate, mode)` → `float` 综合评分
+  - 进攻：`score = -shanten*100 + ukeire*4 - danger*0.8`
+  - 平衡：`score = -shanten*100 + ukeire*3 - danger*1.5`
+  - 防守：`score = -shanten*60 + ukeire*1 - danger*3`
+- `rank_candidates(candidates)`：按 `score` 降序排列
+- `strategy_label(mode)`：中文标签（进攻/平衡/防守）
+
+#### 修改 `game/evaluator.py`
+- `analyze_discard_candidates()` 返回结构变更：**`list[dict]` → `dict`**
+  - `"strategy_mode"`: 当前攻守模式
+  - `"candidates"`: 完整候选列表（含新增 `"score"` 字段）
+- 内部逻辑：先按 `(shanten_after, -ukeire_count)` 排序提取最优值 → 调用 `decide_strategy_mode()` → 为每个候选计算 `score` → 按 `score` 降序重排
+
+#### 修改 `battle/state.py`
+- `_compute_analysis()` 适配 `evaluator.py` 新返回结构
+- 14张手牌分析结果新增字段：
+  - `"strategy_mode"`: 攻守模式
+  - `"top_score"`: 最高分候选的 score 值
+- `to_payload()` 自动将 strategy_mode 随 analysis 注入 LLM prompt
+
+---
+
+## 变更日志
+
 ### 2026-05-06 — 本地分析模块（向听数/进张/危险度）
 
 #### 新增 `game/tiles.py`
@@ -154,7 +183,8 @@
 | `game\shanten.py` | 0 | 4 | 4KB |
 | `game\ukeire.py` | 0 | 1 | 2KB |
 | `game\danger.py` | 0 | 2 | 2KB |
-| `game\evaluator.py` | 0 | 1 | 2KB |
+| `game\evaluator.py` | 0 | 1 | 3KB |
+| `game\strategy.py` | 0 | 3 | 2KB |
 
 ## 核心类
 
@@ -206,6 +236,8 @@
 - `game\evaluator.py` → `game\tiles.py`
 - `game\evaluator.py` → `game\ukeire.py`
 - `game\evaluator.py` → `game\danger.py`
+- `game\evaluator.py` → `game\strategy.py`
+- `game\strategy.py` → `game\danger.py`
 - `game\ukeire.py` → `game\tiles.py`
 - `game\ukeire.py` → `game\shanten.py`
 - `game\shanten.py` → `game\tiles.py`

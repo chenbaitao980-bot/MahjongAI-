@@ -77,6 +77,9 @@ class BattleState:
     # 生牌标记：34维，True 表示该牌本局从未被打出/吃碰杠过
     is_sheng: list[bool] = field(default_factory=lambda: [True] * 34)
 
+    # 最近一次本地分析结果（candidates / shanten / strategy_mode 等）
+    last_analysis: dict = field(default_factory=dict)
+
     def mark_analysis(self, trigger_reason: str) -> None:
         self.last_trigger_reason = trigger_reason
         self.last_analysis_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -157,13 +160,15 @@ class BattleState:
 
             if len(hand) == 13:
                 shanten = calc_shanten(counts, meld_count, baida_count)
-                return {
+                result = {
                     "shanten": shanten,
                     "kan_closed_count": kan_closed_count,
                     "game_features": game_features,
                     "candidates": [],
                     "top_recommendation": None,
                 }
+                self.last_analysis = result
+                return result
 
             elif len(hand) == 14:
                 # 使用 advisor 整合 evaluator + MC
@@ -184,7 +189,7 @@ class BattleState:
                 top = candidates[0]["discard"] if candidates else None
                 top_score = candidates[0].get("score") if candidates else None
                 shanten = calc_shanten(counts, meld_count, baida_count)
-                return {
+                result = {
                     "shanten": shanten,
                     "kan_closed_count": kan_closed_count,
                     "strategy_mode": mode,
@@ -193,6 +198,8 @@ class BattleState:
                     "top_recommendation": top,
                     "top_score": top_score,
                 }
+                self.last_analysis = result
+                return result
 
             return {}
         except Exception:
@@ -250,6 +257,7 @@ class BattleState:
         self.declined_hu = {0: None, 1: None}
         self.declined_peng = {0: None, 1: None}
         self.is_sheng = [True] * 34
+        self.last_analysis = {}
 
     def to_payload(self) -> dict:
         remaining = self.remaining_tiles

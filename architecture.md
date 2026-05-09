@@ -1,10 +1,44 @@
 # MahjongAI 知识图谱
 
-> 自动生成于 2026-05-04 20:49 | 最后人工更新：2026-05-06
+> 自动生成于 2026-05-04 20:49 | 最后人工更新：2026-05-09
 
 ---
 
 ## 变更日志
+
+### 2026-05-09 — 候选分析面板 + 对局数据详尽保存
+
+#### 新增 `ui/battle_panel.py` — `AnalysisPanel` 类
+- 在 UI 中间列底部新增 `AnalysisPanel(QGroupBox)` 部件
+- 展示每次 AI 分析结果：7列表格（出牌 | 向听后 | 进张数 | 危险度 | 潜在番 | 综合分 | MC胜率）
+- 推荐出牌行高亮绿色背景；标题行显示当前向听数和策略模式
+- 在 `_render_advice()` 末尾自动调用 `refresh()`，每次 AI 建议更新时刷新
+
+#### 修改 `battle/state.py` — 存储 last_analysis
+- `BattleState` 新增字段 `last_analysis: dict`，存储 `_compute_analysis()` 的最新结果
+- `_compute_analysis()` 在每次返回前将结果存入 `self.last_analysis`，供 UI 无额外调用即可读取
+- `reset_round()` 同步清空 `last_analysis`
+
+#### 修改 `game/session.py` — 新增分析事件持久化
+- `__init__` 新增 `analysis_events.jsonl` 文件句柄
+- `_init_db()` 新增 `analysis_events` SQLite 表（timestamp / trigger / hand / candidates / advice / shanten / strategy_mode / recommended_discard）
+- 新增 `append_analysis_event(event: dict)` 方法：同步写 jsonl + SQLite，异常静默
+
+#### 修改 `battle/service.py` — 触发分析事件保存
+- `_analyze()` 在 `append_frame()` 之后调用 `self._session.append_analysis_event()`
+- 保存字段：timestamp、trigger_reason、手牌列表、完整 analysis dict（含 candidates）、advice 摘要
+
+### 2026-05-09 — 修复 `game/danger.py` 空文件导致分析链失效
+
+#### 实现 `game/danger.py` — 二人模式危险度评分
+- `calc_tile_danger()` 实现：基线20 + 现物/全现物判定 + 副露清一色推断 + 中张加权 + 巡目加权，clamp [0,100]
+- `danger_level_str()` 将整数分数映射为"安全/较安全/中等/危险/极危险"
+
+#### 修复 `game/llm_advisor.py`
+- `validate_llm_output()` 修复：`legal_discards` 为空时不拒绝合法输出
+- `get_final_advice()` candidates 为空时提前 fallback，跳过 LLM 调用
+
+---
 
 ### 2026-05-06 — 游戏规则修复 + 庄家/门风/暗杠输入 + 生牌/黄牌阶段
 

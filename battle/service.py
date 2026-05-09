@@ -888,6 +888,25 @@ class BattleService:
                         )
             except Exception:
                 pass  # 持久化失败不影响分析主流程
+            # 保存 AI 分析事件
+            try:
+                from datetime import datetime as _dt
+                _analysis = payload.get("self", {}).get("analysis", {})
+                self._session.append_analysis_event({
+                    "timestamp": _dt.now().isoformat(),
+                    "trigger": trigger_reason,
+                    "hand": [getattr(t, "tile_id", "") for t in state.self_hand],
+                    "analysis": _analysis,
+                    "advice": {
+                        "recommended_discard": advice.recommended_discard,
+                        "strategy_type": advice.strategy_type,
+                        "reasoning_summary": advice.reasoning_summary,
+                        "risk_notes": advice.risk_notes,
+                        "forbidden_discards": advice.forbidden_discards,
+                    },
+                })
+            except Exception:
+                pass
         return state, advice
 
     def _persist_local_tile_samples(

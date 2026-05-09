@@ -4,7 +4,7 @@ import html
 from copy import deepcopy
 
 from PyQt6.QtCore import pyqtSignal, QUrl, Qt
-from PyQt6.QtGui import QDesktopServices
+from PyQt6.QtGui import QColor, QDesktopServices
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -14,12 +14,15 @@ from PyQt6.QtWidgets import (
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
     QPlainTextEdit,
     QScrollArea,
+    QTableWidget,
+    QTableWidgetItem,
     QTextEdit,
     QSpinBox,
     QTabWidget,
@@ -498,6 +501,58 @@ class _TileCorrectDialog(QDialog):
         return self._result_tile_id
 
 
+class AnalysisPanel(QGroupBox):
+    """展示每次 AI 分析的候选牌评分表格。"""
+
+    COLS = ["出牌", "向听后", "进张数", "危险度", "潜在番", "综合分", "MC胜率"]
+
+    def __init__(self) -> None:
+        super().__init__("候选分析")
+        self._header = QLabel("向听数：-- | 策略：--")
+        self._header.setStyleSheet("font-size:12px; color:#2c3e50; padding:2px 0;")
+        self._table = QTableWidget(0, 7)
+        self._table.setHorizontalHeaderLabels(self.COLS)
+        self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
+        self._table.setMaximumHeight(160)
+        self._table.setAlternatingRowColors(True)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(6, 4, 6, 4)
+        layout.addWidget(self._header)
+        layout.addWidget(self._table)
+
+    def refresh(self, analysis: dict, recommended: str) -> None:
+        shanten = analysis.get("shanten", "--")
+        mode_map = {"attack": "攻牌", "defense": "守牌", "balance": "平衡"}
+        mode_raw = analysis.get("strategy_mode", "--")
+        mode = mode_map.get(mode_raw, mode_raw)
+        self._header.setText(f"向听数：{shanten} | 策略：{mode}")
+        candidates = analysis.get("candidates", [])
+        self._table.setRowCount(len(candidates))
+        for row, c in enumerate(candidates):
+            mc_win = c.get("mc_win_rate")
+            mc_text = f"{mc_win:.1%}" if mc_win is not None else "--"
+            values = [
+                c.get("discard", ""),
+                str(c.get("shanten_after", "--")),
+                str(c.get("ukeire_count", "--")),
+                c.get("danger_level", "--"),
+                str(c.get("potential_fan", "--")),
+                f"{c.get('score', 0):.1f}",
+                mc_text,
+            ]
+            for col, val in enumerate(values):
+                item = QTableWidgetItem(val)
+                item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self._table.setItem(row, col, item)
+            if c.get("discard") == recommended and recommended:
+                for col in range(7):
+                    cell = self._table.item(row, col)
+                    if cell:
+                        cell.setBackground(QColor("#d5f5e3"))
+
+
 class BattlePanel(QWidget):
     start_requested = pyqtSignal()
     end_requested = pyqtSignal()
@@ -558,9 +613,11 @@ class BattlePanel(QWidget):
         self._train_success_label.setWordWrap(True)
         self._train_success_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._train_success_label.setStyleSheet("color:#888888; font-size:12px; padding:4px;")
+        self._analysis_panel = AnalysisPanel()
         center = QVBoxLayout()
         center.addWidget(center_box)
         center.addWidget(self._train_success_label)
+        center.addWidget(self._analysis_panel)
         center.addStretch()
         content.addLayout(center, 1)
 
@@ -1113,6 +1170,7 @@ class BattlePanel(QWidget):
             )
         else:
             self._meta_label.setText("最近一次分析：--")
+        self._analysis_panel.refresh(self._state.last_analysis, advice.recommended_discard)
 
     def current_state(self) -> BattleState:
         return deepcopy(self._state)

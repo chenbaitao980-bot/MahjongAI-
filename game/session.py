@@ -42,8 +42,11 @@ class GameSession:
 
         self._frames_path = os.path.join(self.session_dir, "frames.jsonl")
         self._frame_details_path = os.path.join(self.session_dir, "frame_details.jsonl")
+        self._analysis_events_path = os.path.join(self.session_dir, "analysis_events.jsonl")
         self._fh = open(self._frames_path, "a", encoding="utf-8", buffering=8192)
         self._details_fh = open(self._frame_details_path, "a", encoding="utf-8", buffering=8192)
+        self._analysis_fh = open(self._analysis_events_path, "a", encoding="utf-8", buffering=1)
+        self._analysis_event_count = 0
         self._db_path = os.path.join(self.session_dir, "session.db")
         self._db = sqlite3.connect(self._db_path, check_same_thread=False)
         self._db.execute("PRAGMA journal_mode=WAL")
@@ -145,6 +148,19 @@ class GameSession:
             );
             CREATE INDEX IF NOT EXISTS idx_event_frame ON events(frame_index);
             CREATE INDEX IF NOT EXISTS idx_event_type ON events(event_type);
+
+            CREATE TABLE IF NOT EXISTS analysis_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                trigger TEXT,
+                hand_json TEXT,
+                candidates_json TEXT,
+                advice_json TEXT,
+                shanten INTEGER,
+                strategy_mode TEXT,
+                recommended_discard TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_analysis_ts ON analysis_events(timestamp);
 
             CREATE TABLE IF NOT EXISTS game_state_current (
                 id INTEGER PRIMARY KEY CHECK(id = 1),
@@ -491,6 +507,34 @@ class GameSession:
         except Exception:
             return None
 
+    def append_analysis_event(self, event: dict) -> None:
+        """将一次 AI 分析事件（手牌+候选+建议）写入 analysis_events.jsonl 和 SQLite。"""
+        try:
+            line = json.dumps(event, ensure_ascii=False, separators=(",", ":"))
+            self._analysis_fh.write(line + "\n")
+            self._analysis_event_count += 1
+            analysis = event.get("analysis", {})
+            candidates = analysis.get("candidates", [])
+            advice = event.get("advice", {})
+            self._db.execute(
+                "INSERT INTO analysis_events "
+                "(timestamp, trigger, hand_json, candidates_json, advice_json, shanten, strategy_mode, recommended_discard) "
+                "VALUES (?,?,?,?,?,?,?,?)",
+                (
+                    event.get("timestamp", ""),
+                    event.get("trigger", ""),
+                    json.dumps(event.get("hand", []), ensure_ascii=False),
+                    json.dumps(candidates, ensure_ascii=False),
+                    json.dumps(advice, ensure_ascii=False),
+                    analysis.get("shanten"),
+                    analysis.get("strategy_mode"),
+                    advice.get("recommended_discard", ""),
+                ),
+            )
+            self._db.commit()
+        except Exception:
+            pass
+
     def flush(self) -> None:
         if hasattr(self, "_write_queue"):
             self._write_queue.join()
@@ -498,6 +542,8 @@ class GameSession:
             self._fh.flush()
         if self._details_fh and not self._details_fh.closed:
             self._details_fh.flush()
+        if getattr(self, "_analysis_fh", None) and not self._analysis_fh.closed:
+            self._analysis_fh.flush()
         if self._db:
             self._db.commit()
 
@@ -516,6 +562,9 @@ class GameSession:
         if self._details_fh and not self._details_fh.closed:
             self._details_fh.flush()
             self._details_fh.close()
+        if getattr(self, "_analysis_fh", None) and not self._analysis_fh.closed:
+            self._analysis_fh.flush()
+            self._analysis_fh.close()
         if self._db:
             self._db.commit()
             self._db.close()

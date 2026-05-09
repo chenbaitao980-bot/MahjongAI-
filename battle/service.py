@@ -1425,7 +1425,11 @@ class BattleService:
 
     def _prune_picture_directory(self, directory: str, limit: int) -> None:
         json_paths: list[str] = []
-        for name in os.listdir(directory):
+        try:
+            names = os.listdir(directory)
+        except OSError:
+            return
+        for name in names:
             path = os.path.join(directory, name)
             if name.lower().endswith(".json") and os.path.isfile(path):
                 json_paths.append(path)

@@ -1298,7 +1298,11 @@ class MainWindow(QMainWindow):
         if not os.path.isdir(pic_dir):
             return []
         candidates: list[tuple[float, str]] = []
-        for name in sorted(os.listdir(pic_dir)):
+        try:
+            pic_names = sorted(os.listdir(pic_dir))
+        except OSError:
+            return []
+        for name in pic_names:
             if not (
                 name.endswith("_picture_tile_request.png")
                 or name.endswith("_picture_tile_response.png")

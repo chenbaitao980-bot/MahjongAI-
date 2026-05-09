@@ -27,7 +27,7 @@ def validate_llm_output(output: dict, legal_discards: list[str]) -> bool:
         return False
 
     discard = output.get("recommended_discard")
-    if discard is not None and discard != "":
+    if discard is not None and discard != "" and legal_discards:
         if str(discard) not in legal_discards:
             return False
 
@@ -154,6 +154,12 @@ def get_final_advice(
 
     if not use_llm:
         return get_program_advice(analysis)
+
+    # candidates 为空说明手牌异常（张数不对或识别错误），无法校验 LLM 输出，直接 fallback
+    if not candidates:
+        advice = fallback_advice(analysis)
+        advice["reason"] += " [candidates 为空，手牌异常或识别错误，跳过 LLM]"
+        return advice
 
     # 构建 prompt
     game_features = analysis.get("game_features", {})

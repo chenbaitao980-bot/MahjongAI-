@@ -85,13 +85,10 @@ def calc_tile_danger(
         if 3 <= rank <= 7:
             danger += 10
 
-    # 5. 巡目提高危险度
-    if turn >= 18:
-        danger += 25
-    elif turn >= 14:
-        danger += 15
-    elif turn >= 10:
-        danger += 8
+    # 5. 巡目提高危险度（指数增长，每2巡一档，上限45）
+    if turn >= 10:
+        tier = (turn - 10) // 2
+        danger += min(int(8 * (1.5 ** tier)), 45)
 
     return max(0, min(100, danger))
 

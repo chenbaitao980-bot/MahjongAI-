@@ -66,11 +66,11 @@ def score_candidate(candidate: dict, mode: str) -> float:
 
     # 番数收益权重按模式递减：进攻 > 平衡 > 防守
     if mode == MODE_ATTACK:
-        return -shanten * 100 + ukeire * 4 - danger * 0.8 + potential_fan * 5
+        return -shanten * 100 + ukeire * 5 - danger * 0.8 + potential_fan * 5
     elif mode == MODE_DEFENSE:
-        return -shanten * 60 + ukeire * 1 - danger * 3 + potential_fan * 1
+        return -shanten * 60 + ukeire * 1.5 - danger * 3 + potential_fan * 1
     else:  # balance
-        return -shanten * 100 + ukeire * 3 - danger * 1.5 + potential_fan * 3
+        return -shanten * 100 + ukeire * 3.5 - danger * 1.5 + potential_fan * 3
 
 
 def strategy_label(mode: str) -> str:

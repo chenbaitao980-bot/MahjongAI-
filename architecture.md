@@ -1,10 +1,26 @@
 # MahjongAI 知识图谱
 
-> 自动生成于 2026-05-04 20:49 | 最后人工更新：2026-05-09
+> 自动生成于 2026-05-04 20:49 | 最后人工更新：2026-05-09（L1/L2/L3）
 
 ---
 
 ## 变更日志
+
+### 2026-05-09 — 低优先级优化 L1/L2/L3
+
+#### 修改 `game/danger.py` — 后期风险曲线指数化（L1）
+- 将巡目危险加成由三档线性阶梯改为指数公式：`min(int(8 * 1.5^tier), 45)`（tier = (turn-10)//2）
+- turn 10-11: +8, 12-13: +12, 14-15: +18, 16-17: +27, 18-19: +40, 20+: +45（上限）
+
+#### 修改 `game/strategy.py` — 进张系数加权（L2）
+- `score_candidate()` ukeire 系数：attack 4→5, balance 3→3.5, defense 1→1.5
+- 放大两面搭子（ukeire高）vs 坎张/对子（ukeire低）评分差距约 25%
+
+#### 修改 `battle/service.py` — 手牌去重（L3）
+- `BattleService.__init__` 新增 `_last_analyzed_hand_sig` / `_last_advice_cache` 字段
+- `_analyze()` 在识别手牌后比对指纹（sorted tile_id tuple），相同时直接返回缓存结果
+
+---
 
 ### 2026-05-09 — 候选分析面板 + 对局数据详尽保存
 

@@ -221,6 +221,8 @@ class BattleService:
         self._last_match_rois: list[np.ndarray] = []
         self._last_meld_rois: list[np.ndarray] = []   # flat list: meld0_tile0, meld0_tile1, ...
         self._last_capture_debug: dict[str, Any] = {}
+        self._last_analyzed_hand_sig: tuple | None = None
+        self._last_advice_cache: "BattleAdvice | None" = None
 
     def analyze_opening(self, state: BattleState) -> tuple[BattleState, BattleAdvice]:
         return self._analyze(state, "start")
@@ -784,6 +786,10 @@ class BattleService:
         state.self_hand = hand_tiles
         state.recognition_source = source
 
+        _hand_sig = tuple(sorted(getattr(t, "tile_id", "") for t in hand_tiles))
+        if _hand_sig == self._last_analyzed_hand_sig and self._last_advice_cache is not None:
+            return state, self._last_advice_cache
+
         payload = state.to_payload()
         payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
         advice_started_at = time.perf_counter()
@@ -907,6 +913,8 @@ class BattleService:
                 })
             except Exception:
                 pass
+        self._last_analyzed_hand_sig = tuple(sorted(getattr(t, "tile_id", "") for t in state.self_hand))
+        self._last_advice_cache = advice
         return state, advice
 
     def _persist_local_tile_samples(

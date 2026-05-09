@@ -110,6 +110,9 @@ class GameState:
 
     raw_confidence_min: float = 1.0   # 本帧最低识别置信度
 
+    # 生牌标记：34维，True 表示该牌本局从未被打出/吃碰杠过
+    is_sheng: list[bool] = field(default_factory=lambda: [True] * 34)
+
     def to_dict(self) -> dict:
         return {
             "fi": self.frame_index,
@@ -121,6 +124,7 @@ class GameState:
             "self": self.self_player.to_dict(),
             "opp": [o.to_dict() for o in self.opponents],
             "regions": {name: region.to_dict() for name, region in self.regions.items()},
+            "is_sheng": self.is_sheng,
             "dbg": {
                 "min_conf": round(self.raw_confidence_min, 3),
                 "hand_count": len(self.self_player.hand),

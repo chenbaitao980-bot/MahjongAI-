@@ -141,6 +141,27 @@ def is_win_simple(hand: list[int]) -> bool:
     return False
 
 
+# ---- 纯整数版本（MC 热循环专用，避免字符串转换） ----
+
+def is_win_int(
+    hand_ints: list[int],
+    meld_count: int,
+    baida_int: int | None,
+) -> bool:
+    """
+    纯整数版本的胡牌判断。直接从整数ID列表构建counts，
+    避免字符串转换开销。MC模拟热循环专用。
+    """
+    counts = [0] * 34
+    baida_count = 0
+    for t in hand_ints:
+        counts[t] += 1
+    if baida_int is not None:
+        baida_count = counts[baida_int]
+        counts[baida_int] = 0
+    return is_win(counts, meld_count, baida_count)
+
+
 if __name__ == "__main__":
     # ---- smoke tests ----
     from game.tiles import hand_to_counts

@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from game.state import MeldGroup, TileMatch
+from game.state import ALL_TILE_IDS, MeldGroup, TileMatch
+from game.tiles import tile_to_int
 
 
 def tile_from_id(tile_id: str, confidence: float = 1.0) -> TileMatch:
@@ -68,6 +69,14 @@ class BattleState:
     recognition_source: str = "manual"
     operation_logs: list[dict] = field(default_factory=list)
 
+    # 能胡不胡 / 能碰不碰 限制（本回合内有效）
+    # player: 0=自家, 1=对手; value: 拒绝过的牌ID 或 None
+    declined_hu: dict[int, str | None] = field(default_factory=lambda: {0: None, 1: None})
+    declined_peng: dict[int, str | None] = field(default_factory=lambda: {0: None, 1: None})
+
+    # 生牌标记：34维，True 表示该牌本局从未被打出/吃碰杠过
+    is_sheng: list[bool] = field(default_factory=lambda: [True] * 34)
+
     def mark_analysis(self, trigger_reason: str) -> None:
         self.last_trigger_reason = trigger_reason
         self.last_analysis_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -101,13 +110,13 @@ class BattleState:
         本地分析计算。任何异常都安静返回 {}，不阻断主流程。
         手牌张数：
           - 13张：只算当前向听数，不算 candidates
-          - 14张：调用 analyze_discard_candidates，得到完整候选列表
+          - 14张：调用 advisor.analyze_with_mc，得到带 MC 统计的候选列表
           - 其他：返回 {}
         """
         try:
             from game.tiles import build_visible_tiles, hand_to_counts, tiles_to_ids
             from game.shanten import calc_shanten
-            from game.evaluator import analyze_discard_candidates
+            from game.advisor import analyze_with_mc
 
             hand = tiles_to_ids(self.self_hand)
             baida = self.baida_tile or None
@@ -137,17 +146,28 @@ class BattleState:
                 1 for m in self.self_melds if m.meld_type == "kan_closed"
             )
 
+            # 游戏特征（用于大模型 prompt）
+            game_features = {
+                "is_2p_mode": True,
+                "no_baopai": True,
+                "is_sheng_phase": self.remaining_tiles <= 30,
+                "is_huangpai_risk": self.remaining_tiles <= 20,
+                "opponent_meld_count": len(self.enemy_melds),
+            }
+
             if len(hand) == 13:
                 shanten = calc_shanten(counts, meld_count, baida_count)
                 return {
                     "shanten": shanten,
                     "kan_closed_count": kan_closed_count,
+                    "game_features": game_features,
                     "candidates": [],
                     "top_recommendation": None,
                 }
 
             elif len(hand) == 14:
-                eval_result = analyze_discard_candidates(
+                # 使用 advisor 整合 evaluator + MC
+                eval_result = analyze_with_mc(
                     hand,
                     self.self_melds,
                     baida,
@@ -156,6 +176,8 @@ class BattleState:
                     self.enemy_melds,
                     tiles_to_ids(self.self_discards),
                     self.remaining_tiles,
+                    mc_iterations=30,   # 每个 candidate 30 次模拟
+                    mc_top_k=3,          # 前 3 个候选做 MC
                 )
                 candidates = eval_result.get("candidates", [])
                 mode = eval_result.get("strategy_mode", "balance")
@@ -166,6 +188,7 @@ class BattleState:
                     "shanten": shanten,
                     "kan_closed_count": kan_closed_count,
                     "strategy_mode": mode,
+                    "game_features": game_features,
                     "candidates": candidates[:5],
                     "top_recommendation": top,
                     "top_score": top_score,
@@ -174,6 +197,35 @@ class BattleState:
             return {}
         except Exception:
             return {}
+
+    def update_sheng(self, tile_ids: list[str]) -> None:
+        """将指定牌标记为熟牌（已出现）。"""
+        for tid in tile_ids:
+            if tid:
+                idx = tile_to_int(tid)
+                if 0 <= idx < 34:
+                    self.is_sheng[idx] = False
+
+    def reset_declined(self, player: int | None = None) -> None:
+        """重置能胡不胡/能碰不碰限制。player=None 时重置双方。"""
+        if player is None:
+            self.declined_hu = {0: None, 1: None}
+            self.declined_peng = {0: None, 1: None}
+        else:
+            self.declined_hu[player] = None
+            self.declined_peng[player] = None
+
+    def on_decline_hu(self, player: int, tile_id: str) -> None:
+        """记录玩家本回合拒绝胡某张牌。"""
+        self.declined_hu[player] = tile_id
+
+    def on_decline_peng(self, player: int, tile_id: str) -> None:
+        """记录玩家本回合拒绝碰某张牌。"""
+        self.declined_peng[player] = tile_id
+
+    def on_action(self, player: int) -> None:
+        """玩家有动牌（吃/碰/杠/摸）行为后，解除该玩家的限制。"""
+        self.reset_declined(player)
 
     def reset_round(self) -> None:
         self.baida_tile = ""
@@ -195,6 +247,9 @@ class BattleState:
         self.recognition_source = "manual"
         self.operation_logs.clear()
         self.deepseek_enabled = True
+        self.declined_hu = {0: None, 1: None}
+        self.declined_peng = {0: None, 1: None}
+        self.is_sheng = [True] * 34
 
     def to_payload(self) -> dict:
         remaining = self.remaining_tiles

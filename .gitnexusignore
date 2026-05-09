@@ -1,0 +1,12 @@
+# 排除运行产物和样本数据，保持索引聚焦核心代码
+data/
+logs/
+tmp_frames/
+debug/
+debug_output/
+templates/
+tile_samples/
+.workbuddy/
+.gitnexus/
+__pycache__/
+*.pyc

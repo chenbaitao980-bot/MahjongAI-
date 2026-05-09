@@ -194,6 +194,23 @@ def _count_taatsus_and_pairs(counts: list[int], jokers: int) -> tuple[int, int]:
     return taatsus, pairs
 
 
+# ---- 纯整数版本（MC 热循环专用，避免字符串转换） ----
+
+def calc_shanten_int(hand_ints: list[int], meld_count: int, baida_int: int | None) -> int:
+    """
+    纯整数版本向听数计算。直接从整数ID列表构建counts，
+    避免字符串转换开销。MC模拟热循环专用。
+    """
+    counts = [0] * 34
+    baida_count = 0
+    for t in hand_ints:
+        counts[t] += 1
+    if baida_int is not None:
+        baida_count = counts[baida_int]
+        counts[baida_int] = 0
+    return calc_shanten(counts, meld_count, baida_count)
+
+
 if __name__ == "__main__":
     from game.tiles import hand_to_counts
 

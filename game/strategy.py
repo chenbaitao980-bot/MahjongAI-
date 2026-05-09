@@ -57,17 +57,20 @@ def score_candidate(candidate: dict, mode: str) -> float:
       - shanten_after: int
       - ukeire_count: int
       - danger: int
+      - potential_fan: float (可选)
     """
     shanten = candidate.get("shanten_after", 0)
     ukeire = candidate.get("ukeire_count", 0)
     danger = candidate.get("danger", 0)
+    potential_fan = candidate.get("potential_fan", 0.0)
 
+    # 番数收益权重按模式递减：进攻 > 平衡 > 防守
     if mode == MODE_ATTACK:
-        return -shanten * 100 + ukeire * 4 - danger * 0.8
+        return -shanten * 100 + ukeire * 4 - danger * 0.8 + potential_fan * 5
     elif mode == MODE_DEFENSE:
-        return -shanten * 60 + ukeire * 1 - danger * 3
+        return -shanten * 60 + ukeire * 1 - danger * 3 + potential_fan * 1
     else:  # balance
-        return -shanten * 100 + ukeire * 3 - danger * 1.5
+        return -shanten * 100 + ukeire * 3 - danger * 1.5 + potential_fan * 3
 
 
 def strategy_label(mode: str) -> str:
@@ -117,7 +120,23 @@ if __name__ == "__main__":
     print(f"danger test: attack={s_danger_attack:.1f}, defense={s_danger_defense:.1f}")
     assert s_danger_defense < s_danger_attack
 
-    # 9. strategy_label
+    # 9. potential_fan 影响：进攻模式下高番牌评分更高
+    cand_low_fan = {"shanten_after": 1, "ukeire_count": 14, "danger": 20, "potential_fan": 0.0}
+    cand_high_fan = {"shanten_after": 1, "ukeire_count": 14, "danger": 20, "potential_fan": 3.0}
+    s_low = score_candidate(cand_low_fan, MODE_ATTACK)
+    s_high = score_candidate(cand_high_fan, MODE_ATTACK)
+    print(f"potential_fan test: low={s_low:.1f}, high={s_high:.1f}")
+    assert s_high > s_low, "进攻模式下高番牌评分应更高"
+
+    # 10. 防守模式下 potential_fan 影响较小
+    s_def_low = score_candidate(cand_low_fan, MODE_DEFENSE)
+    s_def_high = score_candidate(cand_high_fan, MODE_DEFENSE)
+    # 防守时番数收益权重低，差距应小于进攻模式
+    diff_attack = s_high - s_low
+    diff_defense = s_def_high - s_def_low
+    assert diff_defense < diff_attack, "防守模式下番数收益权重应更低"
+
+    # 11. strategy_label
     assert strategy_label(MODE_ATTACK) == "进攻"
     assert strategy_label(MODE_BALANCE) == "平衡"
     assert strategy_label(MODE_DEFENSE) == "防守"

@@ -7,8 +7,73 @@ from __future__ import annotations
 from game.danger import calc_tile_danger, danger_level_str
 from game.state import MeldGroup
 from game.strategy import decide_strategy_mode, rank_candidates, score_candidate
-from game.tiles import build_visible_tiles, tiles_to_ids
+from game.tiles import build_visible_tiles, suit_of, tiles_to_ids
 from game.ukeire import calc_ukeire
+
+
+# 高番字牌：红中(5z)、发财(6z)、门风
+FAN_HONOR_TILES = {"5z", "6z"}  # 红中、发财
+
+
+def estimate_potential_fan(
+    hand_13: list[str],
+    melds: list[MeldGroup],
+    baida: str | None,
+    self_wind: str,
+) -> float:
+    """
+    估算打出一张牌后，剩余手牌的潜在最大番数。
+    第一版简化规则，仅基于手牌结构做静态估算。
+
+    Returns:
+        float: 预估潜在番数（非精确，用于同向听数下的排序）
+    """
+    fan = 0.0
+
+    # 合并手牌和副露中的所有牌
+    all_tiles = list(hand_13)
+    for m in melds:
+        all_tiles.extend(tiles_to_ids(m.tiles))
+
+    if not all_tiles:
+        return 0.0
+
+    total = len(all_tiles)
+
+    # 1. 字牌番：红中、发财、门风 的对子/刻子/杠
+    wind_tiles = {self_wind}
+    fan_honors = FAN_HONOR_TILES | wind_tiles
+
+    counts: dict[str, int] = {}
+    for t in all_tiles:
+        counts[t] = counts.get(t, 0) + 1
+
+    for t, c in counts.items():
+        if t in fan_honors and c >= 2:
+            fan += 1.0  # 对子/刻子/杠各计1番
+
+    # 2. 清一色潜力：某数牌花色占比 >= 80%
+    suits: dict[str, int] = {"m": 0, "p": 0, "s": 0, "z": 0}
+    for t in all_tiles:
+        s = suit_of(t)
+        suits[s] = suits.get(s, 0) + 1
+
+    for s in ("m", "p", "s"):
+        if total > 0 and suits[s] / total >= 0.8:
+            fan += 2.0
+            break  # 清一色只加一次
+
+    # 3. 混一色潜力：某数牌花色 + 字牌 占比 >= 90%
+    for s in ("m", "p", "s"):
+        if total > 0 and (suits[s] + suits.get("z", 0)) / total >= 0.9:
+            # 如果已经加了清一色，不再加混一色
+            if not (suits[s] / total >= 0.8):
+                fan += 0.5
+            break
+
+    # 4. 无财神 / 财神还原（较难静态估算，暂不纳入第一版）
+
+    return round(fan, 1)
 
 
 def analyze_discard_candidates(
@@ -20,6 +85,7 @@ def analyze_discard_candidates(
     enemy_melds: list[MeldGroup],
     self_discards: list[str],
     remaining_tiles: int,
+    self_wind: str = "1z",
 ) -> dict:
     """
     分析14张手牌中每种不重复的候选出牌。
@@ -33,6 +99,7 @@ def analyze_discard_candidates(
                     "shanten_after": int,
                     "ukeire_tiles": [...],
                     "ukeire_count": int,
+                    "potential_fan": float,
                     "danger": int,
                     "danger_level": str,
                     "score": float,
@@ -74,17 +141,20 @@ def analyze_discard_candidates(
             turn,
         )
 
+        potential_fan = estimate_potential_fan(hand_13, melds, baida, self_wind)
+
         candidates.append({
             "discard": tile,
             "shanten_after": ukeire["current_shanten"],
             "ukeire_tiles": ukeire["tiles"],
             "ukeire_count": ukeire["count"],
+            "potential_fan": potential_fan,
             "danger": danger,
             "danger_level": danger_level_str(danger),
         })
 
-    # 先按原始规则排序，提取最优向听数和对应进张数
-    candidates.sort(key=lambda x: (x["shanten_after"], -x["ukeire_count"]))
+    # 先按 (向听数, 潜在番数, 进张数) 排序，提取最优向听数
+    candidates.sort(key=lambda x: (x["shanten_after"], -x["potential_fan"], -x["ukeire_count"]))
     best_shanten = candidates[0]["shanten_after"] if candidates else 99
     best_ukeire = candidates[0]["ukeire_count"] if candidates else 0
 

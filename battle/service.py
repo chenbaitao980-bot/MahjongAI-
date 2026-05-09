@@ -69,6 +69,17 @@ self.analysis 字段包含本地精确计算结果：
 优先原则：shanten_after 最小 → ukeire_count 最多 → danger 最低。
 若 candidates 为空（手牌非14张），则根据 shanten 判断整体局势。
 
+【蒙特卡洛模拟数据（MC统计）】
+部分 candidates 附带 mc 字段，包含蒙特卡洛模拟统计结果：
+- ev：期望收益（正值代表模拟中总体有利，负值代表不利）
+- win_rate：模拟中自家胡牌的概率
+- deal_in_rate：模拟中放铳（打出的牌被对手胡）的概率
+- exhaust_rate：模拟中流局的概率
+- iterations：模拟次数
+
+MC数据用于验证本地分析的结论，特别在多个候选向听数相同时，应优先选择 ev 更高、deal_in_rate 更低的出牌。
+MC数据仅供参考，不要仅凭 MC 数据推翻本地分析的牌效结论。
+
 【最优策略框架（按优先级排序）】
 A. 向听优先：优先计算当前手牌向听数（shanten），向听越少越优先推进。向听数为0即已听牌，应全力争取胡牌。
 B. 价值最大化：在听牌时评估待牌张数 × 番型价值 × 基础牌点加成，选择期望得分最高的听法。注意1、9及风字牌的基础牌点翻倍。无论怎么计算，单局牌点上限为100胡，超过也按100胡计。
@@ -779,17 +790,31 @@ class BattleService:
         raw_text = ""
         advice_error = ""
         advice = BattleAdvice()
+
         if state.deepseek_enabled:
             try:
-                raw_text = self._call_deepseek(payload_json, trigger_reason)
-                advice_data = self._extract_json_object(raw_text)
+                from game.llm_advisor import get_final_advice
+
+                api_key = self._config.get("deepseek", {}).get("api_key", "").strip()
+                model = self._config.get("deepseek", {}).get("model", "deepseek-chat").strip() or "deepseek-chat"
+                analysis = payload.get("self", {}).get("analysis", {})
+
+                llm_result = get_final_advice(
+                    payload=payload,
+                    analysis=analysis,
+                    api_key=api_key,
+                    model=model,
+                    use_llm=True,
+                )
+
+                raw_text = llm_result.get("raw_response", "")
                 advice = BattleAdvice(
-                    recommended_discard=str(advice_data.get("recommended_discard") or ""),
-                    strategy_type=str(advice_data.get("strategy_type") or ""),
-                    reasoning_summary=str(advice_data.get("reasoning_summary") or ""),
-                    risk_notes=str(advice_data.get("risk_notes") or ""),
-                    forbidden_discards=[str(x) for x in advice_data.get("forbidden_discards", []) if str(x).strip()],
-                    candidate_actions=[str(item) for item in advice_data.get("candidate_actions", []) if str(item).strip()],
+                    recommended_discard=str(llm_result.get("tile") or ""),
+                    strategy_type=str(llm_result.get("risk_level") or ""),
+                    reasoning_summary=str(llm_result.get("reason") or ""),
+                    risk_notes=str(llm_result.get("risk_notes") or ""),
+                    forbidden_discards=[str(x) for x in llm_result.get("forbidden_discards", []) if str(x).strip()],
+                    candidate_actions=[str(item) for item in llm_result.get("candidate_actions", []) if str(item).strip()],
                     raw_response=raw_text,
                 )
             except Exception as exc:
@@ -804,7 +829,33 @@ class BattleService:
                     1,
                     int((time.perf_counter() - advice_started_at) * 1000),
                 )
+                # 持久化 LLM 请求日志
+                try:
+                    model = self._config.get("deepseek", {}).get("model", "deepseek-chat").strip() or "deepseek-chat"
+                    self._persist_deepseek_request(
+                        trigger_reason=trigger_reason,
+                        model=model,
+                        payload=payload,
+                        response_text=raw_text,
+                        error_message=advice_error,
+                    )
+                except Exception:
+                    pass
         else:
+            # 无 LLM 模式：使用程序推荐
+            try:
+                from game.llm_advisor import get_program_advice
+                analysis = payload.get("self", {}).get("analysis", {})
+                prog_result = get_program_advice(analysis)
+                advice = BattleAdvice(
+                    recommended_discard=str(prog_result.get("tile") or ""),
+                    strategy_type=str(prog_result.get("risk_level") or ""),
+                    reasoning_summary=str(prog_result.get("reason") or ""),
+                    risk_notes=str(prog_result.get("risk_notes") or ""),
+                    raw_response="[program-mode] " + json.dumps(prog_result, ensure_ascii=False),
+                )
+            except Exception:
+                pass
             state.last_advice_duration_ms = 0
         state.last_analysis_duration_ms = state.last_recognition_duration_ms + state.last_advice_duration_ms
         if advice_error:

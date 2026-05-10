@@ -856,6 +856,12 @@ class BattlePanel(QWidget):
         self._render_state()
         self.state_changed.emit(self.current_state())
 
+    def _adjust_remaining(self, delta: int) -> None:
+        self._state.remaining_tiles = max(0, self._state.remaining_tiles + delta)
+        self._remaining_spin.blockSignals(True)
+        self._remaining_spin.setValue(self._state.remaining_tiles)
+        self._remaining_spin.blockSignals(False)
+
     def _on_ai_toggle(self, checked: bool) -> None:
         self._state.ai_recognition_enabled = checked
         self._record_and_emit("toggle_ai_recognition", {"enabled": checked})
@@ -916,6 +922,7 @@ class BattlePanel(QWidget):
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         tile_id = dialog.selected_tile()
+        self._adjust_remaining(-1)
         if enemy:
             self._state.enemy_discards.append(tile_from_id(tile_id))
             self._record_and_emit("add_enemy_discard", {"tile": tile_id})
@@ -930,6 +937,7 @@ class BattlePanel(QWidget):
         if not discards:
             return
         tile = discards.pop()
+        self._adjust_remaining(+1)
         if enemy:
             self._record_and_emit("undo_enemy_discard", {"tile": tile.tile_id})
             self.state_reanalyze_requested.emit("enemy_discard_undo")
@@ -943,6 +951,7 @@ class BattlePanel(QWidget):
             return
         count = len(discards)
         discards.clear()
+        self._adjust_remaining(count)
         if enemy:
             self._record_and_emit("clear_enemy_discards", {"count": count})
             self.state_reanalyze_requested.emit("enemy_discard_clear")
@@ -950,11 +959,17 @@ class BattlePanel(QWidget):
             self._record_and_emit("clear_self_discards", {"count": count})
             self.recognition_only_requested.emit("self_discard_clear")
 
+    @staticmethod
+    def _is_kan(meld_type: str) -> bool:
+        return "kan" in meld_type
+
     def _add_meld(self, enemy: bool) -> None:
         dialog = MeldSelectionDialog("添加副露", self)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         meld = dialog.selected_meld()
+        if self._is_kan(meld.meld_type):
+            self._adjust_remaining(-1)
         if enemy:
             self._state.enemy_melds.append(meld)
             self._record_and_emit("add_enemy_meld", {"meld_type": meld.meld_type, "tiles": [tile.tile_id for tile in meld.tiles]})
@@ -970,6 +985,8 @@ class BattlePanel(QWidget):
         if not melds:
             return
         meld = melds.pop()
+        if self._is_kan(meld.meld_type):
+            self._adjust_remaining(+1)
         if enemy:
             self._record_and_emit("undo_enemy_meld", {"meld_type": meld.meld_type, "tiles": [tile.tile_id for tile in meld.tiles]})
             self.state_reanalyze_requested.emit("enemy_meld_undo")
@@ -983,7 +1000,10 @@ class BattlePanel(QWidget):
         if not melds:
             return
         count = len(melds)
+        kan_count = sum(1 for m in melds if self._is_kan(m.meld_type))
         melds.clear()
+        if kan_count:
+            self._adjust_remaining(kan_count)
         if enemy:
             self._record_and_emit("clear_enemy_melds", {"count": count})
             self.state_reanalyze_requested.emit("enemy_meld_clear")

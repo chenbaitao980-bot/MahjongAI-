@@ -559,6 +559,8 @@ class BattlePanel(QWidget):
     end_requested = pyqtSignal()
     state_changed = pyqtSignal(object)
     analysis_requested = pyqtSignal(str)
+    recognition_only_requested = pyqtSignal(str)   # 我方编辑：识别+本地分析，不触发DeepSeek
+    state_reanalyze_requested = pyqtSignal(str)    # 敌方编辑：不识别，仅重算本地分析
     config_requested = pyqtSignal()
     tile_correction_requested = pyqtSignal(int, str)   # (tile_index, correct_tile_id)
     meld_correction_requested = pyqtSignal(int, str)   # (flat_meld_tile_index, correct_tile_id)
@@ -903,21 +905,24 @@ class BattlePanel(QWidget):
         tile_id = dialog.selected_tile()
         if enemy:
             self._state.enemy_discards.append(tile_from_id(tile_id))
-            action = "add_enemy_discard"
-            trigger = "enemy_discard_added"
+            self._record_and_emit("add_enemy_discard", {"tile": tile_id})
+            self.state_reanalyze_requested.emit("enemy_discard_added")
         else:
             self._state.self_discards.append(tile_from_id(tile_id))
-            action = "add_self_discard"
-            trigger = "self_discard_added"
-        self._record_and_emit(action, {"tile": tile_id})
-        self.analysis_requested.emit(trigger)
+            self._record_and_emit("add_self_discard", {"tile": tile_id})
+            self.recognition_only_requested.emit("self_discard_added")
 
     def _undo_discard(self, enemy: bool) -> None:
         discards = self._state.enemy_discards if enemy else self._state.self_discards
         if not discards:
             return
         tile = discards.pop()
-        self._record_and_emit("undo_enemy_discard" if enemy else "undo_self_discard", {"tile": tile.tile_id})
+        if enemy:
+            self._record_and_emit("undo_enemy_discard", {"tile": tile.tile_id})
+            self.state_reanalyze_requested.emit("enemy_discard_undo")
+        else:
+            self._record_and_emit("undo_self_discard", {"tile": tile.tile_id})
+            self.recognition_only_requested.emit("self_discard_undo")
 
     def _clear_discards(self, enemy: bool) -> None:
         discards = self._state.enemy_discards if enemy else self._state.self_discards
@@ -925,7 +930,12 @@ class BattlePanel(QWidget):
             return
         count = len(discards)
         discards.clear()
-        self._record_and_emit("clear_enemy_discards" if enemy else "clear_self_discards", {"count": count})
+        if enemy:
+            self._record_and_emit("clear_enemy_discards", {"count": count})
+            self.state_reanalyze_requested.emit("enemy_discard_clear")
+        else:
+            self._record_and_emit("clear_self_discards", {"count": count})
+            self.recognition_only_requested.emit("self_discard_clear")
 
     def _add_meld(self, enemy: bool) -> None:
         dialog = MeldSelectionDialog("添加副露", self)
@@ -934,27 +944,26 @@ class BattlePanel(QWidget):
         meld = dialog.selected_meld()
         if enemy:
             self._state.enemy_melds.append(meld)
-            action = "add_enemy_meld"
-            trigger = "enemy_meld_changed"
+            self._record_and_emit("add_enemy_meld", {"meld_type": meld.meld_type, "tiles": [tile.tile_id for tile in meld.tiles]})
+            self.state_reanalyze_requested.emit("enemy_meld_changed")
         else:
             self._state.self_melds.append(meld)
             self._state.self_melds_locked = True
-            action = "add_self_meld"
-            trigger = "self_meld_changed"
-        self._record_and_emit(action, {"meld_type": meld.meld_type, "tiles": [tile.tile_id for tile in meld.tiles]})
-        self.analysis_requested.emit(trigger)
+            self._record_and_emit("add_self_meld", {"meld_type": meld.meld_type, "tiles": [tile.tile_id for tile in meld.tiles]})
+            self.recognition_only_requested.emit("self_meld_changed")
 
     def _undo_meld(self, enemy: bool) -> None:
         melds = self._state.enemy_melds if enemy else self._state.self_melds
         if not melds:
             return
         meld = melds.pop()
-        if not enemy:
+        if enemy:
+            self._record_and_emit("undo_enemy_meld", {"meld_type": meld.meld_type, "tiles": [tile.tile_id for tile in meld.tiles]})
+            self.state_reanalyze_requested.emit("enemy_meld_undo")
+        else:
             self._state.self_melds_locked = True
-        self._record_and_emit(
-            "undo_enemy_meld" if enemy else "undo_self_meld",
-            {"meld_type": meld.meld_type, "tiles": [tile.tile_id for tile in meld.tiles]},
-        )
+            self._record_and_emit("undo_self_meld", {"meld_type": meld.meld_type, "tiles": [tile.tile_id for tile in meld.tiles]})
+            self.recognition_only_requested.emit("self_meld_undo")
 
     def _clear_melds(self, enemy: bool) -> None:
         melds = self._state.enemy_melds if enemy else self._state.self_melds
@@ -962,9 +971,13 @@ class BattlePanel(QWidget):
             return
         count = len(melds)
         melds.clear()
-        if not enemy:
+        if enemy:
+            self._record_and_emit("clear_enemy_melds", {"count": count})
+            self.state_reanalyze_requested.emit("enemy_meld_clear")
+        else:
             self._state.self_melds_locked = False
-        self._record_and_emit("clear_enemy_melds" if enemy else "clear_self_melds", {"count": count})
+            self._record_and_emit("clear_self_melds", {"count": count})
+            self.recognition_only_requested.emit("self_meld_clear")
 
     _HAND_COLS = 8  # tiles per row before wrapping
 

@@ -230,6 +230,34 @@ class BattleService:
     def analyze_after_action(self, state: BattleState, trigger_reason: str) -> tuple[BattleState, BattleAdvice]:
         return self._analyze(state, trigger_reason)
 
+    def analyze_recognition_only(self, state: BattleState, trigger_reason: str) -> tuple[BattleState, BattleAdvice]:
+        """识别手牌 + 本地分析，跳过 DeepSeek。用于我方弃牌/副露手动编辑后刷新。"""
+        state.deepseek_enabled = False
+        return self._analyze(state, trigger_reason)
+
+    def analyze_state_only(self, state: BattleState, trigger_reason: str) -> tuple[BattleState, BattleAdvice]:
+        """不做图片识别，仅重算本地分析。用于敌方数据变更后快速更新出牌建议。"""
+        state.mark_analysis(trigger_reason)
+        state.last_recognition_duration_ms = 0
+        payload = state.to_payload()
+        advice = BattleAdvice()
+        try:
+            from game.llm_advisor import get_program_advice
+            analysis = payload.get("self", {}).get("analysis", {})
+            prog_result = get_program_advice(analysis)
+            advice = BattleAdvice(
+                recommended_discard=str(prog_result.get("tile") or ""),
+                strategy_type=str(prog_result.get("strategy_type") or ""),
+                reasoning_summary=str(prog_result.get("reason") or ""),
+                risk_notes=str(prog_result.get("risk_notes") or ""),
+                raw_response="[state-only] " + json.dumps(prog_result, ensure_ascii=False),
+            )
+        except Exception:
+            pass
+        state.last_advice_duration_ms = 0
+        state.last_analysis_duration_ms = 0
+        return state, advice
+
     def set_session(self, session: "GameSession | None") -> None:
         self._session = session
 

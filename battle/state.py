@@ -158,7 +158,10 @@ class BattleState:
                 "opponent_meld_count": len(self.enemy_melds),
             }
 
-            if len(hand) == 13:
+            meld_tile_count = sum(len(tiles_to_ids(m.tiles)) for m in self.self_melds)
+            effective_count = len(hand) + meld_tile_count
+
+            if effective_count == 13:
                 shanten = calc_shanten(counts, meld_count, baida_count)
                 result = {
                     "shanten": shanten,
@@ -170,7 +173,7 @@ class BattleState:
                 self.last_analysis = result
                 return result
 
-            elif len(hand) == 14:
+            elif effective_count == 14:
                 # 使用 advisor 整合 evaluator + MC
                 eval_result = analyze_with_mc(
                     hand,

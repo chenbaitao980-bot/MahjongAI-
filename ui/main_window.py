@@ -500,16 +500,21 @@ class BattleAnalysisThread(QThread):
     finished_ok = pyqtSignal(object, object)
     finished_err = pyqtSignal(str)
 
-    def __init__(self, service: BattleService, state: BattleState, trigger_reason: str, parent=None):
+    def __init__(self, service: BattleService, state: BattleState, trigger_reason: str, parent=None, mode: str = "full"):
         super().__init__(parent)
         self._service = service
         self._state = deepcopy(state)
         self._trigger_reason = trigger_reason
+        self._mode = mode
 
     def run(self):
         try:
             if self._trigger_reason == "start":
                 state, advice = self._service.analyze_opening(self._state)
+            elif self._mode == "recognition_only":
+                state, advice = self._service.analyze_recognition_only(self._state, self._trigger_reason)
+            elif self._mode == "state_only":
+                state, advice = self._service.analyze_state_only(self._state, self._trigger_reason)
             else:
                 state, advice = self._service.analyze_after_action(self._state, self._trigger_reason)
             self.finished_ok.emit(state, advice)
@@ -985,6 +990,8 @@ class MainWindow(QMainWindow):
         self._battle_panel.end_requested.connect(self._on_battle_end_requested)
         self._battle_panel.state_changed.connect(self._on_battle_state_changed)
         self._battle_panel.analysis_requested.connect(self._on_battle_analysis_requested)
+        self._battle_panel.recognition_only_requested.connect(self._on_battle_recognition_only_requested)
+        self._battle_panel.state_reanalyze_requested.connect(self._on_battle_state_reanalyze_requested)
         self._battle_panel.config_requested.connect(self._open_api_config_dialog)
         self._battle_panel.tile_correction_requested.connect(self._on_battle_tile_correction)
         self._battle_panel.meld_correction_requested.connect(self._on_battle_meld_correction)
@@ -1660,7 +1667,7 @@ class MainWindow(QMainWindow):
         self._save_config()
         self._battle_panel.clear_error()
 
-    def _on_battle_analysis_requested(self, trigger_reason: str):
+    def _start_battle_worker(self, trigger_reason: str, mode: str = "full") -> None:
         if self._is_hog_training_running():
             self._pending_battle_analysis_reason = trigger_reason
             QMessageBox.information(
@@ -1683,11 +1690,21 @@ class MainWindow(QMainWindow):
             state,
             trigger_reason,
             self,
+            mode=mode,
         )
         self._battle_worker.finished_ok.connect(self._on_battle_analysis_finished)
         self._battle_worker.finished_err.connect(self._on_battle_analysis_failed)
         self._battle_worker.finished.connect(self._on_battle_worker_finished)
         self._battle_worker.start()
+
+    def _on_battle_analysis_requested(self, trigger_reason: str):
+        self._start_battle_worker(trigger_reason, mode="full")
+
+    def _on_battle_recognition_only_requested(self, trigger_reason: str):
+        self._start_battle_worker(trigger_reason, mode="recognition_only")
+
+    def _on_battle_state_reanalyze_requested(self, trigger_reason: str):
+        self._start_battle_worker(trigger_reason, mode="state_only")
 
     def _on_battle_analysis_finished(self, state: BattleState, advice: BattleAdvice):
         state.append_operation(

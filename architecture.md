@@ -6,6 +6,29 @@
 
 ## 变更日志
 
+### 2026-05-10 — 副露手牌计数修复 + 分析触发分层优化
+
+#### 修复 `battle/state.py` — 副露场景向听数/候选分析空结果
+- `_compute_analysis()` 判断条件从 `len(hand) == 13/14` 改为 `len(hand) + meld_tile_count == 13/14`
+- 解决有副露时（如1副露3张→手牌11张）落入 `return {}` 导致 candidates 为空的 bug
+
+#### 修改 `battle/service.py` — 新增两个分析方法
+- `analyze_recognition_only(state, trigger)`: 识别手牌 + 本地分析，强制跳过 DeepSeek，用于我方弃牌/副露手动编辑
+- `analyze_state_only(state, trigger)`: 不做图片识别，仅用当前手牌重算本地分析，用于敌方数据变更
+
+#### 修改 `ui/battle_panel.py` — 信号分层
+- 新增信号 `recognition_only_requested(str)` 和 `state_reanalyze_requested(str)`
+- 我方弃牌/副露的添加/撤销/清空操作 → emit `recognition_only_requested`（识别+本地分析）
+- 敌方弃牌/副露的添加/撤销/清空操作 → emit `state_reanalyze_requested`（仅重算）
+
+#### 修改 `ui/main_window.py` — 支持三种分析模式
+- `BattleAnalysisThread` 新增 `mode` 参数（"full" / "recognition_only" / "state_only"）
+- 原 `_on_battle_analysis_requested()` 逻辑抽取为 `_start_battle_worker(trigger, mode)` 公共方法
+- 新增 `_on_battle_recognition_only_requested()` / `_on_battle_state_reanalyze_requested()` handler
+- 连接 battle_panel 的两个新信号
+
+---
+
 ### 2026-05-10 — AI建议面板中文化（出牌名 + 策略类型）
 
 #### 修改 `game/tiles.py`

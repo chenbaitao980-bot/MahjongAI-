@@ -1631,6 +1631,7 @@ class MainWindow(QMainWindow):
         output = data_path("data")
         self._battle_session = GameSession(output, self._config)
         self._battle_service.set_session(self._battle_session)
+        self._battle_panel.set_game_started(True)
         self.statusBar().showMessage(f"正式战斗：已启动，session={self._battle_session.session_id}")
 
     def _on_battle_end_requested(self):
@@ -1654,6 +1655,7 @@ class MainWindow(QMainWindow):
             self._battle_session = None
             self._battle_service.set_session(None)
 
+        self._battle_panel.set_game_started(False)
         self.statusBar().showMessage("正式战斗：本轮对话与牌局数据已重置，session 已保存")
 
     def _on_battle_state_changed(self, _state: BattleState):

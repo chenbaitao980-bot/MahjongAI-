@@ -585,12 +585,15 @@ class BattlePanel(QWidget):
         self._ai_checkbox.toggled.connect(self._on_ai_toggle)
         top.addWidget(self._ai_checkbox)
 
+        self._game_in_progress = False
+
         self._start_btn = QPushButton("开始")
         self._start_btn.clicked.connect(self._on_start_clicked)
         top.addWidget(self._start_btn)
 
         self._end_btn = QPushButton("结束游戏")
         self._end_btn.clicked.connect(self.end_requested.emit)
+        self._end_btn.setEnabled(False)
         top.addWidget(self._end_btn)
 
         self._config_btn = QPushButton("API 设置")
@@ -739,6 +742,9 @@ class BattlePanel(QWidget):
         hand_top = QHBoxLayout()
         hand_top.addWidget(QLabel("我方手牌区"))
         hand_top.addStretch()
+        self._recognize_btn = QPushButton("识别")
+        self._recognize_btn.clicked.connect(lambda: self.recognition_only_requested.emit("manual_recognize"))
+        hand_top.addWidget(self._recognize_btn)
         hand_add = QPushButton("添加")
         hand_add.clicked.connect(self._add_hand_tile)
         hand_top.addWidget(hand_add)
@@ -1228,10 +1234,16 @@ class BattlePanel(QWidget):
         self._meta_label.setText("最近一次分析：--")
         self._error_label.clear()
 
+    def set_game_started(self, started: bool) -> None:
+        self._game_in_progress = started
+        self._start_btn.setEnabled(not started)
+        self._end_btn.setEnabled(started)
+
     def set_busy(self, busy: bool, message: str = "") -> None:
-        self._start_btn.setEnabled(not busy)
-        self._end_btn.setEnabled(not busy)
+        self._start_btn.setEnabled(not busy and not self._game_in_progress)
+        self._end_btn.setEnabled(not busy and self._game_in_progress)
         self._config_btn.setEnabled(not busy)
+        self._recognize_btn.setEnabled(not busy)
         self._busy_label.setText(message or ("分析中..." if busy else "空闲"))
         if busy and message:
             self._progress_label.setText(f"⧗ {message}")

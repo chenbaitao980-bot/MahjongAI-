@@ -6,6 +6,22 @@
 
 ## 变更日志
 
+### 2026-05-10 — 游戏状态锁 + 手牌识别按钮
+
+#### 修改 `ui/battle_panel.py`
+- 新增 `_game_in_progress: bool = False` 实例变量
+- `_end_btn` 初始设为 `setEnabled(False)`（未开始游戏时不可点击）
+- 新增 `set_game_started(started: bool)` 方法：更新 `_game_in_progress`，同步控制开始/结束按钮启用状态
+- `set_busy()` 改为尊重 `_game_in_progress`：分析中两者均禁用；闲置时按游戏状态分别启用
+- `set_busy()` 新增对 `_recognize_btn` 的禁用控制
+- 我方手牌区新增"识别"按钮（在"添加"左侧），点击发射 `recognition_only_requested("manual_recognize")`
+
+#### 修改 `ui/main_window.py`
+- `_on_battle_start_requested()` 创建 session 后调用 `set_game_started(True)`
+- `_on_battle_end_requested()` 关闭 session 后调用 `set_game_started(False)`
+
+---
+
 ### 2026-05-10 — 耗时分段显示 + 进度漏斗指示器
 
 #### 修改 `battle/state.py`

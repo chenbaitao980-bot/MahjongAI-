@@ -803,6 +803,13 @@ class BattlePanel(QWidget):
         retry_btn = QPushButton("重试")
         retry_btn.clicked.connect(lambda: self.analysis_requested.emit("retry"))
         layout.addWidget(retry_btn)
+
+        self._progress_label = QLabel("")
+        self._progress_label.setWordWrap(True)
+        self._progress_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self._progress_label.setStyleSheet("color:#8e44ad; font-size:11px;")
+        self._progress_label.setVisible(False)
+        layout.addWidget(self._progress_label)
         return box
 
     def _provider_text(self) -> str:
@@ -1172,16 +1179,16 @@ class BattlePanel(QWidget):
         self._candidate_label.setText(f"候选动作：{candidates}")
         self._candidate_label.setStyleSheet("color:#16a085;" if advice.candidate_actions else "")
         if self._state.last_analysis_at:
-            duration_parts: list[str] = []
+            timing_parts: list[str] = []
             if self._state.last_recognition_duration_ms > 0:
-                duration_parts.append(f"图片识别：{self._state.last_recognition_duration_ms} ms")
+                timing_parts.append(f"图片识别：{self._state.last_recognition_duration_ms} ms")
+            if self._state.last_local_analysis_duration_ms > 0:
+                timing_parts.append(f"数据分析：{self._state.last_local_analysis_duration_ms} ms")
             if self._state.last_advice_duration_ms > 0:
-                duration_parts.append(f"AI建议：{self._state.last_advice_duration_ms} ms")
-            if self._state.last_analysis_duration_ms > 0:
-                duration_parts.append(f"总计：{self._state.last_analysis_duration_ms} ms")
-            duration_text = f" | {' | '.join(duration_parts)}" if duration_parts else ""
+                timing_parts.append(f"AI分析：{self._state.last_advice_duration_ms} ms")
+            timing_text = "\n" + " | ".join(timing_parts) if timing_parts else ""
             self._meta_label.setText(
-                f"最近一次分析：{self._state.last_analysis_at} | 触发原因：{self._state.last_trigger_reason}{duration_text}"
+                f"最近一次分析：{self._state.last_analysis_at} | 触发：{self._state.last_trigger_reason}{timing_text}"
             )
         else:
             self._meta_label.setText("最近一次分析：--")
@@ -1226,6 +1233,12 @@ class BattlePanel(QWidget):
         self._end_btn.setEnabled(not busy)
         self._config_btn.setEnabled(not busy)
         self._busy_label.setText(message or ("分析中..." if busy else "空闲"))
+        if busy and message:
+            self._progress_label.setText(f"⧗ {message}")
+            self._progress_label.setVisible(True)
+        else:
+            self._progress_label.setVisible(False)
+            self._progress_label.setText("")
 
     def apply_config(self, config: dict) -> None:
         self._config = deepcopy(config)

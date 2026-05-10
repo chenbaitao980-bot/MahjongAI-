@@ -6,6 +6,30 @@
 
 ## 变更日志
 
+### 2026-05-10 — 耗时分段显示 + 进度漏斗指示器
+
+#### 修改 `battle/state.py`
+- 新增字段 `last_local_analysis_duration_ms: int = 0`，记录本地数据分析（`_compute_analysis()`）耗时
+- `mark_analysis()` 和 `reset_round()` 同步初始化该字段
+
+#### 修改 `battle/service.py`
+- `_analyze()` 在 `to_payload()` 调用前后计时，写入 `state.last_local_analysis_duration_ms`
+- `analyze_state_only()` 同样计时 `to_payload()`
+
+#### 修改 `ui/battle_panel.py`
+- `_build_advice_group()` 底部新增 `_progress_label`（右对齐，默认隐藏）
+- `set_busy(True, message)` 时显示 `⧗ {message}`，`set_busy(False)` 时隐藏
+- `_render_advice()` 耗时格式改为独立一行：`图片识别：X ms | 数据分析：Y ms | AI分析：Z ms`（只显示 >0 的项，删去"总计"）
+
+#### 修改 `ui/main_window.py`
+- 新增 `_MODE_BUSY_MSG` 字典映射 mode→提示文本
+- `_start_battle_worker()` 根据 mode 传入对应文本给 `set_busy()`：
+  - full → "分析中..."
+  - recognition_only → "正在重新识别牌区..."
+  - state_only → "正在分析对策..."
+
+---
+
 ### 2026-05-10 — 副露手牌计数修复 + 分析触发分层优化
 
 #### 修复 `battle/state.py` — 副露场景向听数/候选分析空结果

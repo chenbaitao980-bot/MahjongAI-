@@ -239,7 +239,11 @@ class BattleService:
         """不做图片识别，仅重算本地分析。用于敌方数据变更后快速更新出牌建议。"""
         state.mark_analysis(trigger_reason)
         state.last_recognition_duration_ms = 0
+        local_started_at = time.perf_counter()
         payload = state.to_payload()
+        state.last_local_analysis_duration_ms = max(
+            1, int((time.perf_counter() - local_started_at) * 1000)
+        )
         advice = BattleAdvice()
         try:
             from game.llm_advisor import get_program_advice
@@ -818,7 +822,11 @@ class BattleService:
         if _hand_sig == self._last_analyzed_hand_sig and self._last_advice_cache is not None:
             return state, self._last_advice_cache
 
+        local_analysis_started_at = time.perf_counter()
         payload = state.to_payload()
+        state.last_local_analysis_duration_ms = max(
+            1, int((time.perf_counter() - local_analysis_started_at) * 1000)
+        )
         payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
         advice_started_at = time.perf_counter()
         raw_text = ""

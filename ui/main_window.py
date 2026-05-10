@@ -1667,6 +1667,12 @@ class MainWindow(QMainWindow):
         self._save_config()
         self._battle_panel.clear_error()
 
+    _MODE_BUSY_MSG = {
+        "full": "分析中...",
+        "recognition_only": "正在重新识别牌区...",
+        "state_only": "正在分析对策...",
+    }
+
     def _start_battle_worker(self, trigger_reason: str, mode: str = "full") -> None:
         if self._is_hog_training_running():
             self._pending_battle_analysis_reason = trigger_reason
@@ -1683,7 +1689,8 @@ class MainWindow(QMainWindow):
             return
         state = self._battle_panel.current_state()
         self._battle_panel.clear_error()
-        self._battle_panel.set_busy(True, "分析中...")
+        busy_msg = self._MODE_BUSY_MSG.get(mode, "分析中...")
+        self._battle_panel.set_busy(True, busy_msg)
         self._battle_analysis_started_at = time.perf_counter()
         self._battle_worker = BattleAnalysisThread(
             self._battle_service,

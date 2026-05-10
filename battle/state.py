@@ -65,6 +65,7 @@ class BattleState:
     last_analysis_at: str = ""
     last_analysis_duration_ms: int = 0
     last_recognition_duration_ms: int = 0
+    last_local_analysis_duration_ms: int = 0
     last_advice_duration_ms: int = 0
     recognition_source: str = "manual"
     operation_logs: list[dict] = field(default_factory=list)
@@ -85,6 +86,7 @@ class BattleState:
         self.last_analysis_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.last_analysis_duration_ms = 0
         self.last_recognition_duration_ms = 0
+        self.last_local_analysis_duration_ms = 0
         self.last_advice_duration_ms = 0
 
     def append_operation(self, action: str, detail: dict | None = None) -> None:
@@ -253,6 +255,7 @@ class BattleState:
         self.last_analysis_at = ""
         self.last_analysis_duration_ms = 0
         self.last_recognition_duration_ms = 0
+        self.last_local_analysis_duration_ms = 0
         self.last_advice_duration_ms = 0
         self.recognition_source = "manual"
         self.operation_logs.clear()

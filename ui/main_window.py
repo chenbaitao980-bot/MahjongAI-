@@ -1634,13 +1634,31 @@ class MainWindow(QMainWindow):
         self._battle_panel.set_game_started(True)
         self.statusBar().showMessage(f"正式战斗：已启动，session={self._battle_session.session_id}")
 
+    @staticmethod
+    def _ask_game_result() -> str:
+        """弹出胜负确认对话框，返回 'win' / 'lose' / 'unknown'。"""
+        dlg = QMessageBox()
+        dlg.setWindowTitle("本局结果")
+        dlg.setText("本局对局结果如何？")
+        btn_win = dlg.addButton("赢了", QMessageBox.ButtonRole.AcceptRole)
+        btn_lose = dlg.addButton("输了", QMessageBox.ButtonRole.DestructiveRole)
+        dlg.addButton("跳过不记录", QMessageBox.ButtonRole.RejectRole)
+        dlg.exec()
+        clicked = dlg.clickedButton()
+        if clicked is btn_win:
+            return "win"
+        if clicked is btn_lose:
+            return "lose"
+        return "unknown"
+
     def _on_battle_end_requested(self):
         if self._battle_worker and self._battle_worker.isRunning():
             self.statusBar().showMessage("正式战斗：请等待当前分析完成后再结束游戏")
             return
+        game_result = self._ask_game_result()
         state = self._battle_panel.current_state()
-        state.append_operation("end_game", {"note": "reset round context"})
-        self._battle_service.persist_round_event(state, "end_game", {"note": "reset round context"})
+        state.append_operation("end_game", {"note": "reset round context", "result": game_result})
+        self._battle_service.persist_round_event(state, "end_game", {"note": "reset round context", "result": game_result})
         state.reset_round()
         self._battle_panel.set_state(state)
         self._battle_panel.clear_round_feedback()

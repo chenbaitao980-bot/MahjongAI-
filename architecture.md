@@ -1,10 +1,23 @@
 # MahjongAI 知识图谱
 
-> 自动生成于 2026-05-04 20:49 | 最后人工更新：2026-05-10（修复DeepSeek默认开启）
+> 自动生成于 2026-05-04 20:49 | 最后人工更新：2026-05-10（剩余张数自动联动）
 
 ---
 
 ## 变更日志
+
+### 2026-05-10 — 弃牌/副露编辑自动更新剩余张数
+
+#### 修改 `ui/battle_panel.py`
+- 新增辅助方法 `_adjust_remaining(delta: int)`：更新 `state.remaining_tiles`（≥0）并同步 `_remaining_spin`（blockSignals）
+- 新增静态方法 `_is_kan(meld_type: str)`：判断是否杠型副露
+- `_add_discard()` / `_undo_discard()`：弃牌添加 -1，撤销 +1
+- `_clear_discards()`：按清空张数 +n
+- `_add_meld()`：仅杠型 -1（岭上牌），吃碰不变
+- `_undo_meld()`：仅杠型 +1
+- `_clear_melds()`：按清空副露中杠的数量 +n
+
+---
 
 ### 2026-05-10 — 修复：手动识别被旧局副露锁污染导致切牌错误
 

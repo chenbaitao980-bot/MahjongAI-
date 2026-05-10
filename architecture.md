@@ -6,6 +6,15 @@
 
 ## 变更日志
 
+### 2026-05-10 — 修复：手动识别被旧局副露锁污染导致切牌错误
+
+#### 修复 `battle/service.py` — `analyze_recognition_only()`
+- 当 `trigger_reason == "manual_recognize"` 时，识别前强制设 `state.self_melds_locked = False`
+- 根本原因：`_capture_hand_rois()` 逻辑中，当 `detected_melds=[]` + `self_melds_locked=True` + 手牌区有牌时，不会清除旧副露，导致 `effective_melds` 沿用上一局的副露 → `hand_region(1)` 偏移 → 切牌位置错误
+- 解锁后，视觉系统重新检测当前局副露状态（无副露则 `state.self_melds = []`），手牌区域回到正确位置
+
+---
+
 ### 2026-05-10 — 游戏状态锁 + 手牌识别按钮
 
 #### 修改 `ui/battle_panel.py`

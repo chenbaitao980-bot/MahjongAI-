@@ -232,6 +232,10 @@ class BattleService:
 
     def analyze_recognition_only(self, state: BattleState, trigger_reason: str) -> tuple[BattleState, BattleAdvice]:
         """识别手牌 + 本地分析，跳过 DeepSeek。用于我方弃牌/副露手动编辑后刷新。"""
+        if trigger_reason == "manual_recognize":
+            # 强制解锁副露，让视觉重新检测当前局副露状态，
+            # 避免上一局手动锁定的副露使 hand_region 偏移导致切牌错误
+            state.self_melds_locked = False
         state.deepseek_enabled = False
         return self._analyze(state, trigger_reason)
 

@@ -48,7 +48,7 @@ class BattleAdvice:
 @dataclass
 class BattleState:
     ai_recognition_enabled: bool = True
-    deepseek_enabled: bool = True
+    deepseek_enabled: bool = False
     vision_provider: str = "auto"
     baida_tile: str = ""
     remaining_tiles: int = 108
@@ -253,7 +253,6 @@ class BattleState:
         self.last_advice_duration_ms = 0
         self.recognition_source = "manual"
         self.operation_logs.clear()
-        self.deepseek_enabled = True
         self.declined_hu = {0: None, 1: None}
         self.declined_peng = {0: None, 1: None}
         self.is_sheng = [True] * 34

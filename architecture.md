@@ -1,10 +1,19 @@
 # MahjongAI 知识图谱
 
-> 自动生成于 2026-05-04 20:49 | 最后人工更新：2026-05-09（L1/L2/L3）
+> 自动生成于 2026-05-04 20:49 | 最后人工更新：2026-05-10（修复DeepSeek默认开启）
 
 ---
 
 ## 变更日志
+
+### 2026-05-10 — 修复 DeepSeek 未开启仍触发分析
+
+#### 修改 `battle/state.py`
+- `BattleState.deepseek_enabled` 默认值由 `True` 改为 `False`（第51行）
+- 删除 `reset_round()` 中的 `self.deepseek_enabled = True`（原第256行）
+- 效果：程序启动及每轮重置时不再强制开启DeepSeek，用户选择始终被保留
+
+---
 
 ### 2026-05-09 — 低优先级优化 L1/L2/L3
 

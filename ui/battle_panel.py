@@ -533,8 +533,9 @@ class AnalysisPanel(QGroupBox):
         for row, c in enumerate(candidates):
             mc_win = c.get("mc_win_rate")
             mc_text = f"{mc_win:.1%}" if mc_win is not None else "--"
+            discard_id = c.get("discard", "")
             values = [
-                c.get("discard", ""),
+                TILE_NAME_MAP.get(discard_id, discard_id),
                 str(c.get("shanten_after", "--")),
                 str(c.get("ukeire_count", "--")),
                 c.get("danger_level", "--"),
@@ -1127,7 +1128,8 @@ class BattlePanel(QWidget):
         )
 
     def _render_advice(self, advice: BattleAdvice) -> None:
-        discard = advice.recommended_discard or "--"
+        discard_id = advice.recommended_discard or ""
+        discard = TILE_NAME_MAP.get(discard_id, discard_id) if discard_id else "--"
         self._recommended_label.setText(f"当前推荐出牌：{discard}")
         self._recommended_label.setStyleSheet(
             "color:#27ae60; font-weight:bold;" if advice.recommended_discard else ""

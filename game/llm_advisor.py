@@ -12,6 +12,7 @@ import re
 
 from game.llm_client import LLMClient
 from game.llm_prompt import build_system_prompt, build_user_prompt
+from game.tiles import tile_display_name
 
 
 def validate_llm_output(output: dict, legal_discards: list[str]) -> bool:
@@ -79,6 +80,9 @@ def get_program_advice(analysis: dict) -> dict:
     top_discard = top.get("discard", "")
     mode = analysis.get("strategy_mode", "balance")
 
+    _MODE_CN = {"attack": "攻牌", "defense": "守牌", "balance": "平衡"}
+    strategy_type_cn = _MODE_CN.get(mode, mode)
+
     risk_level = "low"
     danger_level = top.get("danger_level", "")
     if danger_level in ("危险", "极危险"):
@@ -86,20 +90,22 @@ def get_program_advice(analysis: dict) -> dict:
     elif danger_level == "中等":
         risk_level = "medium"
 
-    reason_parts = [f"程序推荐打 {top_discard}。"]
+    discard_cn = tile_display_name(top_discard) if top_discard else ""
+    reason_parts = [f"程序推荐打 {discard_cn}。"]
     if top.get("shanten_after") is not None:
         reason_parts.append(f"打出后向听数={top.get('shanten_after')}。")
     if top.get("ukeire_count"):
         reason_parts.append(f"有效进张={top.get('ukeire_count')}张。")
     if top.get("potential_fan"):
         reason_parts.append(f"潜在番数={top.get('potential_fan')}。")
-    reason_parts.append(f"当前策略={mode}。")
+    reason_parts.append(f"当前策略={strategy_type_cn}。")
 
     return {
         "action": "discard",
         "tile": top_discard,
         "reason": " ".join(reason_parts),
         "risk_level": risk_level,
+        "strategy_type": strategy_type_cn,
         "backup_action": candidates[1]["discard"] if len(candidates) > 1 else None,
         "confidence": 0.7,
         "source": "program",
@@ -206,6 +212,7 @@ def get_final_advice(
         "tile": discard,
         "reason": llm_output.get("reasoning_summary", ""),
         "risk_level": risk_level,
+        "strategy_type": strategy_type,
         "backup_action": llm_output.get("candidate_actions", [None])[0],
         "confidence": 0.85,
         "source": "llm",

@@ -6,6 +6,26 @@
 
 ## 变更日志
 
+### 2026-05-10 — AI建议面板中文化（出牌名 + 策略类型）
+
+#### 修改 `game/tiles.py`
+- 新增 `_TILE_DISPLAY` 映射表和 `tile_display_name(tile_id)` 函数
+- 将牌ID（如"2z"、"3m"）转为中文名（"南"、"3万"）
+
+#### 修改 `game/llm_advisor.py`
+- `get_program_advice()` 返回 dict 新增 `"strategy_type"` 字段（中文：攻牌/守牌/平衡）
+- reason 文本中的出牌名改用 `tile_display_name()` 显示中文，策略名改用中文标签
+- `get_final_advice()` 返回 dict 同样新增 `"strategy_type"` 字段（直接沿用 LLM 的中文输出）
+
+#### 修改 `battle/service.py`
+- LLM模式和程序模式构造 `BattleAdvice` 时，`strategy_type` 字段改从 `"strategy_type"` 键读取（而非原来的 `"risk_level"`）
+
+#### 修改 `ui/battle_panel.py`
+- `_render_advice()`：推荐出牌显示前通过 `TILE_NAME_MAP` 转为中文名
+- `AnalysisPanel.refresh()`：候选表格"出牌"列通过 `TILE_NAME_MAP` 转为中文名，高亮逻辑保持对比 tile_id 不变
+
+---
+
 ### 2026-05-10 — 修复 DeepSeek 未开启仍触发分析
 
 #### 修改 `battle/state.py`

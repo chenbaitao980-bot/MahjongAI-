@@ -816,7 +816,7 @@ class BattleService:
                 raw_text = llm_result.get("raw_response", "")
                 advice = BattleAdvice(
                     recommended_discard=str(llm_result.get("tile") or ""),
-                    strategy_type=str(llm_result.get("risk_level") or ""),
+                    strategy_type=str(llm_result.get("strategy_type") or ""),
                     reasoning_summary=str(llm_result.get("reason") or ""),
                     risk_notes=str(llm_result.get("risk_notes") or ""),
                     forbidden_discards=[str(x) for x in llm_result.get("forbidden_discards", []) if str(x).strip()],
@@ -855,7 +855,7 @@ class BattleService:
                 prog_result = get_program_advice(analysis)
                 advice = BattleAdvice(
                     recommended_discard=str(prog_result.get("tile") or ""),
-                    strategy_type=str(prog_result.get("risk_level") or ""),
+                    strategy_type=str(prog_result.get("strategy_type") or ""),
                     reasoning_summary=str(prog_result.get("reason") or ""),
                     risk_notes=str(prog_result.get("risk_notes") or ""),
                     raw_response="[program-mode] " + json.dumps(prog_result, ensure_ascii=False),

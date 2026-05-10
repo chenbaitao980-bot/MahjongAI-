@@ -73,6 +73,20 @@ def hand_to_counts(hand: list[str], baida: str | None = None) -> tuple[list[int]
     return counts, baida_count
 
 
+_TILE_DISPLAY: dict[str, str] = {
+    **{f"{i}m": f"{i}万" for i in range(1, 10)},
+    **{f"{i}p": f"{i}筒" for i in range(1, 10)},
+    **{f"{i}s": f"{i}条" for i in range(1, 10)},
+    "1z": "东", "2z": "南", "3z": "西", "4z": "北",
+    "5z": "中", "6z": "发", "7z": "白",
+}
+
+
+def tile_display_name(tile_id: str) -> str:
+    """将牌ID转为中文显示名，如 '2z' -> '南'，'3m' -> '3万'。未知牌原样返回。"""
+    return _TILE_DISPLAY.get(tile_id, tile_id)
+
+
 def build_visible_tiles(
     self_hand: list[str],
     self_discards: list[str],

@@ -186,8 +186,8 @@ class BattleState:
                     self.enemy_melds,
                     tiles_to_ids(self.self_discards),
                     self.remaining_tiles,
-                    mc_iterations=30,   # 每个 candidate 30 次模拟
-                    mc_top_k=3,          # 前 3 个候选做 MC
+                    mc_iterations=10,   # 每个 candidate 10 次模拟（向听0时生效）
+                    mc_top_k=2,         # 仅前 2 个候选做 MC
                 )
                 candidates = eval_result.get("candidates", [])
                 mode = eval_result.get("strategy_mode", "balance")

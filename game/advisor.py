@@ -165,6 +165,16 @@ def analyze_with_mc(
         eval_result["top_recommendation"] = candidates[0]["discard"] if candidates else None
         return eval_result
 
+    # 高向听：MC 胜率趋近于 0，evaluator 排序已足够，跳过 MC 节省时间
+    best_shanten = candidates[0].get("shanten_after", 99)
+    if best_shanten >= 2:
+        eval_result["top_recommendation"] = candidates[0]["discard"] if candidates else None
+        return eval_result
+
+    # 向听 1：模拟价值有限，最多 10 次
+    if best_shanten == 1:
+        mc_iterations = min(mc_iterations, 10)
+
     # 2. 取 Top K 候选做 MC
     top_k = candidates[:mc_top_k]
 

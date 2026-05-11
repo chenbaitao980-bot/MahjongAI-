@@ -266,6 +266,76 @@ class BattleService:
         state.last_analysis_duration_ms = 0
         return state, advice
 
+    def analyze_state_with_ai(self, state: BattleState, trigger_reason: str) -> tuple[BattleState, BattleAdvice]:
+        """不做图片识别，直接用当前手牌重跑本地分析+DeepSeek。用于重试按钮。"""
+        state.mark_analysis(trigger_reason)
+        state.last_recognition_duration_ms = 0
+        local_started_at = time.perf_counter()
+        payload = state.to_payload()
+        state.last_local_analysis_duration_ms = max(
+            1, int((time.perf_counter() - local_started_at) * 1000)
+        )
+        advice_started_at = time.perf_counter()
+        raw_text = ""
+        advice_error = ""
+        advice = BattleAdvice()
+        if state.deepseek_enabled:
+            try:
+                from game.llm_advisor import get_final_advice
+                api_key = self._config.get("deepseek", {}).get("api_key", "").strip()
+                model = self._config.get("deepseek", {}).get("model", "deepseek-chat").strip() or "deepseek-chat"
+                analysis = payload.get("self", {}).get("analysis", {})
+                llm_result = get_final_advice(
+                    payload=payload, analysis=analysis,
+                    api_key=api_key, model=model, use_llm=True,
+                )
+                raw_text = llm_result.get("raw_response", "")
+                advice = BattleAdvice(
+                    recommended_discard=str(llm_result.get("tile") or ""),
+                    strategy_type=str(llm_result.get("strategy_type") or ""),
+                    reasoning_summary=str(llm_result.get("reason") or ""),
+                    risk_notes=str(llm_result.get("risk_notes") or ""),
+                    forbidden_discards=[str(x) for x in llm_result.get("forbidden_discards", []) if str(x).strip()],
+                    candidate_actions=[str(item) for item in llm_result.get("candidate_actions", []) if str(item).strip()],
+                    raw_response=raw_text,
+                )
+            except Exception as exc:
+                advice_error = str(exc)
+                advice = BattleAdvice(
+                    reasoning_summary="数据分析完成，但 AI 建议解析失败。",
+                    risk_notes=advice_error,
+                    raw_response=raw_text,
+                )
+            finally:
+                state.last_advice_duration_ms = max(
+                    1, int((time.perf_counter() - advice_started_at) * 1000)
+                )
+                try:
+                    model = self._config.get("deepseek", {}).get("model", "deepseek-chat").strip() or "deepseek-chat"
+                    self._persist_deepseek_request(
+                        trigger_reason=trigger_reason, model=model,
+                        payload=payload, response_text=raw_text, error_message=advice_error,
+                    )
+                except Exception:
+                    pass
+        else:
+            try:
+                from game.llm_advisor import get_program_advice
+                analysis = payload.get("self", {}).get("analysis", {})
+                prog_result = get_program_advice(analysis)
+                advice = BattleAdvice(
+                    recommended_discard=str(prog_result.get("tile") or ""),
+                    strategy_type=str(prog_result.get("strategy_type") or ""),
+                    reasoning_summary=str(prog_result.get("reason") or ""),
+                    risk_notes=str(prog_result.get("risk_notes") or ""),
+                    raw_response="[program-mode] " + json.dumps(prog_result, ensure_ascii=False),
+                )
+            except Exception:
+                pass
+            state.last_advice_duration_ms = 0
+        state.last_analysis_duration_ms = state.last_local_analysis_duration_ms + state.last_advice_duration_ms
+        return state, advice
+
     def set_session(self, session: "GameSession | None") -> None:
         self._session = session
 

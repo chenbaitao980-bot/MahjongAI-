@@ -515,6 +515,8 @@ class BattleAnalysisThread(QThread):
                 state, advice = self._service.analyze_recognition_only(self._state, self._trigger_reason)
             elif self._mode == "state_only":
                 state, advice = self._service.analyze_state_only(self._state, self._trigger_reason)
+            elif self._mode == "state_with_ai":
+                state, advice = self._service.analyze_state_with_ai(self._state, self._trigger_reason)
             else:
                 state, advice = self._service.analyze_after_action(self._state, self._trigger_reason)
             self.finished_ok.emit(state, advice)
@@ -992,6 +994,7 @@ class MainWindow(QMainWindow):
         self._battle_panel.analysis_requested.connect(self._on_battle_analysis_requested)
         self._battle_panel.recognition_only_requested.connect(self._on_battle_recognition_only_requested)
         self._battle_panel.state_reanalyze_requested.connect(self._on_battle_state_reanalyze_requested)
+        self._battle_panel.reanalyze_with_ai_requested.connect(self._on_battle_reanalyze_with_ai_requested)
         self._battle_panel.config_requested.connect(self._open_api_config_dialog)
         self._battle_panel.tile_correction_requested.connect(self._on_battle_tile_correction)
         self._battle_panel.meld_correction_requested.connect(self._on_battle_meld_correction)
@@ -1691,6 +1694,7 @@ class MainWindow(QMainWindow):
         "full": "分析中...",
         "recognition_only": "正在重新识别牌区...",
         "state_only": "正在分析对策...",
+        "state_with_ai": "正在重新分析（跳过识别）...",
     }
 
     def _start_battle_worker(self, trigger_reason: str, mode: str = "full") -> None:
@@ -1732,6 +1736,9 @@ class MainWindow(QMainWindow):
 
     def _on_battle_state_reanalyze_requested(self, trigger_reason: str):
         self._start_battle_worker(trigger_reason, mode="state_only")
+
+    def _on_battle_reanalyze_with_ai_requested(self, trigger_reason: str):
+        self._start_battle_worker(trigger_reason, mode="state_with_ai")
 
     def _on_battle_analysis_finished(self, state: BattleState, advice: BattleAdvice):
         state.append_operation(

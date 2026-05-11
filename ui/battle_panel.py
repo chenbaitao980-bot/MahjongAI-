@@ -561,6 +561,7 @@ class BattlePanel(QWidget):
     analysis_requested = pyqtSignal(str)
     recognition_only_requested = pyqtSignal(str)   # 我方编辑：识别+本地分析，不触发DeepSeek
     state_reanalyze_requested = pyqtSignal(str)    # 敌方编辑：不识别，仅重算本地分析
+    reanalyze_with_ai_requested = pyqtSignal(str)  # 重试：不识别，重跑本地+AI
     config_requested = pyqtSignal()
     tile_correction_requested = pyqtSignal(int, str)   # (tile_index, correct_tile_id)
     meld_correction_requested = pyqtSignal(int, str)   # (flat_meld_tile_index, correct_tile_id)
@@ -807,7 +808,7 @@ class BattlePanel(QWidget):
         layout.addWidget(self._error_label)
 
         retry_btn = QPushButton("重试")
-        retry_btn.clicked.connect(lambda: self.analysis_requested.emit("retry"))
+        retry_btn.clicked.connect(lambda: self.reanalyze_with_ai_requested.emit("retry"))
         layout.addWidget(retry_btn)
 
         self._progress_label = QLabel("")

@@ -537,7 +537,8 @@ class AnalysisPanel(QGroupBox):
         candidates = analysis.get("candidates", [])
         self._table.setRowCount(len(candidates))
         for row, c in enumerate(candidates):
-            mc_win = c.get("mc_win_rate")
+            mc = c.get("mc") or {}
+            mc_win = mc.get("win_rate")
             mc_text = f"{mc_win:.1%}" if mc_win is not None else "--"
             discard_id = c.get("discard", "")
             values = [

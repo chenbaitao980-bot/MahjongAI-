@@ -236,8 +236,11 @@ class BattleService:
             # 强制解锁副露，让视觉重新检测当前局副露状态，
             # 避免上一局手动锁定的副露使 hand_region 偏移导致切牌错误
             state.self_melds_locked = False
+        original_deepseek = state.deepseek_enabled
         state.deepseek_enabled = False
-        return self._analyze(state, trigger_reason)
+        result_state, advice = self._analyze(state, trigger_reason)
+        result_state.deepseek_enabled = original_deepseek  # 恢复原始值，避免 UI 勾选框被错误清除
+        return result_state, advice
 
     def analyze_state_only(self, state: BattleState, trigger_reason: str) -> tuple[BattleState, BattleAdvice]:
         """不做图片识别，仅重算本地分析。用于敌方数据变更后快速更新出牌建议。"""

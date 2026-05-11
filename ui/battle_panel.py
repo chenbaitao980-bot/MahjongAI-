@@ -650,9 +650,12 @@ class BattlePanel(QWidget):
         discard_row.addWidget(discard_clear)
         layout.addLayout(discard_row)
 
-        discard_label = QLabel("（空）")
-        discard_label.setWordWrap(True)
-        layout.addWidget(discard_label)
+        discard_container = QWidget()
+        discard_layout = QGridLayout(discard_container)
+        discard_layout.setContentsMargins(0, 0, 0, 0)
+        discard_layout.setSpacing(4)
+        discard_layout.addWidget(QLabel("（空）"), 0, 0)
+        layout.addWidget(discard_container)
 
         meld_row = QHBoxLayout()
         meld_row.addWidget(QLabel("副露区"))
@@ -677,10 +680,10 @@ class BattlePanel(QWidget):
         layout.addWidget(meld_container)
 
         if enemy:
-            self._enemy_discard_label = discard_label
+            self._enemy_discard_layout = discard_layout
             self._enemy_meld_layout = meld_layout
         else:
-            self._self_discard_label = discard_label
+            self._self_discard_layout = discard_layout
             self._self_meld_layout = meld_layout
         return box
 
@@ -1009,7 +1012,48 @@ class BattlePanel(QWidget):
             self._record_and_emit("clear_self_melds", {"count": count})
             self.recognition_only_requested.emit("self_meld_clear")
 
-    _HAND_COLS = 8  # tiles per row before wrapping
+    _HAND_COLS = 8     # tiles per row before wrapping
+    _DISCARD_COLS = 6  # discard tiles per row before wrapping
+
+    def _rebuild_discard_buttons(self, discards, is_enemy: bool, layout) -> None:
+        while layout.count():
+            item = layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        if not discards:
+            layout.addWidget(QLabel("（空）"), 0, 0)
+            return
+        col, row = 0, 0
+        for idx, tile in enumerate(discards):
+            if not tile.tile_id:
+                continue
+            btn = QPushButton(tile_display(tile.tile_id))
+            btn.setFixedWidth(70)
+            btn.setToolTip("点击删除")
+            btn.clicked.connect(
+                lambda _checked, i=idx, e=is_enemy: self._on_discard_tile_click(i, e)
+            )
+            layout.addWidget(btn, row, col)
+            col += 1
+            if col >= self._DISCARD_COLS:
+                col = 0
+                row += 1
+
+    def _on_discard_tile_click(self, tile_index: int, is_enemy: bool) -> None:
+        from PyQt6.QtWidgets import QMenu
+        from PyQt6.QtGui import QCursor
+        menu = QMenu(self)
+        delete_act = menu.addAction("删除")
+        chosen = menu.exec(QCursor.pos())
+        if chosen == delete_act:
+            discards = self._state.enemy_discards if is_enemy else self._state.self_discards
+            if tile_index < len(discards):
+                tile = discards.pop(tile_index)
+                self._adjust_remaining(+1)
+                key = "delete_enemy_discard" if is_enemy else "delete_self_discard"
+                self._record_and_emit(key, {"index": tile_index, "tile": tile.tile_id})
+                lo = self._enemy_discard_layout if is_enemy else self._self_discard_layout
+                self._rebuild_discard_buttons(discards, is_enemy, lo)
 
     def _rebuild_hand_tile_buttons(self, tiles) -> None:
         layout = self._hand_tiles_layout
@@ -1110,12 +1154,32 @@ class BattlePanel(QWidget):
             label = type_map.get(meld.meld_type, meld.meld_type)
             tile_text = ",".join(tile_display(tile.tile_id) for tile in meld.tiles if tile.tile_id)
             btn = QPushButton(f"{label}[{tile_text}]")
-            btn.setToolTip("点击修改")
+            btn.setToolTip("点击操作")
             btn.clicked.connect(
-                lambda _checked, i=idx, e=is_enemy, m=meld: self._on_meld_correction_click(i, e, m)
+                lambda _checked, i=idx, e=is_enemy, m=meld: self._on_meld_btn_click(i, e, m)
             )
             layout.addWidget(btn)
         layout.addStretch()
+
+    def _on_meld_btn_click(self, meld_index: int, is_enemy: bool, meld) -> None:
+        from PyQt6.QtWidgets import QMenu
+        from PyQt6.QtGui import QCursor
+        menu = QMenu(self)
+        modify_act = menu.addAction("修改")
+        delete_act = menu.addAction("删除")
+        chosen = menu.exec(QCursor.pos())
+        if chosen == modify_act:
+            self._on_meld_correction_click(meld_index, is_enemy, meld)
+        elif chosen == delete_act:
+            melds = self._state.enemy_melds if is_enemy else self._state.self_melds
+            if meld_index < len(melds):
+                m = melds.pop(meld_index)
+                if self._is_kan(m.meld_type):
+                    self._adjust_remaining(+1)
+                key = "delete_enemy_meld" if is_enemy else "delete_self_meld"
+                self._record_and_emit(key, {"index": meld_index})
+                lo = self._enemy_meld_layout if is_enemy else self._self_meld_layout
+                self._rebuild_meld_buttons(melds, is_enemy, lo)
 
     def _on_meld_correction_click(self, meld_index: int, is_enemy: bool, current_meld) -> None:
         dlg = MeldSelectionDialog("修改副露", parent=self, existing_meld=current_meld)
@@ -1155,8 +1219,8 @@ class BattlePanel(QWidget):
         self._remaining_spin.blockSignals(False)
 
         self._rebuild_hand_tile_buttons(self._state.self_hand)
-        self._self_discard_label.setText(self._format_tiles(self._state.self_discards))
-        self._enemy_discard_label.setText(self._format_tiles(self._state.enemy_discards))
+        self._rebuild_discard_buttons(self._state.self_discards, False, self._self_discard_layout)
+        self._rebuild_discard_buttons(self._state.enemy_discards, True, self._enemy_discard_layout)
         self._rebuild_meld_buttons(self._state.self_melds, False, self._self_meld_layout)
         self._rebuild_meld_buttons(self._state.enemy_melds, True, self._enemy_meld_layout)
         self._recognition_label.setText(f"识别来源：{self._state.recognition_source}")

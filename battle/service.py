@@ -221,8 +221,9 @@ class BattleService:
         self._last_match_rois: list[np.ndarray] = []
         self._last_meld_rois: list[np.ndarray] = []   # flat list: meld0_tile0, meld0_tile1, ...
         self._last_capture_debug: dict[str, Any] = {}
-        self._last_analyzed_hand_sig: tuple | None = None
+        self._last_analyzed_hand_sig: tuple | None = None  # 用于 _analyze() 路径
         self._last_advice_cache: "BattleAdvice | None" = None
+        self._last_state_sig: tuple | None = None           # 用于 analyze_state_with_ai() 路径
         self._last_payload: "dict | None" = None
         self._last_model_mtime: float = -1.0
 
@@ -284,9 +285,19 @@ class BattleService:
         """不做图片识别，直接用当前手牌重跑本地分析+DeepSeek。用于重试按钮。"""
         state.mark_analysis(trigger_reason)
         state.last_recognition_duration_ms = 0
-        current_hand_sig = tuple(sorted(getattr(t, "tile_id", "") for t in state.self_hand))
+        current_hand_sig = (
+            tuple(sorted(getattr(t, "tile_id", "") for t in state.self_hand)),
+            tuple(getattr(t, "tile_id", "") for t in state.enemy_discards),
+            tuple(getattr(t, "tile_id", "") for t in state.self_discards),
+            tuple(
+                (m.meld_type, tuple(getattr(t, "tile_id", "") for t in m.tiles))
+                for m in state.enemy_melds
+            ),
+            state.remaining_tiles,
+            state.baida_tile,
+        )
         local_started_at = time.perf_counter()
-        if current_hand_sig == self._last_analyzed_hand_sig and self._last_payload is not None:
+        if current_hand_sig == self._last_state_sig and self._last_payload is not None:
             payload = self._last_payload
             state.last_local_analysis_duration_ms = 0
         else:
@@ -295,7 +306,7 @@ class BattleService:
                 1, int((time.perf_counter() - local_started_at) * 1000)
             )
             self._last_payload = payload
-            self._last_analyzed_hand_sig = current_hand_sig
+            self._last_state_sig = current_hand_sig
         advice_started_at = time.perf_counter()
         raw_text = ""
         advice_error = ""

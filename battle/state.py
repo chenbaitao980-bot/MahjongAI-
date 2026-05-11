@@ -48,7 +48,7 @@ class BattleAdvice:
 @dataclass
 class BattleState:
     ai_recognition_enabled: bool = True
-    deepseek_enabled: bool = False
+    deepseek_enabled: bool = True
     vision_provider: str = "auto"
     baida_tile: str = ""
     remaining_tiles: int = 108

@@ -1,10 +1,73 @@
 # MahjongAI 知识图谱
 
-> 自动生成于 2026-05-04 20:49 | 最后人工更新：2026-05-11（重试跳过识别 + DeepSeek 状态丢失修复）
+> 自动生成于 2026-05-04 20:49 | 最后人工更新：2026-05-11（MC并行化 + UI交互简化 + 性能优化 + 动态财神Prompt）
 
 ---
 
 ## 变更日志
+
+### 2026-05-11 — MC并行化 + UI交互简化 + 性能优化 + 动态财神Prompt
+
+#### 修改 `game/advisor.py` — MC性能优化：向听跳过 + 并行执行
+
+- **向听≥2时完全跳过MC**：候选向听数≥2时win_rate≈0，跳过MC直接返回evaluator排序结果，节省约6.7秒
+- **向听=1时限制10次**：`mc_iterations = min(mc_iterations, 10)`
+- **ThreadPoolExecutor并行**：将串行 `for candidate in top_k` 循环改为 `ThreadPoolExecutor(max_workers=len(top_k))` 并行执行各候选的MC模拟
+- **新增模块级函数 `_run_mc_candidate(args)`**：单候选全部迭代的封装，可被executor.map调用；种子策略与串行版完全相同，结果幂等
+
+#### 修改 `battle/state.py` — 减少MC默认参数
+
+- `_compute_analysis()` 中 `mc_iterations=30 → 10`，`mc_top_k=3 → 2`
+- `deepseek_enabled: bool = False → True`（DeepSeek默认开启）
+
+#### 修改 `battle/service.py` — 识别专用模式 + 扩展缓存键
+
+- `analyze_recognition_only()` 新增 `trigger_reason == "manual_recognize"` 分支：仅做 `capture_self_hand()`，跳过 `to_payload()` 和MC分析，`last_local_analysis_duration_ms = 0`
+- 新增 `_last_state_sig: tuple | None = None` 实例变量（区别于原 `_last_analyzed_hand_sig` 避免类型冲突）
+- `analyze_state_with_ai()` 的缓存键扩展为完整局面签名：`(sorted_hand, enemy_discards, self_discards, enemy_melds_tuple, remaining_tiles, baida_tile)`，数据未变时直接复用上次payload，跳过重算
+
+#### 修改 `ui/battle_panel.py` — UI交互全面改造
+
+**添加按钮去掉自动分析触发：**
+- `_add_discard()`：删除 `state_reanalyze_requested.emit("enemy_discard_added")` 和 `recognition_only_requested.emit("self_discard_added")` 两行emit
+- `_add_meld()`：删除 `state_reanalyze_requested.emit("enemy_meld_changed")` 和 `recognition_only_requested.emit("self_meld_changed")` 两行emit
+- 分析只在点击"重试"时触发
+
+**手牌点击增加删除选项：**
+- `_rebuild_hand_tile_buttons()` 中 btn.clicked 从连接 `_on_tile_correction_click` 改为 `_on_hand_tile_btn_click`
+- 新增 `_on_hand_tile_btn_click(tile_index, tile_id)`：弹出 QMenu（纠正 / 删除）
+- 新增 `_delete_hand_tile_at(tile_index)`：从 `state.self_hand` pop指定牌，重建按钮，记录日志
+
+**弃牌区从QLabel重构为QPushButton网格：**
+- `_build_player_group()` 中弃牌显示区改为 `QGridLayout` 容器（`_self_discard_layout` / `_enemy_discard_layout`）
+- `_render_state()` 改为调用 `_rebuild_discard_buttons(discards, is_enemy, layout)` 而非 `setText()`
+- 新增类常量 `_DISCARD_COLS = 6`
+- 新增 `_rebuild_discard_buttons(discards, is_enemy, layout)`：按6列网格渲染每张弃牌为QPushButton
+- 新增 `_on_discard_tile_click(tile_index, is_enemy)`：弹出 QMenu（删除）
+
+**副露区点击增加删除选项：**
+- `_rebuild_meld_buttons()` 中 btn.clicked 改为连接 `_on_meld_btn_click`
+- 新增 `_on_meld_btn_click(meld_index, is_enemy, meld)`：弹出 QMenu（修改 / 删除）；"修改"调用原 `_on_meld_correction_click`；"删除"直接弹出自家或对手副露
+
+**AI建议文本中文化：**
+- 新增辅助函数 `_replace_tile_codes(text: str) -> str`：用正则 `r'[1-9][mpsz]'` 替换所有牌码为中文名
+- `_render_advice()` 中 reasoning_summary、risk_notes、forbidden_discards、candidate_actions 均通过 `_replace_tile_codes()` 过滤后显示
+
+**MC胜率Bug修复：**
+- `AnalysisPanel.refresh()` 中 `c.get("mc_win_rate")` 修正为 `c.get("mc", {}).get("win_rate")`（MC数据存放在嵌套的`mc`字段内）
+
+#### 修改 `game/llm_prompt.py` — 动态财神牌描述
+
+- 添加 `from game.tiles import tile_display_name`
+- 将 `_CORE_RULES` 改名为 `_CORE_RULES_TMPL`，正文中两处"白板(7z)"替换为 `{baida}` 占位符
+- `build_system_prompt(game_features)` 新增逻辑：从 `game_features["baida_tile"]` 读取财神牌ID，`"7z"` → `"白板(7z)"`，其他 → `"{中文名}({id})"` 格式；`core_rules = _CORE_RULES_TMPL.format(baida=baida)` 动态填入
+
+#### 修改 `game/llm_advisor.py` — 财神牌注入system prompt
+
+- `get_final_advice()` 中从 `payload.get("rules", {}).get("baida_tile")` 提取财神牌ID
+- 注入 `game_features["baida_tile"]` 后再调用 `build_system_prompt(game_features)`，确保AI收到正确的财神牌描述
+
+---
 
 ### 2026-05-11 — 修复：添加/识别操作后 DeepSeek 勾选框被错误清除
 

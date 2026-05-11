@@ -167,8 +167,11 @@ def get_final_advice(
         advice["reason"] += " [candidates 为空，手牌异常或识别错误，跳过 LLM]"
         return advice
 
-    # 构建 prompt
-    game_features = analysis.get("game_features", {})
+    # 构建 prompt（将财神牌注入 game_features，让 system prompt 动态描述正确的财神）
+    game_features = dict(analysis.get("game_features", {}))
+    baida_tile = payload.get("rules", {}).get("baida_tile") or ""
+    if baida_tile:
+        game_features["baida_tile"] = baida_tile
     system_prompt = build_system_prompt(game_features)
     user_prompt = build_user_prompt(payload, analysis)
 

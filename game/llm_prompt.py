@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import json
 
+from game.tiles import tile_display_name
 
-# 核心规则模板（不随局面变化的部分）
-_CORE_RULES = """【台州麻将核心规则】
+
+# 核心规则模板（财神牌名用 {baida} 占位，运行时填入）
+_CORE_RULES_TMPL = """【台州麻将核心规则】
 1. 共136张牌，2人对局，无花牌。
-2. 胡牌结构：1对将牌 + 4副牌（面子或刻子），共14张牌成型。财神（白板7z）为万能牌，可替代任意一张牌凑成牌型，但将牌必须由两张相同牌组成，不能单张财神作将。
+2. 胡牌结构：1对将牌 + 4副牌（面子或刻子），共14张牌成型。财神（{baida}）为万能牌，可替代任意一张牌凑成牌型，但将牌必须由两张相同牌组成，不能单张财神作将。
 3. 计分公式（最高100胡）：
    - 胡牌家牌点 = (10 + 基础牌点) × 2^总番数
    - 闲家牌点 = 基础牌点 × 2^总番数
@@ -27,7 +29,7 @@ _CORE_RULES = """【台州麻将核心规则】
    - 清一色：3番
    - 混一色：1番
    - 字牌和门风番：红中、发财和自家门风碰/杠/暗刻各计1番（未胡牌时不可用财神替代）
-   - 得番数（财神相关）：手中无财神1番；财神还原（将财神当作白板7z本身使用）1番
+   - 得番数（财神相关）：手中无财神1番；财神还原（将财神当作{baida}本身使用）1番
 6. 能胡不胡：同一回合中，若有人点炮且你第一次选择不胡，则该回合内再次有人点炮同一张牌时你也不能胡（自摸除外）。限制仅对该回合生效，该玩家有任何动牌（吃、碰、杠、摸牌）后即解除。
 7. 能碰不碰：同一回合中，若有人打出你可碰的牌且你第一次选择不碰，则该回合内再次有人打出这张牌时你也不能碰。限制仅对该回合生效，该玩家有任何动牌（吃、碰、杠、摸牌）后即解除。
 8. 一炮一响（截胡）：若某玩家打出的牌同时符合多家胡牌条件，按座位顺序下家优先截胡。2人对局时即按轮序先后判定。"""
@@ -116,7 +118,7 @@ def build_system_prompt(game_features: dict | None = None) -> str:
     根据游戏特征动态构建 system prompt。
 
     Args:
-        game_features: 包含 is_2p_mode / is_sheng_phase / no_baopai 等特征的字典
+        game_features: 包含 is_2p_mode / is_sheng_phase / no_baopai / baida_tile 等特征的字典
 
     Returns:
         str: 完整的 system prompt
@@ -124,8 +126,13 @@ def build_system_prompt(game_features: dict | None = None) -> str:
     game_features = game_features or {}
     is_2p = game_features.get("is_2p_mode", True)
 
+    # 财神牌显示名（7z→"白板(7z)"，其他如"2万(2m)"）
+    baida_id = game_features.get("baida_tile") or "7z"
+    baida = "白板(7z)" if baida_id == "7z" else f"{tile_display_name(baida_id)}({baida_id})"
+    core_rules = _CORE_RULES_TMPL.format(baida=baida)
+
     parts = ["你是台州麻将2人对战专家AI，只根据我提供的真实牌局数据给出最优决策。"]
-    parts.append(_CORE_RULES)
+    parts.append(core_rules)
 
     if is_2p:
         parts.append(_2P_HINTS)

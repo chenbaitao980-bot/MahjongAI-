@@ -927,11 +927,9 @@ class BattlePanel(QWidget):
         if enemy:
             self._state.enemy_discards.append(tile_from_id(tile_id))
             self._record_and_emit("add_enemy_discard", {"tile": tile_id})
-            self.state_reanalyze_requested.emit("enemy_discard_added")
         else:
             self._state.self_discards.append(tile_from_id(tile_id))
             self._record_and_emit("add_self_discard", {"tile": tile_id})
-            self.recognition_only_requested.emit("self_discard_added")
 
     def _undo_discard(self, enemy: bool) -> None:
         discards = self._state.enemy_discards if enemy else self._state.self_discards
@@ -974,12 +972,10 @@ class BattlePanel(QWidget):
         if enemy:
             self._state.enemy_melds.append(meld)
             self._record_and_emit("add_enemy_meld", {"meld_type": meld.meld_type, "tiles": [tile.tile_id for tile in meld.tiles]})
-            self.state_reanalyze_requested.emit("enemy_meld_changed")
         else:
             self._state.self_melds.append(meld)
             self._state.self_melds_locked = True
             self._record_and_emit("add_self_meld", {"meld_type": meld.meld_type, "tiles": [tile.tile_id for tile in meld.tiles]})
-            self.recognition_only_requested.emit("self_meld_changed")
 
     def _undo_meld(self, enemy: bool) -> None:
         melds = self._state.enemy_melds if enemy else self._state.self_melds
@@ -1035,19 +1031,37 @@ class BattlePanel(QWidget):
             label = tile_display(tile.tile_id)
             btn = QPushButton(label)
             btn.setFixedWidth(70)
-            btn.setToolTip(f"置信度: {conf:.0%}  点击纠正")
+            btn.setToolTip(f"置信度: {conf:.0%}  点击操作")
             if conf < 0.9:
                 btn.setStyleSheet("color: red; font-weight: bold;")
             else:
                 btn.setStyleSheet("color: black;")
             btn.clicked.connect(
-                lambda _checked, i=idx, t=tile.tile_id: self._on_tile_correction_click(i, t)
+                lambda _checked, i=idx, t=tile.tile_id: self._on_hand_tile_btn_click(i, t)
             )
             layout.addWidget(btn, row, col)
             col += 1
             if col >= self._HAND_COLS:
                 col = 0
                 row += 1
+
+    def _on_hand_tile_btn_click(self, tile_index: int, tile_id: str) -> None:
+        from PyQt6.QtWidgets import QMenu
+        from PyQt6.QtGui import QCursor
+        menu = QMenu(self)
+        correct_act = menu.addAction("纠正")
+        delete_act = menu.addAction("删除")
+        chosen = menu.exec(QCursor.pos())
+        if chosen == correct_act:
+            self._on_tile_correction_click(tile_index, tile_id)
+        elif chosen == delete_act:
+            self._delete_hand_tile_at(tile_index)
+
+    def _delete_hand_tile_at(self, tile_index: int) -> None:
+        if tile_index < len(self._state.self_hand):
+            tile = self._state.self_hand.pop(tile_index)
+            self._rebuild_hand_tile_buttons(self._state.self_hand)
+            self._record_and_emit("delete_self_hand", {"index": tile_index, "tile": tile.tile_id})
 
     def _on_tile_correction_click(self, tile_index: int, current_tile_id: str) -> None:
         dlg = _TileCorrectDialog(current_tile_id, parent=self)

@@ -157,7 +157,7 @@ def build_user_prompt(payload: dict, analysis: dict | None = None) -> str:
         else:
             prompt_data["analysis"] = analysis
 
-    return json.dumps(prompt_data, ensure_ascii=False, indent=2)
+    return json.dumps(prompt_data, ensure_ascii=False)
 
 
 if __name__ == "__main__":

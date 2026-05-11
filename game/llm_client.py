@@ -23,7 +23,7 @@ class LLMClient:
         model: str = "deepseek-chat",
         temperature: float = 0.2,
         base_url: str = "https://api.deepseek.com",
-        timeout: int = 45,
+        timeout: int = 15,
     ) -> None:
         if not api_key or not api_key.strip():
             raise RuntimeError("LLM API Key 未配置。")

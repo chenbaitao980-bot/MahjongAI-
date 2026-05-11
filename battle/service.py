@@ -1153,19 +1153,24 @@ class BattleService:
 
         results: list[str | None] = [None] * len(rois)
 
-        for index, roi in enumerate(rois):
-            guess = local_guess[index] if index < len(local_guess) else ""
-            local_confidence = float(getattr(local_matches[index], "confidence", 0.0)) if index < len(local_matches) else 0.0
-            results[index] = self._recognize_single_tile_with_vision(
-                provider,
-                api_key,
-                model,
-                endpoint,
-                roi,
-                index,
-                guess,
-                local_confidence,
-            )
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_index = {
+                executor.submit(
+                    self._recognize_single_tile_with_vision,
+                    provider,
+                    api_key,
+                    model,
+                    endpoint,
+                    roi,
+                    index,
+                    local_guess[index] if index < len(local_guess) else "",
+                    float(getattr(local_matches[index], "confidence", 0.0)) if index < len(local_matches) else 0.0,
+                ): index
+                for index, roi in enumerate(rois)
+            }
+            for future in concurrent.futures.as_completed(future_to_index):
+                idx = future_to_index[future]
+                results[idx] = future.result()
 
         merged: list[str] = []
         for index, tile_id in enumerate(results):

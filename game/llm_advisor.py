@@ -177,9 +177,14 @@ def get_final_advice(
         client = LLMClient(api_key=api_key, model=model)
         raw_text = client.chat(system_prompt, user_prompt)
     except Exception as exc:
-        # LLM 调用失败，fallback 到程序推荐
+        err_msg = str(exc)
         advice = fallback_advice(analysis)
-        advice["reason"] += f" [LLM 调用失败: {exc}]"
+        # 超时或网络故障 → 静默降级到程序推荐
+        if any(kw in err_msg.lower() for kw in ("timed out", "urlopen error", "网络请求失败", "time out")):
+            advice["reason"] = f"[AI超时降级] {advice['reason']}"
+            advice["raw_response"] = f"[timeout-fallback] {err_msg}"
+        else:
+            advice["reason"] += f" [LLM 调用失败: {err_msg}]"
         return advice
 
     # 解析输出

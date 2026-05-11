@@ -223,6 +223,7 @@ class BattleService:
         self._last_capture_debug: dict[str, Any] = {}
         self._last_analyzed_hand_sig: tuple | None = None
         self._last_advice_cache: "BattleAdvice | None" = None
+        self._last_model_mtime: float = -1.0
 
     def analyze_opening(self, state: BattleState) -> tuple[BattleState, BattleAdvice]:
         return self._analyze(state, "start")
@@ -1417,6 +1418,9 @@ class BattleService:
 
     def _refresh_local_recognizer_from_disk(self) -> None:
         model_path = os.path.join(data_path(), "models", "tile_svm.xml")
+        current_mtime = self._safe_mtime(model_path)
+        if current_mtime > 0 and current_mtime == self._last_model_mtime:
+            return
         if os.path.exists(model_path):
             hog_clf = getattr(self._tile_recognizer, "_hog_clf", None)
             if hog_clf is not None and getattr(hog_clf, "is_ready", False):
@@ -1426,6 +1430,10 @@ class BattleService:
         cleaned_dir = data_path(os.path.join("data", "tile_samples_cleaned"))
         if hasattr(self._tile_recognizer, "load_training_samples"):
             self._tile_recognizer.load_training_samples(cleaned_dir)
+        self._last_model_mtime = current_mtime
+
+    def invalidate_model_cache(self) -> None:
+        self._last_model_mtime = -1.0
 
     def _persist_deepseek_request(
         self,

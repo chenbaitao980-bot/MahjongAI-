@@ -419,6 +419,7 @@ class HOGTrainerThread(QThread):
         super().__init__(parent)
         self.samples_dir = samples_dir
         self.model_path = model_path
+        self.temp_model_path = model_path + ".new"
         self.auto_params = auto_params
 
     def run(self):
@@ -454,7 +455,7 @@ class HOGTrainerThread(QThread):
             stats["samples_dir"] = self.samples_dir
 
             os.makedirs(os.path.dirname(self.model_path) or ".", exist_ok=True)
-            clf.save(self.model_path)
+            clf.save(self.temp_model_path)
 
             self.finished_ok.emit(stats)
         except Exception as e:
@@ -533,8 +534,6 @@ class MainWindow(QMainWindow):
         self._battle_worker: BattleAnalysisThread | None = None
         self._battle_analysis_started_at: float | None = None
         self._hog_train_thread: HOGTrainerThread | None = None
-        self._pending_battle_start = False
-        self._pending_battle_analysis_reason: str | None = None
 
         self.setWindowTitle("台州麻将AI — 视觉识别层 v1.0")
         self.resize(1000, 680)
@@ -1236,8 +1235,16 @@ class MainWindow(QMainWindow):
         class_counts = stats.get("class_counts", {})
         samples_dir = stats.get("samples_dir", "")
 
-        # 重新加载 HOG 分类器
+        # 原子替换模型文件（训练写临时文件，完成后一次性替换）
         model_path = os.path.join(data_path(), "models", "tile_svm.xml")
+        temp_path = model_path + ".new"
+        if os.path.exists(temp_path):
+            os.replace(temp_path, model_path)
+
+        # 重置 mtime 缓存，让下次识别强制重载新模型
+        self._battle_service.invalidate_model_cache()
+
+        # 重新加载 HOG 分类器
         if self._tile_rec._hog_clf is not None and self._tile_rec._hog_clf.is_ready:
             self._tile_rec._hog_clf.load(model_path)
         else:
@@ -1262,20 +1269,11 @@ class MainWindow(QMainWindow):
             self._battle_panel.set_train_success_message(
                 f"{train_ts} 训练结束  准确率 {train_acc:.1f}%  {n_classes}类/{n_samples}张"
             )
-        if self._pending_battle_start:
-            self._pending_battle_start = False
-            self._on_battle_start_requested()
-        if self._pending_battle_analysis_reason:
-            reason = self._pending_battle_analysis_reason
-            self._pending_battle_analysis_reason = None
-            QTimer.singleShot(0, lambda r=reason: self._on_battle_analysis_requested(r))
 
     def _on_hog_train_error(self, err: str):
         self._btn_train_hog.setEnabled(True)
         self._btn_train_hog.setText("🧠 一键训练HOG模型")
         self._hog_train_thread = None
-        self._pending_battle_start = False
-        self._pending_battle_analysis_reason = None
         self.statusBar().showMessage(f"训练失败：{err}")
         QMessageBox.critical(self, "训练失败", f"HOG 模型训练出错：\n{err}")
 
@@ -1611,16 +1609,6 @@ class MainWindow(QMainWindow):
         self._capture_panel.on_frame(state)
 
     def _on_battle_start_requested(self):
-        if self._is_hog_training_running():
-            self._pending_battle_start = True
-            QMessageBox.information(
-                self,
-                "训练中",
-                "HOG 模型仍在训练和热重载中。\n"
-                "这次“开始”请求已经记下，训练完成后会自动开始正式战斗。",
-            )
-            self.statusBar().showMessage("正式战斗：已排队，等待 HOG 训练完成后自动开始")
-            return
         # 如果已有战斗 session，先关闭（防止重复开始）
         if getattr(self, "_battle_session", None) is not None:
             try:
@@ -1698,16 +1686,6 @@ class MainWindow(QMainWindow):
     }
 
     def _start_battle_worker(self, trigger_reason: str, mode: str = "full") -> None:
-        if self._is_hog_training_running():
-            self._pending_battle_analysis_reason = trigger_reason
-            QMessageBox.information(
-                self,
-                "训练中",
-                "HOG 模型仍在训练和热重载中。\n"
-                "这次重新识别请求已经记下，训练完成后会自动补跑这一轮分析。",
-            )
-            self.statusBar().showMessage("正式战斗：已排队，等待 HOG 训练完成后自动分析")
-            return
         if self._battle_worker and self._battle_worker.isRunning():
             self.statusBar().showMessage("正式战斗：上一轮分析仍在进行，请稍候")
             return

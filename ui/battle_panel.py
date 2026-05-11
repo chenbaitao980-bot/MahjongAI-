@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import re
 from copy import deepcopy
 
 from PyQt6.QtCore import pyqtSignal, QUrl, Qt
@@ -108,6 +109,11 @@ QWEN_VISION_MODELS = [
 
 def tile_display(tile_id: str) -> str:
     return f"{TILE_NAME_MAP.get(tile_id, tile_id)} ({tile_id})"
+
+
+def _replace_tile_codes(text: str) -> str:
+    """将文本中的牌代码（如3p、7m、9s、1z）替换为中文名（如3筒、7万、9条、东）。"""
+    return re.sub(r'[1-9][mpsz]', lambda m: TILE_NAME_MAP.get(m.group(), m.group()), text)
 
 
 class TileSelectionDialog(QDialog):
@@ -1269,18 +1275,18 @@ class BattlePanel(QWidget):
         parts: list[str] = []
         if advice.reasoning_summary:
             parts.append(
-                f'<p style="color:#2c3e50;margin:2px 0">{html.escape(advice.reasoning_summary)}</p>'
+                f'<p style="color:#2c3e50;margin:2px 0">{html.escape(_replace_tile_codes(advice.reasoning_summary))}</p>'
             )
         if advice.forbidden_discards:
-            fd = html.escape("、".join(advice.forbidden_discards))
+            fd = html.escape("、".join(_replace_tile_codes(t) for t in advice.forbidden_discards))
             parts.append(f'<p style="color:#e74c3c;margin:2px 0">⚠ 禁止出牌：{fd}</p>')
         if advice.risk_notes:
             parts.append(
-                f'<p style="color:#e67e22;margin:2px 0">⚡ 风险：{html.escape(advice.risk_notes)}</p>'
+                f'<p style="color:#e67e22;margin:2px 0">⚡ 风险：{html.escape(_replace_tile_codes(advice.risk_notes))}</p>'
             )
         self._summary_edit.setHtml("".join(parts))
 
-        candidates = " / ".join(advice.candidate_actions) if advice.candidate_actions else "--"
+        candidates = " / ".join(_replace_tile_codes(a) for a in advice.candidate_actions) if advice.candidate_actions else "--"
         self._candidate_label.setText(f"候选动作：{candidates}")
         self._candidate_label.setStyleSheet("color:#16a085;" if advice.candidate_actions else "")
         if self._state.last_analysis_at:

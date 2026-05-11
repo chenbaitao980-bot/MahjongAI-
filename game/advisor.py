@@ -35,6 +35,54 @@ def _simulate_one(args: tuple) -> dict:
     return run_single_simulation(state, wall, baida_int, fixed_discard, rng, policy_fn)
 
 
+def _run_mc_candidate(args: tuple) -> dict:
+    """
+    对单个候选牌执行全部 MC 迭代，返回 mc_data 字典。
+    模块级函数，可被 ThreadPoolExecutor 并行调用。
+    种子策略与串行版完全相同，结果幂等。
+    """
+    (discard_int, sim_hand, mc_iterations,
+     self_melds, self_discards_ints, enemy_discards_ints,
+     enemy_melds, baida_int, remaining_tiles, policy_fn) = args
+
+    win_count = 0
+    deal_in_count = 0
+    exhaust_count = 0
+    total_score = 0
+
+    for i in range(mc_iterations):
+        rng = random.Random(i * 1000 + discard_int)
+        wall, enemy_hand = build_wall_and_enemy_hand(
+            sim_hand, self_melds, self_discards_ints,
+            enemy_discards_ints, enemy_melds,
+            baida_int, remaining_tiles, rng,
+        )
+        state = SimpleGameState()
+        state.hands[0] = list(sim_hand)
+        state.hands[1] = list(enemy_hand)
+        state.melds[0] = [SimpleMeld(type=m.type, tiles=list(m.tiles)) for m in self_melds]
+        state.melds[1] = [SimpleMeld(type=m.type, tiles=list(m.tiles)) for m in enemy_melds]
+
+        result = run_single_simulation(state, wall, baida_int, None, rng, policy_fn)
+        score = score_result(result["result"], result.get("deal_in", False))
+        total_score += score
+        if result["result"] == "self_win":
+            win_count += 1
+        elif result["result"] == "enemy_win" and result.get("deal_in", False):
+            deal_in_count += 1
+        else:
+            exhaust_count += 1
+
+    n = mc_iterations
+    return {
+        "ev": round(total_score / n, 2),
+        "win_rate": round(win_count / n, 3),
+        "deal_in_rate": round(deal_in_count / n, 3),
+        "exhaust_rate": round(exhaust_count / n, 3),
+        "iterations": n,
+    }
+
+
 def _build_simple_melds(melds: list[MeldGroup]) -> list[SimpleMeld]:
     """将 MeldGroup 列表转为 SimpleMeld 列表。"""
     result = []
@@ -131,65 +179,22 @@ def analyze_with_mc(
     # 调整手牌为13张用于模拟（去掉要打的牌）
     policy_fn = _make_policy_fn(baida_int)
 
-    # 3. 对每个候选执行 MC 模拟
+    # 3. 并行对每个候选执行 MC 模拟（种子与串行版完全相同，结果幂等）
+    task_args = []
     for candidate in top_k:
-        discard_str = candidate["discard"]
-        discard_int = tile_to_int(discard_str)
-
-        # 模拟手牌 = hand_14 去掉 discard
+        discard_int = tile_to_int(candidate["discard"])
         sim_hand = list(self_hand_ints)
         sim_hand.remove(discard_int)
+        task_args.append((
+            discard_int, sim_hand, mc_iterations,
+            self_melds_simple, self_discards_ints, enemy_discards_ints,
+            enemy_melds_simple, baida_int, remaining_tiles, policy_fn,
+        ))
 
-        # MC 统计
-        win_count = 0
-        deal_in_count = 0
-        exhaust_count = 0
-        total_score = 0
+    with ThreadPoolExecutor(max_workers=len(top_k)) as executor:
+        mc_results = list(executor.map(_run_mc_candidate, task_args))
 
-        for i in range(mc_iterations):
-            rng = random.Random(i * 1000 + discard_int)
-
-            # 构建牌墙和对手手牌
-            wall, enemy_hand = build_wall_and_enemy_hand(
-                sim_hand, self_melds, self_discards_ints,
-                enemy_discards_ints, enemy_melds,
-                baida_int, remaining_tiles, rng,
-            )
-
-            # 构建初始状态
-            state = SimpleGameState()
-            state.hands[0] = list(sim_hand)
-            state.hands[1] = list(enemy_hand)
-            state.melds[0] = [SimpleMeld(type=m.type, tiles=list(m.tiles)) for m in self_melds_simple]
-            state.melds[1] = [SimpleMeld(type=m.type, tiles=list(m.tiles)) for m in enemy_melds_simple]
-
-            # 执行模拟（对手从 wall 摸牌，所以这里模拟从当前状态开始打牌）
-            result = run_single_simulation(
-                state, wall, baida_int, None, rng, policy_fn,
-            )
-
-            score = score_result(result["result"], result.get("deal_in", False))
-            total_score += score
-            if result["result"] == "self_win":
-                win_count += 1
-            elif result["result"] == "enemy_win":
-                if result.get("deal_in", False):
-                    deal_in_count += 1
-                else:
-                    win_count += 0  # 对手自摸
-            else:
-                exhaust_count += 1
-
-        # 计算统计数据
-        n = mc_iterations
-        mc_data = {
-            "ev": round(total_score / n, 2),
-            "win_rate": round(win_count / n, 3),
-            "deal_in_rate": round(deal_in_count / n, 3),
-            "exhaust_rate": round(exhaust_count / n, 3),
-            "iterations": n,
-        }
-
+    for candidate, mc_data in zip(top_k, mc_results):
         candidate["mc"] = mc_data
 
     # 4. 如果有 MC 数据，按 EV 重排 candidates

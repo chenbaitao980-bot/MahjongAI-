@@ -223,6 +223,7 @@ class BattleService:
         self._last_capture_debug: dict[str, Any] = {}
         self._last_analyzed_hand_sig: tuple | None = None
         self._last_advice_cache: "BattleAdvice | None" = None
+        self._last_payload: "dict | None" = None
         self._last_model_mtime: float = -1.0
 
     def analyze_opening(self, state: BattleState) -> tuple[BattleState, BattleAdvice]:
@@ -274,11 +275,18 @@ class BattleService:
         """不做图片识别，直接用当前手牌重跑本地分析+DeepSeek。用于重试按钮。"""
         state.mark_analysis(trigger_reason)
         state.last_recognition_duration_ms = 0
+        current_hand_sig = tuple(sorted(getattr(t, "tile_id", "") for t in state.self_hand))
         local_started_at = time.perf_counter()
-        payload = state.to_payload()
-        state.last_local_analysis_duration_ms = max(
-            1, int((time.perf_counter() - local_started_at) * 1000)
-        )
+        if current_hand_sig == self._last_analyzed_hand_sig and self._last_payload is not None:
+            payload = self._last_payload
+            state.last_local_analysis_duration_ms = 0
+        else:
+            payload = state.to_payload()
+            state.last_local_analysis_duration_ms = max(
+                1, int((time.perf_counter() - local_started_at) * 1000)
+            )
+            self._last_payload = payload
+            self._last_analyzed_hand_sig = current_hand_sig
         advice_started_at = time.perf_counter()
         raw_text = ""
         advice_error = ""
@@ -905,6 +913,7 @@ class BattleService:
         state.last_local_analysis_duration_ms = max(
             1, int((time.perf_counter() - local_analysis_started_at) * 1000)
         )
+        self._last_payload = payload
         payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
         advice_started_at = time.perf_counter()
         raw_text = ""
@@ -977,7 +986,7 @@ class BattleService:
             except Exception:
                 pass
             state.last_advice_duration_ms = 0
-        state.last_analysis_duration_ms = state.last_recognition_duration_ms + state.last_advice_duration_ms
+        state.last_analysis_duration_ms = state.last_local_analysis_duration_ms + state.last_advice_duration_ms
         if advice_error:
             state.append_operation(
                 "advice_failed",

@@ -1,10 +1,36 @@
 # MahjongAI 知识图谱
 
-> 自动生成于 2026-05-04 20:49 | 最后人工更新：2026-05-10（结束游戏胜负确认）
+> 自动生成于 2026-05-04 20:49 | 最后人工更新：2026-05-11（重试跳过识别 + DeepSeek 状态丢失修复）
 
 ---
 
 ## 变更日志
+
+### 2026-05-11 — 修复：添加/识别操作后 DeepSeek 勾选框被错误清除
+
+#### 修复 `battle/service.py` — `analyze_recognition_only()`
+- **根本原因**：方法内 `state.deepseek_enabled = False` 用于跳过 AI 调用，但该 state 对象最终被 `set_state()` 写回 UI，导致 DeepSeek 勾选框被清除
+- **修复**：执行前保存 `original_deepseek = state.deepseek_enabled`，执行后恢复 `result_state.deepseek_enabled = original_deepseek`，UI 状态不再受影响
+
+---
+
+### 2026-05-11 — 重试按钮：跳过图片识别，直接重跑本地分析 + AI
+
+#### 新增 `battle/service.py` — `analyze_state_with_ai()`
+- 新增方法：不做截图/识别，直接用当前 `state.self_hand` 重跑 `to_payload()` + DeepSeek/program 分析
+- `last_recognition_duration_ms = 0`，其余逻辑与 `_analyze()` AI 分支完全一致（含 `_persist_deepseek_request`）
+
+#### 修改 `ui/main_window.py`
+- `BattleAnalysisThread.run()` 新增 `state_with_ai` 分支 → 调用 `service.analyze_state_with_ai()`
+- `_MODE_BUSY_MSG` 新增 `"state_with_ai": "正在重新分析（跳过识别）..."`
+- 新增 slot `_on_battle_reanalyze_with_ai_requested()` → `_start_battle_worker(mode="state_with_ai")`
+- 连接 `battle_panel.reanalyze_with_ai_requested` 信号
+
+#### 修改 `ui/battle_panel.py`
+- 新增信号 `reanalyze_with_ai_requested = pyqtSignal(str)`（重试：不识别，重跑本地+AI）
+- "重试"按钮从 `analysis_requested.emit("retry")` 改为 `reanalyze_with_ai_requested.emit("retry")`
+
+---
 
 ### 2026-05-10 — 结束游戏弹出胜负确认对话框
 

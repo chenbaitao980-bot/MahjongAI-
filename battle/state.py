@@ -50,6 +50,7 @@ class BattleState:
     ai_recognition_enabled: bool = True
     deepseek_enabled: bool = True
     ai_provider: str = "deepseek"   # "deepseek" | "qianwen"
+    ai_model: str = ""              # 空=使用配置文件默认值
     vision_provider: str = "auto"
     baida_tile: str = ""
     remaining_tiles: int = 108

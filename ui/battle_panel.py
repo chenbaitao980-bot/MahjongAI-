@@ -797,6 +797,13 @@ class BattlePanel(QWidget):
         self._ai_provider_combo.setEnabled(self._state.deepseek_enabled)
         self._ai_provider_combo.currentIndexChanged.connect(self._on_ai_provider_changed)
         ai_row.addWidget(self._ai_provider_combo)
+        self._ai_model_edit = QLineEdit()
+        self._ai_model_edit.setPlaceholderText("模型名称")
+        self._ai_model_edit.setFixedWidth(160)
+        self._ai_model_edit.setEnabled(self._state.deepseek_enabled)
+        self._ai_model_edit.setText(self._state.ai_model or self._default_model_for_provider(self._state.ai_provider))
+        self._ai_model_edit.editingFinished.connect(self._on_ai_model_changed)
+        ai_row.addWidget(self._ai_model_edit)
         ai_row.addStretch()
         layout.addLayout(ai_row)
 
@@ -890,15 +897,34 @@ class BattlePanel(QWidget):
         self._state.ai_recognition_enabled = checked
         self._record_and_emit("toggle_ai_recognition", {"enabled": checked})
 
+    def _default_model_for_provider(self, provider: str) -> str:
+        cfg = self._config.get(provider, {})
+        _fallback = {"deepseek": "deepseek-chat", "qianwen": "qwen-turbo-latest"}
+        return cfg.get("model", _fallback.get(provider, "")) or _fallback.get(provider, "")
+
     def _on_deepseek_toggle(self, checked: bool) -> None:
         self._state.deepseek_enabled = checked
         self._ai_provider_combo.setEnabled(checked)
+        self._ai_model_edit.setEnabled(checked)
         self._record_and_emit("toggle_deepseek", {"enabled": checked})
 
     def _on_ai_provider_changed(self, index: int) -> None:
         provider = str(self._ai_provider_combo.itemData(index) or "deepseek")
         self._state.ai_provider = provider
-        self._record_and_emit("change_ai_provider", {"provider": provider})
+        # 切换 provider 时自动填入该 provider 的默认模型
+        self._state.ai_model = self._default_model_for_provider(provider)
+        self._ai_model_edit.blockSignals(True)
+        self._ai_model_edit.setText(self._state.ai_model)
+        self._ai_model_edit.blockSignals(False)
+        self._record_and_emit("change_ai_provider", {"provider": provider, "model": self._state.ai_model})
+
+    def _on_ai_model_changed(self) -> None:
+        model = self._ai_model_edit.text().strip()
+        if not model:
+            model = self._default_model_for_provider(self._state.ai_provider)
+            self._ai_model_edit.setText(model)
+        self._state.ai_model = model
+        self._record_and_emit("change_ai_model", {"model": model})
 
     def _on_start_clicked(self) -> None:
         self._state.append_operation("start_analysis", {"trigger": "start"})

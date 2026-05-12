@@ -324,6 +324,7 @@ class BattleService:
                 provider_cfg = self._config.get(provider, {})
                 api_key = provider_cfg.get("api_key", "").strip()
                 model = provider_cfg.get("model", _def_model).strip() or _def_model
+                model = getattr(state, "ai_model", "").strip() or model
                 base_url = provider_cfg.get("base_url", _def_url).strip() or _def_url
                 analysis = payload.get("self", {}).get("analysis", {})
                 llm_result = get_final_advice(
@@ -963,6 +964,7 @@ class BattleService:
                 provider_cfg = self._config.get(provider, {})
                 api_key = provider_cfg.get("api_key", "").strip()
                 model = provider_cfg.get("model", _def_model).strip() or _def_model
+                model = getattr(state, "ai_model", "").strip() or model
                 base_url = provider_cfg.get("base_url", _def_url).strip() or _def_url
                 analysis = payload.get("self", {}).get("analysis", {})
 

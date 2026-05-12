@@ -781,11 +781,22 @@ class BattlePanel(QWidget):
         box = QGroupBox("AI 建议")
         layout = QVBoxLayout(box)
 
-        # DeepSeek 分析开关
-        self._deepseek_checkbox = QCheckBox("开启 DeepSeek 分析")
+        # AI 分析开关 + 模型选择
+        ai_row = QHBoxLayout()
+        self._deepseek_checkbox = QCheckBox("开启 AI 分析")
         self._deepseek_checkbox.setChecked(self._state.deepseek_enabled)
         self._deepseek_checkbox.toggled.connect(self._on_deepseek_toggle)
-        layout.addWidget(self._deepseek_checkbox)
+        ai_row.addWidget(self._deepseek_checkbox)
+        self._ai_provider_combo = QComboBox()
+        self._ai_provider_combo.addItem("DeepSeek", "deepseek")
+        self._ai_provider_combo.addItem("千问", "qianwen")
+        _provider_idx = 1 if getattr(self._state, "ai_provider", "deepseek") == "qianwen" else 0
+        self._ai_provider_combo.setCurrentIndex(_provider_idx)
+        self._ai_provider_combo.setEnabled(self._state.deepseek_enabled)
+        self._ai_provider_combo.currentIndexChanged.connect(self._on_ai_provider_changed)
+        ai_row.addWidget(self._ai_provider_combo)
+        ai_row.addStretch()
+        layout.addLayout(ai_row)
 
         self._recommended_label = QLabel("当前推荐出牌：--")
         self._recommended_label.setWordWrap(True)
@@ -879,7 +890,13 @@ class BattlePanel(QWidget):
 
     def _on_deepseek_toggle(self, checked: bool) -> None:
         self._state.deepseek_enabled = checked
+        self._ai_provider_combo.setEnabled(checked)
         self._record_and_emit("toggle_deepseek", {"enabled": checked})
+
+    def _on_ai_provider_changed(self, index: int) -> None:
+        provider = str(self._ai_provider_combo.itemData(index) or "deepseek")
+        self._state.ai_provider = provider
+        self._record_and_emit("change_ai_provider", {"provider": provider})
 
     def _on_start_clicked(self) -> None:
         self._state.append_operation("start_analysis", {"trigger": "start"})

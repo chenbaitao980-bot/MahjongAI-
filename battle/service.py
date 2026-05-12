@@ -314,12 +314,21 @@ class BattleService:
         if state.deepseek_enabled:
             try:
                 from game.llm_advisor import get_final_advice
-                api_key = self._config.get("deepseek", {}).get("api_key", "").strip()
-                model = self._config.get("deepseek", {}).get("model", "deepseek-chat").strip() or "deepseek-chat"
+                provider = getattr(state, "ai_provider", "deepseek") or "deepseek"
+                _defaults = {
+                    "deepseek": ("deepseek-chat", "https://api.deepseek.com"),
+                    "qianwen": ("qwen-turbo-latest", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
+                }
+                _def_model, _def_url = _defaults.get(provider, _defaults["deepseek"])
+                provider_cfg = self._config.get(provider, {})
+                api_key = provider_cfg.get("api_key", "").strip()
+                model = provider_cfg.get("model", _def_model).strip() or _def_model
+                base_url = provider_cfg.get("base_url", _def_url).strip() or _def_url
                 analysis = payload.get("self", {}).get("analysis", {})
                 llm_result = get_final_advice(
                     payload=payload, analysis=analysis,
                     api_key=api_key, model=model, use_llm=True,
+                    base_url=base_url,
                 )
                 raw_text = llm_result.get("raw_response", "")
                 advice = BattleAdvice(

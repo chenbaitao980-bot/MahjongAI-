@@ -8,14 +8,19 @@ battle:
   ai_recognition_enabled: false
 deepseek:
   api_key: sk-1287db910c9146e8aba8240f6e01c053
+  base_url: https://api.deepseek.com
   model: deepseek-chat
+qianwen:
+  api_key: sk-6cd1e408ea5745dc83cf3c1d39f2e5e1
+  base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  model: qwen-turbo-latest
 event_reference:
   image: C:\MahjongAI\data\event_reference\current.png
 game_window:
-  height: 723
-  left: 55
-  top: 142
-  width: 1283
+  height: 360
+  left: 3
+  top: 436
+  width: 628
 layout:
   decision_buttons:
     h: 0.217593

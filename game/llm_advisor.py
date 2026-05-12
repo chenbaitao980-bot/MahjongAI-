@@ -135,6 +135,7 @@ def get_final_advice(
     api_key: str,
     model: str = "deepseek-chat",
     use_llm: bool = True,
+    base_url: str = "https://api.deepseek.com",
 ) -> dict:
     """
     总流程：
@@ -177,7 +178,7 @@ def get_final_advice(
 
     # 调用 LLM
     try:
-        client = LLMClient(api_key=api_key, model=model)
+        client = LLMClient(api_key=api_key, model=model, base_url=base_url)
         raw_text = client.chat(system_prompt, user_prompt)
     except Exception as exc:
         err_msg = str(exc)

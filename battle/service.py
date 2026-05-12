@@ -312,6 +312,7 @@ class BattleService:
         advice_error = ""
         advice = BattleAdvice()
         if state.deepseek_enabled:
+            model = "unknown"
             try:
                 from game.llm_advisor import get_final_advice
                 provider = getattr(state, "ai_provider", "deepseek") or "deepseek"
@@ -352,7 +353,6 @@ class BattleService:
                     1, int((time.perf_counter() - advice_started_at) * 1000)
                 )
                 try:
-                    model = self._config.get("deepseek", {}).get("model", "deepseek-chat").strip() or "deepseek-chat"
                     self._persist_deepseek_request(
                         trigger_reason=trigger_reason, model=model,
                         payload=payload, response_text=raw_text, error_message=advice_error,
@@ -950,6 +950,7 @@ class BattleService:
         advice = BattleAdvice()
 
         if state.deepseek_enabled:
+            model = "unknown"
             try:
                 from game.llm_advisor import get_final_advice
 
@@ -999,7 +1000,6 @@ class BattleService:
                 )
                 # 持久化 LLM 请求日志
                 try:
-                    model = self._config.get("deepseek", {}).get("model", "deepseek-chat").strip() or "deepseek-chat"
                     self._persist_deepseek_request(
                         trigger_reason=trigger_reason,
                         model=model,

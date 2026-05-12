@@ -580,6 +580,8 @@ class BattlePanel(QWidget):
             ai_recognition_enabled=bool(self._config.get("battle", {}).get("ai_recognition_enabled", False)),
             vision_provider=self._config.get("vision", {}).get("provider", "auto"),
         )
+        self._stream_buffer = ""
+        self._stream_discard_found = False
         self._setup_ui()
         self._render_state()
         self.clear_round_feedback()
@@ -1278,24 +1280,26 @@ class BattlePanel(QWidget):
 
     def clear_stream_buffer(self) -> None:
         self._stream_buffer = ""
+        self._stream_discard_found = False
         self._summary_edit.clear()
         self._recommended_label.setText("当前推荐出牌：AI 生成中…")
         self._recommended_label.setStyleSheet("color:#8e44ad;")
 
     def append_stream_chunk(self, chunk: str) -> None:
-        self._stream_buffer = getattr(self, "_stream_buffer", "") + chunk
-        cursor = self._summary_edit.textCursor()
-        cursor.movePosition(QTextCursor.MoveOperation.End)
-        self._summary_edit.setTextCursor(cursor)
-        self._summary_edit.insertPlainText(chunk)
-        # 一旦流里出现 recommended_discard 字段就提前显示推荐出牌
-        m = re.search(r'"recommended_discard"\s*:\s*"([^"]*)"', self._stream_buffer)
-        if m:
-            discard_id = m.group(1)
-            if discard_id and discard_id != "null":
-                tile_name = TILE_NAME_MAP.get(discard_id, discard_id)
-                self._recommended_label.setText(f"当前推荐出牌：{tile_name}")
-                self._recommended_label.setStyleSheet("color:#27ae60; font-weight:bold;")
+        try:
+            self._stream_buffer += chunk
+            self._summary_edit.setPlainText(self._stream_buffer)
+            # 只在还没找到推荐出牌时做 regex，找到后不再重复搜索
+            if not self._stream_discard_found:
+                m = re.search(r'"recommended_discard"\s*:\s*"([^"]+)"', self._stream_buffer)
+                if m:
+                    self._stream_discard_found = True
+                    discard_id = m.group(1)
+                    tile_name = TILE_NAME_MAP.get(discard_id, discard_id)
+                    self._recommended_label.setText(f"当前推荐出牌：{tile_name}")
+                    self._recommended_label.setStyleSheet("color:#27ae60; font-weight:bold;")
+        except Exception:
+            pass
 
     def _render_advice(self, advice: BattleAdvice) -> None:
         discard_id = advice.recommended_discard or ""

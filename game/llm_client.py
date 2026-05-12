@@ -115,22 +115,26 @@ class LLMClient:
         accumulated = ""
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                for raw_line in resp:
-                    line = raw_line.decode("utf-8").rstrip("\r\n")
-                    if not line.startswith("data: "):
-                        continue
-                    data = line[6:]
-                    if data.strip() == "[DONE]":
-                        break
-                    try:
-                        chunk_obj = json.loads(data)
-                        delta = chunk_obj["choices"][0]["delta"].get("content") or ""
-                        if delta:
-                            accumulated += delta
-                            if on_chunk is not None:
-                                on_chunk(delta)
-                    except (json.JSONDecodeError, KeyError, IndexError):
-                        pass
+                try:
+                    for raw_line in resp:
+                        line = raw_line.decode("utf-8").rstrip("\r\n")
+                        if not line.startswith("data: "):
+                            continue
+                        data = line[6:]
+                        if data.strip() == "[DONE]":
+                            break
+                        try:
+                            chunk_obj = json.loads(data)
+                            delta = chunk_obj["choices"][0]["delta"].get("content") or ""
+                            if delta:
+                                accumulated += delta
+                                if on_chunk is not None:
+                                    on_chunk(delta)
+                        except (json.JSONDecodeError, KeyError, IndexError):
+                            pass
+                except OSError:
+                    # 流中途断开，返回已累积内容，让上层处理
+                    pass
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="ignore")
             raise RuntimeError(f"HTTP {exc.code}: {detail}") from exc

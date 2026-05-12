@@ -1703,7 +1703,9 @@ class MainWindow(QMainWindow):
             self,
             mode=mode,
         )
-        self._battle_panel.clear_stream_buffer()
+        uses_ai = mode in ("full", "state_with_ai") or trigger_reason == "start"
+        if uses_ai:
+            self._battle_panel.clear_stream_buffer()
         self._battle_worker.stream_chunk.connect(self._battle_panel.append_stream_chunk)
         self._battle_worker.finished_ok.connect(self._on_battle_analysis_finished)
         self._battle_worker.finished_err.connect(self._on_battle_analysis_failed)

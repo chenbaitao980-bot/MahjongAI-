@@ -500,6 +500,7 @@ class CaptureWorkerThread(QThread):
 class BattleAnalysisThread(QThread):
     finished_ok = pyqtSignal(object, object)
     finished_err = pyqtSignal(str)
+    stream_chunk = pyqtSignal(str)
 
     def __init__(self, service: BattleService, state: BattleState, trigger_reason: str, parent=None, mode: str = "full"):
         super().__init__(parent)
@@ -509,6 +510,7 @@ class BattleAnalysisThread(QThread):
         self._mode = mode
 
     def run(self):
+        on_chunk = lambda text: self.stream_chunk.emit(text)
         try:
             if self._trigger_reason == "start":
                 state, advice = self._service.analyze_opening(self._state)
@@ -517,9 +519,9 @@ class BattleAnalysisThread(QThread):
             elif self._mode == "state_only":
                 state, advice = self._service.analyze_state_only(self._state, self._trigger_reason)
             elif self._mode == "state_with_ai":
-                state, advice = self._service.analyze_state_with_ai(self._state, self._trigger_reason)
+                state, advice = self._service.analyze_state_with_ai(self._state, self._trigger_reason, on_chunk=on_chunk)
             else:
-                state, advice = self._service.analyze_after_action(self._state, self._trigger_reason)
+                state, advice = self._service.analyze_after_action(self._state, self._trigger_reason, on_chunk=on_chunk)
             self.finished_ok.emit(state, advice)
         except Exception as exc:
             self.finished_err.emit(str(exc))
@@ -1701,6 +1703,8 @@ class MainWindow(QMainWindow):
             self,
             mode=mode,
         )
+        self._battle_panel.clear_stream_buffer()
+        self._battle_worker.stream_chunk.connect(self._battle_panel.append_stream_chunk)
         self._battle_worker.finished_ok.connect(self._on_battle_analysis_finished)
         self._battle_worker.finished_err.connect(self._on_battle_analysis_failed)
         self._battle_worker.finished.connect(self._on_battle_worker_finished)

@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import urllib.error
 import urllib.request
+from typing import Callable
 
 
 class LLMClient:
@@ -84,6 +85,58 @@ class LLMClient:
             return response["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:
             raise RuntimeError(f"LLM 返回结构无法解析: {exc}") from exc
+
+    def chat_stream(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        on_chunk: Callable[[str], None] | None = None,
+    ) -> str:
+        """流式对话请求，每收到一段文本就调用 on_chunk，最终返回完整文本。"""
+        body = {
+            "model": self.model,
+            "temperature": self.temperature,
+            "stream": True,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        }
+        url = f"{self.base_url}/chat/completions"
+        req = urllib.request.Request(
+            url=url,
+            data=json.dumps(body).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.api_key}",
+            },
+            method="POST",
+        )
+        accumulated = ""
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                for raw_line in resp:
+                    line = raw_line.decode("utf-8").rstrip("\r\n")
+                    if not line.startswith("data: "):
+                        continue
+                    data = line[6:]
+                    if data.strip() == "[DONE]":
+                        break
+                    try:
+                        chunk_obj = json.loads(data)
+                        delta = chunk_obj["choices"][0]["delta"].get("content") or ""
+                        if delta:
+                            accumulated += delta
+                            if on_chunk is not None:
+                                on_chunk(delta)
+                    except (json.JSONDecodeError, KeyError, IndexError):
+                        pass
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="ignore")
+            raise RuntimeError(f"HTTP {exc.code}: {detail}") from exc
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"网络请求失败: {exc}") from exc
+        return accumulated
 
 
 if __name__ == "__main__":

@@ -230,8 +230,8 @@ class BattleService:
     def analyze_opening(self, state: BattleState) -> tuple[BattleState, BattleAdvice]:
         return self._analyze(state, "start")
 
-    def analyze_after_action(self, state: BattleState, trigger_reason: str) -> tuple[BattleState, BattleAdvice]:
-        return self._analyze(state, trigger_reason)
+    def analyze_after_action(self, state: BattleState, trigger_reason: str, on_chunk=None) -> tuple[BattleState, BattleAdvice]:
+        return self._analyze(state, trigger_reason, on_chunk=on_chunk)
 
     def analyze_recognition_only(self, state: BattleState, trigger_reason: str) -> tuple[BattleState, BattleAdvice]:
         """识别手牌 + 本地分析，跳过 DeepSeek。用于我方弃牌/副露手动编辑后刷新。"""
@@ -281,7 +281,7 @@ class BattleService:
         state.last_analysis_duration_ms = 0
         return state, advice
 
-    def analyze_state_with_ai(self, state: BattleState, trigger_reason: str) -> tuple[BattleState, BattleAdvice]:
+    def analyze_state_with_ai(self, state: BattleState, trigger_reason: str, on_chunk=None) -> tuple[BattleState, BattleAdvice]:
         """不做图片识别，直接用当前手牌重跑本地分析+DeepSeek。用于重试按钮。"""
         state.mark_analysis(trigger_reason)
         state.last_recognition_duration_ms = 0
@@ -328,7 +328,7 @@ class BattleService:
                 llm_result = get_final_advice(
                     payload=payload, analysis=analysis,
                     api_key=api_key, model=model, use_llm=True,
-                    base_url=base_url,
+                    base_url=base_url, on_chunk=on_chunk,
                 )
                 raw_text = llm_result.get("raw_response", "")
                 advice = BattleAdvice(
@@ -922,7 +922,7 @@ class BattleService:
                 return "chi"
         return "auto"
 
-    def _analyze(self, state: BattleState, trigger_reason: str) -> tuple[BattleState, BattleAdvice]:
+    def _analyze(self, state: BattleState, trigger_reason: str, on_chunk=None) -> tuple[BattleState, BattleAdvice]:
         state.mark_analysis(trigger_reason)
         recognition_started_at = time.perf_counter()
         hand_tiles, source = self.capture_self_hand(state)
@@ -953,8 +953,16 @@ class BattleService:
             try:
                 from game.llm_advisor import get_final_advice
 
-                api_key = self._config.get("deepseek", {}).get("api_key", "").strip()
-                model = self._config.get("deepseek", {}).get("model", "deepseek-chat").strip() or "deepseek-chat"
+                provider = getattr(state, "ai_provider", "deepseek") or "deepseek"
+                _defaults = {
+                    "deepseek": ("deepseek-chat", "https://api.deepseek.com"),
+                    "qianwen": ("qwen-turbo-latest", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
+                }
+                _def_model, _def_url = _defaults.get(provider, _defaults["deepseek"])
+                provider_cfg = self._config.get(provider, {})
+                api_key = provider_cfg.get("api_key", "").strip()
+                model = provider_cfg.get("model", _def_model).strip() or _def_model
+                base_url = provider_cfg.get("base_url", _def_url).strip() or _def_url
                 analysis = payload.get("self", {}).get("analysis", {})
 
                 llm_result = get_final_advice(
@@ -963,6 +971,8 @@ class BattleService:
                     api_key=api_key,
                     model=model,
                     use_llm=True,
+                    base_url=base_url,
+                    on_chunk=on_chunk,
                 )
 
                 raw_text = llm_result.get("raw_response", "")

@@ -5,7 +5,7 @@ import re
 from copy import deepcopy
 
 from PyQt6.QtCore import pyqtSignal, QUrl, Qt
-from PyQt6.QtGui import QColor, QDesktopServices
+from PyQt6.QtGui import QColor, QDesktopServices, QTextCursor
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -1275,6 +1275,27 @@ class BattlePanel(QWidget):
             f"暗杠{self._state.kan_closed_count}次 | "
             f"剩余{self._state.remaining_tiles}张"
         )
+
+    def clear_stream_buffer(self) -> None:
+        self._stream_buffer = ""
+        self._summary_edit.clear()
+        self._recommended_label.setText("当前推荐出牌：AI 生成中…")
+        self._recommended_label.setStyleSheet("color:#8e44ad;")
+
+    def append_stream_chunk(self, chunk: str) -> None:
+        self._stream_buffer = getattr(self, "_stream_buffer", "") + chunk
+        cursor = self._summary_edit.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        self._summary_edit.setTextCursor(cursor)
+        self._summary_edit.insertPlainText(chunk)
+        # 一旦流里出现 recommended_discard 字段就提前显示推荐出牌
+        m = re.search(r'"recommended_discard"\s*:\s*"([^"]*)"', self._stream_buffer)
+        if m:
+            discard_id = m.group(1)
+            if discard_id and discard_id != "null":
+                tile_name = TILE_NAME_MAP.get(discard_id, discard_id)
+                self._recommended_label.setText(f"当前推荐出牌：{tile_name}")
+                self._recommended_label.setStyleSheet("color:#27ae60; font-weight:bold;")
 
     def _render_advice(self, advice: BattleAdvice) -> None:
         discard_id = advice.recommended_discard or ""

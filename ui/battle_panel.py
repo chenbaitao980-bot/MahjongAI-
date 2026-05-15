@@ -40,17 +40,17 @@ from battle.state import BattleAdvice, BattleState, meld_from_ids, tile_from_id
 from game.state import ALL_TILE_IDS, MeldGroup
 
 
-_C_SELF  = "#74c69d"   # 自家回合（绿）
-_C_ENEMY = "#e07a5f"   # 敌方回合（暖橙红）
-_C_OK    = "#52b788"   # 成功/推荐（护眼绿）
-_C_WARN  = "#f4a261"   # 警告（暖橙）
-_C_ERR   = "#e07a5f"   # 错误（暖红）
-_C_AI    = "#b5a0d4"   # AI生成中（柔紫）
-_C_CAND  = "#5bc0be"   # 候选动作（青绿）
-_C_GOLD  = "#e9c46a"   # 暖黄（选中高亮）
-_C_MUTED = "#5a7868"   # 弱文字
-_C_2ND   = "#7aaa8a"   # 次文字
-_C_TEXT  = "#ccddd5"   # 主文字
+_C_SELF  = "#3fb950"   # 自家回合（GitHub绿）
+_C_ENEMY = "#f85149"   # 敌方回合（GitHub红）
+_C_OK    = "#3fb950"   # 成功/推荐
+_C_WARN  = "#d29922"   # 警告（琥珀）
+_C_ERR   = "#f85149"   # 错误
+_C_AI    = "#bc8cff"   # AI生成中（柔紫）
+_C_CAND  = "#39d0d8"   # 候选动作（青绿）
+_C_GOLD  = "#e3b341"   # 高亮金
+_C_MUTED = "#484f58"   # 弱文字
+_C_2ND   = "#8b949e"   # 次文字
+_C_TEXT  = "#e6edf3"   # 主文字
 
 TILE_NAME_MAP = {
     **{f"{i}m": f"{i}万" for i in range(1, 10)},
@@ -1275,7 +1275,7 @@ class BattlePanel(QWidget):
         # 红框牌条
         self._tile_strip_container = QWidget()
         self._tile_strip_container.setStyleSheet(
-            f"QWidget {{ border: 2px solid {_C_ENEMY}; border-radius: 4px; padding: 2px; }}"
+            f"QWidget {{ border: 1px solid {_C_ENEMY}; border-radius: 6px; padding: 4px; background: #161b22; }}"
         )
         self._tile_strip_layout = QHBoxLayout(self._tile_strip_container)
         self._tile_strip_layout.setContentsMargins(4, 2, 4, 2)
@@ -1312,7 +1312,7 @@ class BattlePanel(QWidget):
     def _update_suit_btn_highlight(self) -> None:
         for code, btn in self._suit_btns.items():
             if code == self._shortcut_suit:
-                btn.setStyleSheet(f"background: {_C_SELF}; color: #1a2418; font-weight: bold;")
+                btn.setStyleSheet("background: #238636; color: #ffffff; border-color: #2ea043; font-weight: bold;")
             else:
                 btn.setStyleSheet("")
 
@@ -1344,7 +1344,7 @@ class BattlePanel(QWidget):
         self._shortcut_selected = number
         for i, btn in enumerate(self._tile_strip_btns):
             if i + 1 == number:
-                btn.setStyleSheet(f"background: {_C_GOLD}; color: #1a2418; font-weight: bold;")
+                btn.setStyleSheet(f"background: {_C_GOLD}; color: #0d1117; border-color: {_C_GOLD}; font-weight: bold;")
             else:
                 btn.setStyleSheet("")
 

@@ -26,11 +26,11 @@ PHASE_TEXT = {
 }
 
 PHASE_COLOR = {
-    PHASE_PLAYING: "#2d8a2d",
-    PHASE_SHENGJIA: "#b05a00",
-    PHASE_HUANGPAI: "#c00",
-    PHASE_LIUJU: "#555",
-    PHASE_HUPAI: "#c00",
+    PHASE_PLAYING:  "#3fb950",
+    PHASE_SHENGJIA: "#d29922",
+    PHASE_HUANGPAI: "#f85149",
+    PHASE_LIUJU:    "#8b949e",
+    PHASE_HUPAI:    "#f85149",
 }
 
 
@@ -55,7 +55,7 @@ class CapturePanel(QWidget):
         ctrl_layout = QHBoxLayout(ctrl)
 
         self._btn_start = QPushButton("▶ 开始识别")
-        self._btn_start.setFixedHeight(36)
+        self._btn_start.setFixedHeight(32)
         self._btn_start.clicked.connect(self._toggle)
         ctrl_layout.addWidget(self._btn_start)
 
@@ -147,7 +147,9 @@ class CapturePanel(QWidget):
             self._seen_event_keys.clear()
             self._log.clear()
             self._btn_start.setText("■ 停止识别")
-            self._btn_start.setStyleSheet("background-color: #c0392b; color: white;")
+            self._btn_start.setStyleSheet(
+                "background: #f85149; color: #0d1117; border-color: #f85149; font-weight: bold;"
+            )
             self.start_requested.emit(self._interval_spin.value())
         else:
             self._running = False

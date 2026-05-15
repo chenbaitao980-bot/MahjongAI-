@@ -588,7 +588,7 @@ class BattlePanel(QWidget):
         self._tile_strip_btns: list[QPushButton] = []
         self._shortcut_keys = {
             "万": "W", "筒": "T", "条": "B", "字": "Z",
-            "添加": "Return", "撤销": "U", "清空": "C",
+            "添加": "Return", "撤销": "U", "清空": "C", "分析": "A",
         }
         self._active_shortcuts: list = []
         self._setup_ui()
@@ -850,7 +850,7 @@ class BattlePanel(QWidget):
         self._error_label.setStyleSheet("color:#c0392b;")
         layout.addWidget(self._error_label)
 
-        retry_btn = QPushButton("重试")
+        retry_btn = QPushButton("分析")
         retry_btn.clicked.connect(lambda: self.reanalyze_with_ai_requested.emit("retry"))
         layout.addWidget(retry_btn)
 
@@ -1244,8 +1244,9 @@ class BattlePanel(QWidget):
         add_key = self._shortcut_keys.get("添加", "Return")
         undo_key = self._shortcut_keys.get("撤销", "U")
         clear_key = self._shortcut_keys.get("清空", "C")
+        analyze_key = self._shortcut_keys.get("分析", "A")
         self._shortcut_hint_label = QLabel(
-            f"添加:{add_key}  撤销:{undo_key}  清空:{clear_key}  (数字键1-9选牌)"
+            f"添加:{add_key}  撤销:{undo_key}  清空:{clear_key}  分析:{analyze_key}  (数字键1-9选牌)"
         )
         self._shortcut_hint_label.setStyleSheet("color: #555; font-size: 11px;")
         vbox.addWidget(self._shortcut_hint_label)
@@ -1380,6 +1381,9 @@ class BattlePanel(QWidget):
         _sc(add_key, self._shortcut_add)
         _sc(undo_key, self._shortcut_undo)
         _sc(clear_key, self._shortcut_clear)
+        analyze_key = self._shortcut_keys.get("分析", "A")
+        if analyze_key:
+            _sc(analyze_key, lambda: self.reanalyze_with_ai_requested.emit("retry"))
 
     def _open_shortcut_config(self) -> None:
         from PyQt6.QtWidgets import QDialog, QFormLayout, QLineEdit, QDialogButtonBox
@@ -1423,7 +1427,8 @@ class BattlePanel(QWidget):
         self._shortcut_hint_label.setText(
             f"添加:{self._shortcut_keys.get('添加','Return')}  "
             f"撤销:{self._shortcut_keys.get('撤销','U')}  "
-            f"清空:{self._shortcut_keys.get('清空','C')}  (数字键1-9选牌)"
+            f"清空:{self._shortcut_keys.get('清空','C')}  "
+            f"分析:{self._shortcut_keys.get('分析','A')}  (数字键1-9选牌)"
         )
         self._rebuild_shortcuts()
 

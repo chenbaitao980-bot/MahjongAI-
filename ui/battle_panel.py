@@ -650,19 +650,19 @@ class BattlePanel(QWidget):
         self._train_success_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._train_success_label.setStyleSheet("color:#888888; font-size:12px; padding:4px;")
         self._analysis_panel = AnalysisPanel()
+        self._meta_label = QLabel("最近一次分析：--")
+        self._meta_label.setWordWrap(True)
+        self._meta_label.setStyleSheet("color:#aaa; font-size:10px; padding: 2px 4px;")
         center = QVBoxLayout()
         center.addWidget(center_box)
         center.addWidget(self._train_success_label)
         center.addStretch()
+        center.addWidget(self._meta_label)
         content.addLayout(center, 1)
 
-        self._meta_label = QLabel("最近一次分析：--")
-        self._meta_label.setWordWrap(True)
-        self._meta_label.setStyleSheet("color:#aaa; font-size:10px; padding: 2px 4px;")
         right = QVBoxLayout()
         right.addWidget(self._build_advice_group())
         right.addWidget(self._analysis_panel)
-        right.addWidget(self._meta_label)
         content.addLayout(right, 1)
 
     def _build_player_group(self, title: str, enemy: bool) -> QGroupBox:
@@ -1664,9 +1664,16 @@ class BattlePanel(QWidget):
             )
         self._summary_edit.setHtml("".join(parts))
 
-        candidates = " / ".join(_replace_tile_codes(a) for a in advice.candidate_actions) if advice.candidate_actions else "--"
+        ca = advice.candidate_actions
+        if not ca:
+            local_candidates = self._state.last_analysis.get("candidates", [])[:3]
+            ca = [
+                f"打{TILE_NAME_MAP.get(c.get('discard', ''), c.get('discard', ''))}"
+                for c in local_candidates if c.get("discard")
+            ]
+        candidates = " / ".join(_replace_tile_codes(a) for a in ca) if ca else "--"
         self._candidate_label.setText(f"候选动作：{candidates}")
-        self._candidate_label.setStyleSheet("color:#16a085;" if advice.candidate_actions else "")
+        self._candidate_label.setStyleSheet("color:#16a085;" if ca else "")
         if self._state.last_analysis_at:
             timing_parts: list[str] = []
             if self._state.last_recognition_duration_ms > 0:

@@ -997,6 +997,7 @@ class MainWindow(QMainWindow):
         self._battle_panel.state_reanalyze_requested.connect(self._on_battle_state_reanalyze_requested)
         self._battle_panel.reanalyze_with_ai_requested.connect(self._on_battle_reanalyze_with_ai_requested)
         self._battle_panel.config_requested.connect(self._open_api_config_dialog)
+        self._battle_panel.config_save_requested.connect(self._save_config)
         self._battle_panel.tile_correction_requested.connect(self._on_battle_tile_correction)
         self._battle_panel.meld_correction_requested.connect(self._on_battle_meld_correction)
         layout.addWidget(self._battle_panel)

@@ -570,6 +570,7 @@ class BattlePanel(QWidget):
     state_reanalyze_requested = pyqtSignal(str)    # 敌方编辑：不识别，仅重算本地分析
     reanalyze_with_ai_requested = pyqtSignal(str)  # 重试：不识别，重跑本地+AI
     config_requested = pyqtSignal()
+    config_save_requested = pyqtSignal()           # 请求主窗口保存 config 到磁盘
     tile_correction_requested = pyqtSignal(int, str)   # (tile_index, correct_tile_id)
     meld_correction_requested = pyqtSignal(int, str)   # (flat_meld_tile_index, correct_tile_id)
 
@@ -586,10 +587,12 @@ class BattlePanel(QWidget):
         self._shortcut_selected: int | None = None
         self._suit_btns: dict[str, QPushButton] = {}
         self._tile_strip_btns: list[QPushButton] = []
-        self._shortcut_keys = {
+        _default_shortcut_keys = {
             "万": "W", "筒": "T", "条": "B", "字": "Z",
             "添加": "Return", "撤销": "U", "清空": "C", "分析": "A",
         }
+        saved = self._config.get("shortcut_keys", {})
+        self._shortcut_keys = {**_default_shortcut_keys, **saved}
         self._active_shortcuts: list = []
         self._setup_ui()
         self._rebuild_shortcuts()
@@ -1431,6 +1434,8 @@ class BattlePanel(QWidget):
             f"分析:{self._shortcut_keys.get('分析','A')}  (数字键1-9选牌)"
         )
         self._rebuild_shortcuts()
+        self._config["shortcut_keys"] = dict(self._shortcut_keys)
+        self.config_save_requested.emit()
 
     def _format_tiles(self, tiles) -> str:
         if not tiles:

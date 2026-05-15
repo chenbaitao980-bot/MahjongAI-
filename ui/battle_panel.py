@@ -582,7 +582,17 @@ class BattlePanel(QWidget):
         )
         self._stream_buffer = ""
         self._stream_discard_found = False
+        self._shortcut_suit = "m"
+        self._shortcut_selected: int | None = None
+        self._suit_btns: dict[str, QPushButton] = {}
+        self._tile_strip_btns: list[QPushButton] = []
+        self._shortcut_keys = {
+            "万": "W", "筒": "T", "条": "B", "字": "Z",
+            "添加": "Return", "撤销": "U", "清空": "C",
+        }
+        self._active_shortcuts: list = []
         self._setup_ui()
+        self._rebuild_shortcuts()
         self._render_state()
         self.clear_round_feedback()
 
@@ -753,7 +763,8 @@ class BattlePanel(QWidget):
         layout.addLayout(form)
 
         hand_top = QHBoxLayout()
-        hand_top.addWidget(QLabel("我方手牌区"))
+        self._turn_label = QLabel("我方手牌区")
+        hand_top.addWidget(self._turn_label)
         hand_top.addStretch()
         self._recognize_btn = QPushButton("识别")
         self._recognize_btn.clicked.connect(lambda: self.recognition_only_requested.emit("manual_recognize"))
@@ -777,6 +788,8 @@ class BattlePanel(QWidget):
 
         self._recognition_label = QLabel("识别来源：manual")
         layout.addWidget(self._recognition_label)
+
+        self._build_shortcut_group(layout)
         return box
 
     def _build_advice_group(self) -> QGroupBox:
@@ -973,11 +986,12 @@ class BattlePanel(QWidget):
         self._state.self_hand.clear()
         self._record_and_emit("clear_self_hand", {"count": count})
 
-    def _add_discard(self, enemy: bool) -> None:
-        dialog = TileSelectionDialog("添加弃牌", self)
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return
-        tile_id = dialog.selected_tile()
+    def _add_discard(self, enemy: bool, tile_id: str | None = None) -> None:
+        if tile_id is None:
+            dialog = TileSelectionDialog("添加弃牌", self)
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                return
+            tile_id = dialog.selected_tile()
         self._adjust_remaining(-1)
         if enemy:
             self._state.enemy_discards.append(tile_from_id(tile_id))
@@ -985,6 +999,9 @@ class BattlePanel(QWidget):
         else:
             self._state.self_discards.append(tile_from_id(tile_id))
             self._record_and_emit("add_self_discard", {"tile": tile_id})
+        self._state.current_turn = "self" if enemy else "enemy"
+        self._update_turn_label()
+        self._update_shortcut_status()
 
     def _undo_discard(self, enemy: bool) -> None:
         discards = self._state.enemy_discards if enemy else self._state.self_discards
@@ -1174,6 +1191,234 @@ class BattlePanel(QWidget):
             self._record_and_emit("correct_tile", {"index": tile_index, "tile": correct_id})
         self.tile_correction_requested.emit(tile_index, correct_id)
 
+    # ─── 回合指示器 ──────────────────────────────────────────────
+
+    def _update_turn_label(self) -> None:
+        turn = self._state.current_turn
+        if turn == "self":
+            self._turn_label.setText("我方手牌区  ● 我方回合")
+            self._turn_label.setStyleSheet("color: #1565C0; font-weight: bold;")
+        elif turn == "enemy":
+            self._turn_label.setText("我方手牌区  ● 敌方回合")
+            self._turn_label.setStyleSheet("color: #C62828; font-weight: bold;")
+        else:
+            self._turn_label.setText("我方手牌区")
+            self._turn_label.setStyleSheet("")
+
+    # ─── 快捷键操作模块 ──────────────────────────────────────────
+
+    def _build_shortcut_group(self, layout) -> None:
+        from PyQt6.QtWidgets import QGroupBox
+        box = QGroupBox("快捷键操作")
+        vbox = QVBoxLayout(box)
+
+        # 牌型切换行
+        suit_row = QHBoxLayout()
+        suit_row.addWidget(QLabel("牌型:"))
+        suit_map = [("m", "万"), ("p", "筒"), ("s", "条"), ("z", "字")]
+        for suit_code, suit_name in suit_map:
+            key = self._shortcut_keys.get(suit_name, "")
+            btn = QPushButton(f"{key}={suit_name}")
+            btn.setFixedWidth(60)
+            btn.clicked.connect(lambda _=None, c=suit_code: self._switch_shortcut_suit(c))
+            self._suit_btns[suit_code] = btn
+            suit_row.addWidget(btn)
+        suit_row.addStretch()
+        config_btn = QPushButton("配置")
+        config_btn.setFixedWidth(50)
+        config_btn.clicked.connect(self._open_shortcut_config)
+        suit_row.addWidget(config_btn)
+        vbox.addLayout(suit_row)
+
+        # 红框牌条
+        self._tile_strip_container = QWidget()
+        self._tile_strip_container.setStyleSheet(
+            "QWidget { border: 2px solid #C62828; border-radius: 4px; padding: 2px; }"
+        )
+        self._tile_strip_layout = QHBoxLayout(self._tile_strip_container)
+        self._tile_strip_layout.setContentsMargins(4, 2, 4, 2)
+        self._tile_strip_layout.setSpacing(3)
+        vbox.addWidget(self._tile_strip_container)
+
+        # 快捷键说明行
+        add_key = self._shortcut_keys.get("添加", "Return")
+        undo_key = self._shortcut_keys.get("撤销", "U")
+        clear_key = self._shortcut_keys.get("清空", "C")
+        self._shortcut_hint_label = QLabel(
+            f"添加:{add_key}  撤销:{undo_key}  清空:{clear_key}  (数字键1-9选牌)"
+        )
+        self._shortcut_hint_label.setStyleSheet("color: #555; font-size: 11px;")
+        vbox.addWidget(self._shortcut_hint_label)
+
+        # 状态标签
+        self._shortcut_status_label = QLabel("请先添加弃牌以自动切换回合")
+        self._shortcut_status_label.setStyleSheet("color: #888; font-size: 11px;")
+        vbox.addWidget(self._shortcut_status_label)
+
+        layout.addWidget(box)
+        self._rebuild_tile_strip()
+        self._update_suit_btn_highlight()
+
+    def _switch_shortcut_suit(self, suit: str) -> None:
+        self._shortcut_suit = suit
+        self._shortcut_selected = None
+        self._rebuild_tile_strip()
+        self._update_suit_btn_highlight()
+
+    def _update_suit_btn_highlight(self) -> None:
+        for code, btn in self._suit_btns.items():
+            if code == self._shortcut_suit:
+                btn.setStyleSheet("background: #1565C0; color: white; font-weight: bold;")
+            else:
+                btn.setStyleSheet("")
+
+    def _rebuild_tile_strip(self) -> None:
+        while self._tile_strip_layout.count():
+            item = self._tile_strip_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        self._tile_strip_btns.clear()
+
+        suit = self._shortcut_suit
+        if suit == "z":
+            tiles = [(i + 1, tid) for i, tid in enumerate(
+                ["1z", "2z", "3z", "4z", "5z", "6z", "7z"]
+            )]
+        else:
+            tiles = [(n, f"{n}{suit}") for n in range(1, 10)]
+
+        for number, tile_id in tiles:
+            label = TILE_NAME_MAP.get(tile_id, tile_id)
+            btn = QPushButton(label)
+            btn.setFixedWidth(52)
+            btn.clicked.connect(lambda _=None, n=number: self._shortcut_select(n))
+            self._tile_strip_btns.append(btn)
+            self._tile_strip_layout.addWidget(btn)
+        self._tile_strip_layout.addStretch()
+
+    def _shortcut_select(self, number: int) -> None:
+        self._shortcut_selected = number
+        for i, btn in enumerate(self._tile_strip_btns):
+            if i + 1 == number:
+                btn.setStyleSheet("background: #FFF176; font-weight: bold;")
+            else:
+                btn.setStyleSheet("")
+
+    def _shortcut_add(self) -> None:
+        if self._shortcut_selected is None:
+            return
+        suit = self._shortcut_suit
+        if suit == "z":
+            tile_id = f"{self._shortcut_selected}z"
+        else:
+            tile_id = f"{self._shortcut_selected}{suit}"
+        turn = self._state.current_turn
+        if turn == "none":
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.information(self, "提示", "请先通过弃牌区【添加】按钮切换回合")
+            return
+        enemy = (turn == "enemy")
+        # 清除选中高亮
+        for btn in self._tile_strip_btns:
+            btn.setStyleSheet("")
+        self._shortcut_selected = None
+        self._add_discard(enemy=enemy, tile_id=tile_id)
+
+    def _shortcut_undo(self) -> None:
+        turn = self._state.current_turn
+        if turn == "none":
+            return
+        enemy = (turn == "enemy")
+        self._undo_discard(enemy)
+
+    def _shortcut_clear(self) -> None:
+        turn = self._state.current_turn
+        if turn == "none":
+            return
+        enemy = (turn == "enemy")
+        self._clear_discards(enemy)
+
+    def _update_shortcut_status(self) -> None:
+        if not hasattr(self, "_shortcut_status_label"):
+            return
+        turn = self._state.current_turn
+        if turn == "self":
+            self._shortcut_status_label.setText("将添加到：我方弃牌区")
+            self._shortcut_status_label.setStyleSheet("color: #1565C0; font-size: 11px; font-weight: bold;")
+        elif turn == "enemy":
+            self._shortcut_status_label.setText("将添加到：敌方弃牌区")
+            self._shortcut_status_label.setStyleSheet("color: #C62828; font-size: 11px; font-weight: bold;")
+        else:
+            self._shortcut_status_label.setText("请先添加弃牌以自动切换回合")
+            self._shortcut_status_label.setStyleSheet("color: #888; font-size: 11px;")
+
+    def _rebuild_shortcuts(self) -> None:
+        from PyQt6.QtGui import QShortcut
+        from PyQt6.QtGui import QKeySequence
+        for sc in self._active_shortcuts:
+            sc.setEnabled(False)
+            sc.deleteLater()
+        self._active_shortcuts.clear()
+
+        def _sc(key_str, slot):
+            sc = QShortcut(QKeySequence(key_str), self)
+            sc.activated.connect(slot)
+            self._active_shortcuts.append(sc)
+
+        suit_map = {"万": "m", "筒": "p", "条": "s", "字": "z"}
+        for suit_label, suit_code in suit_map.items():
+            key = self._shortcut_keys.get(suit_label, "")
+            if key:
+                _sc(key, lambda _=None, c=suit_code: self._switch_shortcut_suit(c))
+
+        for n in range(1, 10):
+            _sc(str(n), lambda _=None, v=n: self._shortcut_select(v))
+
+        add_key = self._shortcut_keys.get("添加", "Return")
+        undo_key = self._shortcut_keys.get("撤销", "U")
+        clear_key = self._shortcut_keys.get("清空", "C")
+        _sc(add_key, self._shortcut_add)
+        _sc(undo_key, self._shortcut_undo)
+        _sc(clear_key, self._shortcut_clear)
+
+    def _open_shortcut_config(self) -> None:
+        from PyQt6.QtWidgets import QDialog, QFormLayout, QLineEdit, QDialogButtonBox
+        dlg = QDialog(self)
+        dlg.setWindowTitle("快捷键配置")
+        form = QFormLayout(dlg)
+        editors: dict[str, QLineEdit] = {}
+        for label, default_key in self._shortcut_keys.items():
+            ed = QLineEdit(default_key)
+            ed.setMaxLength(20)
+            editors[label] = ed
+            form.addRow(label, ed)
+        btns = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        btns.accepted.connect(dlg.accept)
+        btns.rejected.connect(dlg.reject)
+        form.addRow(btns)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        for label, ed in editors.items():
+            val = ed.text().strip()
+            if val:
+                self._shortcut_keys[label] = val
+        # 更新牌型按钮文本
+        suit_map = {"万": "m", "筒": "p", "条": "s", "字": "z"}
+        for suit_label, suit_code in suit_map.items():
+            btn = self._suit_btns.get(suit_code)
+            if btn:
+                key = self._shortcut_keys.get(suit_label, "")
+                btn.setText(f"{key}={suit_label}")
+        # 更新快捷键说明
+        self._shortcut_hint_label.setText(
+            f"添加:{self._shortcut_keys.get('添加','Return')}  "
+            f"撤销:{self._shortcut_keys.get('撤销','U')}  "
+            f"清空:{self._shortcut_keys.get('清空','C')}  (数字键1-9选牌)"
+        )
+        self._rebuild_shortcuts()
+
     def _format_tiles(self, tiles) -> str:
         if not tiles:
             return "（空）"
@@ -1303,6 +1548,8 @@ class BattlePanel(QWidget):
             f"暗杠{self._state.kan_closed_count}次 | "
             f"剩余{self._state.remaining_tiles}张"
         )
+        self._update_turn_label()
+        self._update_shortcut_status()
 
     def clear_stream_buffer(self) -> None:
         self._stream_buffer = ""

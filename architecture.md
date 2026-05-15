@@ -1,10 +1,54 @@
 # MahjongAI 知识图谱
 
-> 自动生成于 2026-05-04 20:49 | 最后人工更新：2026-05-11（MC并行化 + UI交互简化 + 性能优化 + 动态财神Prompt）
+> 自动生成于 2026-05-04 20:49 | 最后人工更新：2026-05-15（回合指示器 + 快捷键操作模块）
 
 ---
 
 ## 变更日志
+
+### 2026-05-15 — 回合指示器 + 快捷键操作模块
+
+#### 修改 `battle/state.py`
+- `BattleState` 新增字段 `current_turn: str = "none"`，取值 `"self"` | `"enemy"` | `"none"`，追踪当前轮到谁出牌
+
+#### 修改 `ui/battle_panel.py`
+
+**回合颜色指示器：**
+- `_build_center_group()` 中将 `QLabel("我方手牌区")` 改为 `self._turn_label`，保存引用
+- 新增 `_update_turn_label()`：根据 `current_turn` 动态改变标签文字和颜色
+  - `"self"` → 蓝色 `"我方手牌区  ● 我方回合"`
+  - `"enemy"` → 红色 `"我方手牌区  ● 敌方回合"`
+  - `"none"` → 默认样式
+- `_add_discard()` 添加弃牌后自动切换 `current_turn`（敌方添加→我方回合，我方添加→敌方回合）
+- `_render_state()` 末尾调用 `_update_turn_label()` 和 `_update_shortcut_status()`
+
+**快捷键操作模块（`_build_shortcut_group`）：**
+- 在战斗状态面板（`_build_center_group`）底部新增 `QGroupBox("快捷键操作")`
+- 牌型切换按钮行：[W=万] [T=筒] [B=条] [Z=字]，当前选中高亮蓝色
+- 红框牌条（`_tile_strip_container`）：根据当前牌型显示 9 个（字牌 7 个）选牌按钮；选中时按钮变黄色
+- 状态标签：显示"将添加到：我方/敌方弃牌区"（与回合同步颜色）
+- 快捷键说明行：显示添加/撤销/清空快捷键
+
+**快捷键绑定（`_rebuild_shortcuts`，使用 `QShortcut`）：**
+- W/T/B/Z → 切换牌型（默认，可在配置对话框修改）
+- 数字 1-9 → 选中对应牌并高亮
+- Enter → 将选中牌添加到当前回合的弃牌区
+- U → 撤销当前回合弃牌区最后一张
+- C → 清空当前回合弃牌区
+
+**快捷键配置（`_open_shortcut_config`）：**
+- 点击"配置"按钮打开 `QDialog`，可修改所有快捷键键位
+- 修改后自动更新按钮文字、说明标签，并调用 `_rebuild_shortcuts()` 重建绑定
+
+**新增实例变量：**
+- `_shortcut_suit`: 当前选中牌型 (`m`/`p`/`s`/`z`)
+- `_shortcut_selected`: 当前选中牌号 (1-9) 或 None
+- `_suit_btns`: 牌型按钮字典
+- `_tile_strip_btns`: 牌条按钮列表
+- `_shortcut_keys`: 快捷键配置字典
+- `_active_shortcuts`: 活跃 `QShortcut` 列表（用于重建时销毁）
+
+---
 
 ### 2026-05-11 — MC并行化 + UI交互简化 + 性能优化 + 动态财神Prompt
 

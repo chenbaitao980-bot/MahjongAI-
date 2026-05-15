@@ -63,6 +63,7 @@ class BattleState:
     enemy_discards: list[TileMatch] = field(default_factory=list)
     enemy_melds: list[MeldGroup] = field(default_factory=list)
     kan_closed_count: int = 0   # 暗杠次数（影响基础牌点计算）
+    current_turn: str = "none"  # "self" | "enemy" | "none"
     last_trigger_reason: str = ""
     last_analysis_at: str = ""
     last_analysis_duration_ms: int = 0

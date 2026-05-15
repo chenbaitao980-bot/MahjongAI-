@@ -40,6 +40,18 @@ from battle.state import BattleAdvice, BattleState, meld_from_ids, tile_from_id
 from game.state import ALL_TILE_IDS, MeldGroup
 
 
+_C_SELF  = "#64b5f6"   # 自家回合（蓝）
+_C_ENEMY = "#e53935"   # 敌方回合（朱红）
+_C_OK    = "#66bb6a"   # 成功/推荐（绿）
+_C_WARN  = "#ffa726"   # 警告（橙）
+_C_ERR   = "#ef5350"   # 错误（红）
+_C_AI    = "#ce93d8"   # AI生成中（紫）
+_C_CAND  = "#4db6ac"   # 候选动作（青绿）
+_C_GOLD  = "#ffd54f"   # 金色强调
+_C_MUTED = "#6a6050"   # 弱文字
+_C_2ND   = "#a09880"   # 次文字
+_C_TEXT  = "#e8dcc8"   # 主文字
+
 TILE_NAME_MAP = {
     **{f"{i}m": f"{i}万" for i in range(1, 10)},
     **{f"{i}p": f"{i}筒" for i in range(1, 10)},
@@ -515,7 +527,7 @@ class AnalysisPanel(QGroupBox):
     def __init__(self) -> None:
         super().__init__("候选分析")
         self._header = QLabel("向听数：-- | 策略：--")
-        self._header.setStyleSheet("font-size:12px; color:#2c3e50; padding:2px 0;")
+        self._header.setStyleSheet(f"font-size:12px; color:{_C_2ND}; padding:2px 0;")
         self._table = QTableWidget(0, 7)
         self._table.setHorizontalHeaderLabels(self.COLS)
         self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
@@ -558,7 +570,7 @@ class AnalysisPanel(QGroupBox):
                 for col in range(7):
                     cell = self._table.item(row, col)
                     if cell:
-                        cell.setBackground(QColor("#d5f5e3"))
+                        cell.setBackground(QColor("#2d4428"))
 
 
 class BattlePanel(QWidget):
@@ -647,11 +659,11 @@ class BattlePanel(QWidget):
         self._train_success_label = QLabel("")
         self._train_success_label.setWordWrap(True)
         self._train_success_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._train_success_label.setStyleSheet("color:#888888; font-size:12px; padding:4px;")
+        self._train_success_label.setStyleSheet(f"color:{_C_2ND}; font-size:12px; padding:4px;")
         self._analysis_panel = AnalysisPanel()
         self._meta_label = QLabel("最近一次分析：--")
         self._meta_label.setWordWrap(True)
-        self._meta_label.setStyleSheet("color:#aaa; font-size:10px; padding: 2px 4px;")
+        self._meta_label.setStyleSheet(f"color:{_C_MUTED}; font-size:10px; padding: 2px 4px;")
         center = QVBoxLayout()
         center.addWidget(center_box)
         center.addWidget(self._train_success_label)
@@ -860,7 +872,7 @@ class BattlePanel(QWidget):
 
         self._error_label = QLabel("")
         self._error_label.setWordWrap(True)
-        self._error_label.setStyleSheet("color:#c0392b;")
+        self._error_label.setStyleSheet(f"color:{_C_ERR};")
         layout.addWidget(self._error_label)
 
         retry_btn = QPushButton("分析")
@@ -870,7 +882,7 @@ class BattlePanel(QWidget):
         self._progress_label = QLabel("")
         self._progress_label.setWordWrap(True)
         self._progress_label.setAlignment(Qt.AlignmentFlag.AlignRight)
-        self._progress_label.setStyleSheet("color:#8e44ad; font-size:11px;")
+        self._progress_label.setStyleSheet(f"color:{_C_AI}; font-size:11px;")
         self._progress_label.setVisible(False)
         layout.addWidget(self._progress_label)
 
@@ -1162,9 +1174,9 @@ class BattlePanel(QWidget):
             btn.setFixedWidth(52)
             btn.setToolTip(f"置信度: {conf:.0%}  点击操作")
             if conf < 0.9:
-                btn.setStyleSheet("color: red; font-weight: bold;")
+                btn.setStyleSheet(f"color: {_C_ERR}; font-weight: bold;")
             else:
-                btn.setStyleSheet("color: black;")
+                btn.setStyleSheet(f"color: {_C_TEXT};")
             btn.clicked.connect(
                 lambda _checked, i=idx, t=tile.tile_id: self._on_hand_tile_btn_click(i, t)
             )
@@ -1213,10 +1225,10 @@ class BattlePanel(QWidget):
         turn = self._state.current_turn
         if turn == "self":
             self._turn_label.setText("我方手牌区  ● 我方回合")
-            self._turn_label.setStyleSheet("color: #1565C0; font-weight: bold;")
+            self._turn_label.setStyleSheet(f"color: {_C_SELF}; font-weight: bold;")
         elif turn == "enemy":
             self._turn_label.setText("我方手牌区  ● 敌方回合")
-            self._turn_label.setStyleSheet("color: #C62828; font-weight: bold;")
+            self._turn_label.setStyleSheet(f"color: {_C_ENEMY}; font-weight: bold;")
         else:
             self._turn_label.setText("我方手牌区")
             self._turn_label.setStyleSheet("")
@@ -1249,7 +1261,7 @@ class BattlePanel(QWidget):
         # 红框牌条
         self._tile_strip_container = QWidget()
         self._tile_strip_container.setStyleSheet(
-            "QWidget { border: 2px solid #C62828; border-radius: 4px; padding: 2px; }"
+            f"QWidget {{ border: 2px solid {_C_ENEMY}; border-radius: 4px; padding: 2px; }}"
         )
         self._tile_strip_layout = QHBoxLayout(self._tile_strip_container)
         self._tile_strip_layout.setContentsMargins(4, 2, 4, 2)
@@ -1265,12 +1277,12 @@ class BattlePanel(QWidget):
         self._shortcut_hint_label = QLabel(
             f"添加:{add_key}  撤销:{undo_key}  清空:{clear_key}  分析:{analyze_key}  切换回合:{toggle_key}  (数字键1-9选牌)"
         )
-        self._shortcut_hint_label.setStyleSheet("color: #555; font-size: 11px;")
+        self._shortcut_hint_label.setStyleSheet(f"color: {_C_MUTED}; font-size: 11px;")
         vbox.addWidget(self._shortcut_hint_label)
 
         # 状态标签
         self._shortcut_status_label = QLabel("请先添加弃牌以自动切换回合")
-        self._shortcut_status_label.setStyleSheet("color: #888; font-size: 11px;")
+        self._shortcut_status_label.setStyleSheet(f"color: {_C_MUTED}; font-size: 11px;")
         vbox.addWidget(self._shortcut_status_label)
 
         layout.addWidget(box)
@@ -1286,7 +1298,7 @@ class BattlePanel(QWidget):
     def _update_suit_btn_highlight(self) -> None:
         for code, btn in self._suit_btns.items():
             if code == self._shortcut_suit:
-                btn.setStyleSheet("background: #1565C0; color: white; font-weight: bold;")
+                btn.setStyleSheet(f"background: {_C_SELF}; color: #1a2418; font-weight: bold;")
             else:
                 btn.setStyleSheet("")
 
@@ -1318,7 +1330,7 @@ class BattlePanel(QWidget):
         self._shortcut_selected = number
         for i, btn in enumerate(self._tile_strip_btns):
             if i + 1 == number:
-                btn.setStyleSheet("background: #FFF176; font-weight: bold;")
+                btn.setStyleSheet(f"background: {_C_GOLD}; color: #1a2418; font-weight: bold;")
             else:
                 btn.setStyleSheet("")
 
@@ -1372,13 +1384,13 @@ class BattlePanel(QWidget):
         turn = self._state.current_turn
         if turn == "self":
             self._shortcut_status_label.setText("将添加到：我方弃牌区")
-            self._shortcut_status_label.setStyleSheet("color: #1565C0; font-size: 11px; font-weight: bold;")
+            self._shortcut_status_label.setStyleSheet(f"color: {_C_SELF}; font-size: 11px; font-weight: bold;")
         elif turn == "enemy":
             self._shortcut_status_label.setText("将添加到：敌方弃牌区")
-            self._shortcut_status_label.setStyleSheet("color: #C62828; font-size: 11px; font-weight: bold;")
+            self._shortcut_status_label.setStyleSheet(f"color: {_C_ENEMY}; font-size: 11px; font-weight: bold;")
         else:
             self._shortcut_status_label.setText("请先添加弃牌以自动切换回合")
-            self._shortcut_status_label.setStyleSheet("color: #888; font-size: 11px;")
+            self._shortcut_status_label.setStyleSheet(f"color: {_C_MUTED}; font-size: 11px;")
 
     def _rebuild_shortcuts(self) -> None:
         from PyQt6.QtGui import QShortcut
@@ -1621,7 +1633,7 @@ class BattlePanel(QWidget):
         self._stream_discard_found = False
         self._summary_edit.clear()
         self._recommended_label.setText("当前推荐出牌：AI 生成中…")
-        self._recommended_label.setStyleSheet("color:#8e44ad;")
+        self._recommended_label.setStyleSheet(f"color:{_C_AI};")
 
     def append_stream_chunk(self, chunk: str) -> None:
         try:
@@ -1635,7 +1647,7 @@ class BattlePanel(QWidget):
                     discard_id = m.group(1)
                     tile_name = TILE_NAME_MAP.get(discard_id, discard_id)
                     self._recommended_label.setText(f"当前推荐出牌：{tile_name}")
-                    self._recommended_label.setStyleSheet("color:#27ae60; font-weight:bold;")
+                    self._recommended_label.setStyleSheet(f"color:{_C_OK}; font-weight:bold;")
         except Exception:
             pass
 
@@ -1644,26 +1656,26 @@ class BattlePanel(QWidget):
         discard = TILE_NAME_MAP.get(discard_id, discard_id) if discard_id else "--"
         self._recommended_label.setText(f"当前推荐出牌：{discard}")
         self._recommended_label.setStyleSheet(
-            "color:#27ae60; font-weight:bold;" if advice.recommended_discard else ""
+            f"color:{_C_OK}; font-weight:bold;" if advice.recommended_discard else ""
         )
 
-        _TYPE_COLORS = {"攻牌": "#27ae60", "守牌": "#e67e22", "平衡": "#2980b9"}
+        _TYPE_COLORS = {"攻牌": _C_OK, "守牌": _C_WARN, "平衡": _C_SELF}
         st = advice.strategy_type or ""
-        color = _TYPE_COLORS.get(st, "#555555")
+        color = _TYPE_COLORS.get(st, _C_2ND)
         self._strategy_label.setText(f"策略类型：{st or '--'}")
         self._strategy_label.setStyleSheet(f"color:{color}; font-weight:bold;" if st else "")
 
         parts: list[str] = []
         if advice.reasoning_summary:
             parts.append(
-                f'<p style="color:#2c3e50;margin:2px 0">{html.escape(_replace_tile_codes(advice.reasoning_summary))}</p>'
+                f'<p style="color:{_C_TEXT};margin:2px 0">{html.escape(_replace_tile_codes(advice.reasoning_summary))}</p>'
             )
         if advice.forbidden_discards:
             fd = html.escape("、".join(_replace_tile_codes(t) for t in advice.forbidden_discards))
-            parts.append(f'<p style="color:#e74c3c;margin:2px 0">⚠ 禁止出牌：{fd}</p>')
+            parts.append(f'<p style="color:{_C_ERR};margin:2px 0">⚠ 禁止出牌：{fd}</p>')
         if advice.risk_notes:
             parts.append(
-                f'<p style="color:#e67e22;margin:2px 0">⚡ 风险：{html.escape(_replace_tile_codes(advice.risk_notes))}</p>'
+                f'<p style="color:{_C_WARN};margin:2px 0">⚡ 风险：{html.escape(_replace_tile_codes(advice.risk_notes))}</p>'
             )
         self._summary_edit.setHtml("".join(parts))
 
@@ -1676,7 +1688,7 @@ class BattlePanel(QWidget):
             ]
         candidates = " / ".join(_replace_tile_codes(a) for a in ca) if ca else "--"
         self._candidate_label.setText(f"候选动作：{candidates}")
-        self._candidate_label.setStyleSheet("color:#16a085;" if ca else "")
+        self._candidate_label.setStyleSheet(f"color:{_C_CAND};" if ca else "")
         if self._state.last_analysis_at:
             timing_parts: list[str] = []
             if self._state.last_recognition_duration_ms > 0:
@@ -1708,11 +1720,11 @@ class BattlePanel(QWidget):
 
     def set_training_in_progress(self) -> None:
         self._train_success_label.setText("⏳ 正在训练中...")
-        self._train_success_label.setStyleSheet("color: #e67e22; font-size: 11px;")
+        self._train_success_label.setStyleSheet(f"color: {_C_WARN}; font-size: 11px;")
 
     def set_train_success_message(self, message: str) -> None:
         self._train_success_label.setText(message)
-        self._train_success_label.setStyleSheet("color: #27ae60; font-size: 11px;")
+        self._train_success_label.setStyleSheet(f"color: {_C_OK}; font-size: 11px;")
 
     def set_error(self, message: str) -> None:
         self._error_label.setText(message)

@@ -44,6 +44,196 @@ from game.session import GameSession
 from game.state import ALL_TILE_IDS, GameState
 from utils.paths import data_path, template_dir
 
+_MAHJONG_QSS = """
+QWidget {
+    background: #1a2418;
+    color: #e8dcc8;
+    font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+    font-size: 12px;
+}
+QTabWidget::pane {
+    border: 1px solid #4a6040;
+    background: #1a2418;
+}
+QTabBar::tab {
+    background: #243020;
+    color: #a09880;
+    border: 1px solid #4a6040;
+    border-bottom: none;
+    border-radius: 4px 4px 0 0;
+    padding: 4px 12px;
+    margin-right: 2px;
+}
+QTabBar::tab:selected {
+    background: #2d3d28;
+    color: #ffd54f;
+    font-weight: bold;
+}
+QTabBar::tab:hover:!selected {
+    background: #354a30;
+    color: #e8dcc8;
+}
+QGroupBox {
+    background: #243020;
+    border: 1px solid #4a6040;
+    border-radius: 6px;
+    margin-top: 8px;
+    padding-top: 6px;
+    font-weight: bold;
+    color: #ffd54f;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 10px;
+    padding: 0 4px;
+    color: #ffd54f;
+    background: #1a2418;
+    border-radius: 3px;
+}
+QPushButton {
+    background: #2d3d28;
+    color: #e8dcc8;
+    border: 1px solid #4a6040;
+    border-radius: 5px;
+    padding: 3px 10px;
+    min-height: 22px;
+}
+QPushButton:hover {
+    background: #354a30;
+    border-color: #ffd54f;
+    color: #ffd54f;
+}
+QPushButton:pressed {
+    background: #1a2418;
+    border-color: #e53935;
+    color: #e53935;
+}
+QPushButton:disabled {
+    background: #1e2a1a;
+    color: #4a5a40;
+    border-color: #354830;
+}
+QLineEdit, QPlainTextEdit, QTextEdit {
+    background: #1e2a1a;
+    color: #e8dcc8;
+    border: 1px solid #4a6040;
+    border-radius: 4px;
+    padding: 2px 4px;
+    selection-background-color: #e53935;
+    selection-color: #fff;
+}
+QLineEdit:focus, QPlainTextEdit:focus, QTextEdit:focus {
+    border-color: #ffd54f;
+}
+QComboBox {
+    background: #2d3d28;
+    color: #e8dcc8;
+    border: 1px solid #4a6040;
+    border-radius: 4px;
+    padding: 2px 6px;
+    min-height: 22px;
+}
+QComboBox:hover { border-color: #ffd54f; }
+QComboBox::drop-down {
+    border: none;
+    width: 18px;
+}
+QComboBox::down-arrow {
+    image: none;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 6px solid #a09880;
+    margin-right: 4px;
+}
+QComboBox QAbstractItemView {
+    background: #2d3d28;
+    color: #e8dcc8;
+    border: 1px solid #4a6040;
+    selection-background-color: #354a30;
+    selection-color: #ffd54f;
+    outline: none;
+}
+QSpinBox {
+    background: #1e2a1a;
+    color: #e8dcc8;
+    border: 1px solid #4a6040;
+    border-radius: 4px;
+    padding: 2px 4px;
+}
+QSpinBox:hover { border-color: #ffd54f; }
+QSpinBox::up-button, QSpinBox::down-button {
+    background: #2d3d28;
+    border: none;
+    width: 16px;
+}
+QCheckBox { color: #e8dcc8; spacing: 5px; }
+QCheckBox::indicator {
+    width: 14px; height: 14px;
+    border: 1px solid #4a6040;
+    border-radius: 3px;
+    background: #1e2a1a;
+}
+QCheckBox::indicator:checked {
+    background: #e53935;
+    border-color: #e53935;
+}
+QCheckBox::indicator:hover { border-color: #ffd54f; }
+QTableWidget {
+    background: #1e2a1a;
+    color: #e8dcc8;
+    border: 1px solid #4a6040;
+    border-radius: 4px;
+    gridline-color: #354a30;
+    alternate-background-color: #243020;
+}
+QHeaderView::section {
+    background: #354a30;
+    color: #ffd54f;
+    border: none;
+    border-right: 1px solid #4a6040;
+    border-bottom: 1px solid #4a6040;
+    padding: 3px 4px;
+    font-weight: bold;
+}
+QTableWidget::item { padding: 2px 4px; }
+QTableWidget::item:selected {
+    background: #354a30;
+    color: #ffd54f;
+}
+QScrollBar:vertical {
+    background: #1a2418;
+    width: 8px;
+    margin: 0;
+}
+QScrollBar::handle:vertical {
+    background: #4a6040;
+    border-radius: 4px;
+    min-height: 20px;
+}
+QScrollBar::handle:vertical:hover { background: #ffd54f; }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+QScrollBar:horizontal {
+    background: #1a2418;
+    height: 8px;
+}
+QScrollBar::handle:horizontal {
+    background: #4a6040;
+    border-radius: 4px;
+    min-width: 20px;
+}
+QScrollBar::handle:horizontal:hover { background: #ffd54f; }
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
+QStatusBar {
+    background: #243020;
+    color: #a09880;
+    border-top: 1px solid #4a6040;
+}
+QDialog { background: #1a2418; }
+QDialogButtonBox QPushButton { min-width: 70px; }
+QMessageBox { background: #1a2418; }
+"""
+
 
 def _hog_sample_counts(samples_dir: str) -> dict[str, int]:
     """Return per-class png counts exactly as HOG training will consume them."""
@@ -540,6 +730,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("台州麻将AI — 视觉识别层 v1.0")
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint)
         self.resize(860, 560)
+        self.setStyleSheet(_MAHJONG_QSS)
 
         # 初始化各模块
         self._layout_calc = LayoutCalculator(config)

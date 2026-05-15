@@ -40,17 +40,17 @@ from battle.state import BattleAdvice, BattleState, meld_from_ids, tile_from_id
 from game.state import ALL_TILE_IDS, MeldGroup
 
 
-_C_SELF  = "#64b5f6"   # 自家回合（蓝）
-_C_ENEMY = "#e53935"   # 敌方回合（朱红）
-_C_OK    = "#66bb6a"   # 成功/推荐（绿）
-_C_WARN  = "#ffa726"   # 警告（橙）
-_C_ERR   = "#ef5350"   # 错误（红）
-_C_AI    = "#ce93d8"   # AI生成中（紫）
-_C_CAND  = "#4db6ac"   # 候选动作（青绿）
-_C_GOLD  = "#ffd54f"   # 金色强调
-_C_MUTED = "#6a6050"   # 弱文字
-_C_2ND   = "#a09880"   # 次文字
-_C_TEXT  = "#e8dcc8"   # 主文字
+_C_SELF  = "#89b4fa"   # 自家回合（柔蓝）
+_C_ENEMY = "#f38ba8"   # 敌方回合（柔红）
+_C_OK    = "#a6e3a1"   # 成功/推荐（柔绿）
+_C_WARN  = "#fab387"   # 警告（柔橙）
+_C_ERR   = "#f38ba8"   # 错误（柔红）
+_C_AI    = "#cba6f7"   # AI生成中（柔紫）
+_C_CAND  = "#94e2d5"   # 候选动作（柔青）
+_C_GOLD  = "#f9e2af"   # 暖黄强调（用于选中）
+_C_MUTED = "#5a6a85"   # 弱文字
+_C_2ND   = "#8a9bb8"   # 次文字
+_C_TEXT  = "#c8d5e8"   # 主文字
 
 TILE_NAME_MAP = {
     **{f"{i}m": f"{i}万" for i in range(1, 10)},
@@ -570,7 +570,7 @@ class AnalysisPanel(QGroupBox):
                 for col in range(7):
                     cell = self._table.item(row, col)
                     if cell:
-                        cell.setBackground(QColor("#2d4428"))
+                        cell.setBackground(QColor("#1e3a52"))
 
 
 class BattlePanel(QWidget):

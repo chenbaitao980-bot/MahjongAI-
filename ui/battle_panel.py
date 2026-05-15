@@ -644,7 +644,6 @@ class BattlePanel(QWidget):
         content.addWidget(left_widget)
 
         center_box = self._build_center_group()
-        center_box.setMaximumWidth(520)
         self._train_success_label = QLabel("")
         self._train_success_label.setWordWrap(True)
         self._train_success_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -658,12 +657,15 @@ class BattlePanel(QWidget):
         center.addWidget(self._train_success_label)
         center.addStretch()
         center.addWidget(self._meta_label)
-        content.addLayout(center, 1)
+        center_widget = QWidget()
+        center_widget.setMaximumWidth(540)
+        center_widget.setLayout(center)
+        content.addWidget(center_widget, 1)
 
         right = QVBoxLayout()
-        right.addWidget(self._build_advice_group())
-        right.addWidget(self._analysis_panel)
-        content.addLayout(right, 1)
+        right.addWidget(self._build_advice_group(), 3)
+        right.addWidget(self._analysis_panel, 2)
+        content.addLayout(right, 2)
 
     def _build_player_group(self, title: str, enemy: bool) -> QGroupBox:
         box = QGroupBox(title)
@@ -848,6 +850,7 @@ class BattlePanel(QWidget):
 
         self._summary_edit = QTextEdit()
         self._summary_edit.setReadOnly(True)
+        self._summary_edit.setMinimumHeight(180)
         self._summary_edit.setPlaceholderText("推荐理由摘要会显示在这里")
         layout.addWidget(self._summary_edit, 1)
 

@@ -539,7 +539,7 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("台州麻将AI — 视觉识别层 v1.0")
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint)
-        self.resize(1000, 680)
+        self.resize(860, 560)
 
         # 初始化各模块
         self._layout_calc = LayoutCalculator(config)

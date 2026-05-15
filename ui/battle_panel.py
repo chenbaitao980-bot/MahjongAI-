@@ -521,7 +521,7 @@ class AnalysisPanel(QGroupBox):
         self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
-        self._table.setMinimumHeight(260)
+        self._table.setMinimumHeight(140)
         self._table.setAlternatingRowColors(True)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(6, 4, 6, 4)
@@ -636,7 +636,7 @@ class BattlePanel(QWidget):
         root.addLayout(content, 1)
 
         left_widget = QWidget()
-        left_widget.setMaximumWidth(500)
+        left_widget.setMaximumWidth(290)
         left = QVBoxLayout(left_widget)
         left.setContentsMargins(0, 0, 0, 0)
         left.addWidget(self._build_player_group("敌方牌区", enemy=True))
@@ -658,7 +658,7 @@ class BattlePanel(QWidget):
         center.addStretch()
         center.addWidget(self._meta_label)
         center_widget = QWidget()
-        center_widget.setMaximumWidth(540)
+        center_widget.setMaximumWidth(370)
         center_widget.setLayout(center)
         content.addWidget(center_widget, 1)
 
@@ -828,7 +828,7 @@ class BattlePanel(QWidget):
         ai_row.addWidget(self._ai_provider_combo)
         self._ai_model_edit = QLineEdit()
         self._ai_model_edit.setPlaceholderText("模型名称")
-        self._ai_model_edit.setFixedWidth(160)
+        self._ai_model_edit.setFixedWidth(120)
         self._ai_model_edit.setEnabled(self._state.deepseek_enabled)
         self._ai_model_edit.setText(self._state.ai_model or self._default_model_for_provider(self._state.ai_provider))
         self._ai_model_edit.editingFinished.connect(self._on_ai_model_changed)
@@ -850,7 +850,7 @@ class BattlePanel(QWidget):
 
         self._summary_edit = QTextEdit()
         self._summary_edit.setReadOnly(True)
-        self._summary_edit.setMinimumHeight(180)
+        self._summary_edit.setMinimumHeight(100)
         self._summary_edit.setPlaceholderText("推荐理由摘要会显示在这里")
         layout.addWidget(self._summary_edit, 1)
 
@@ -1113,7 +1113,7 @@ class BattlePanel(QWidget):
             if not tile.tile_id:
                 continue
             btn = QPushButton(tile_display(tile.tile_id))
-            btn.setFixedWidth(70)
+            btn.setFixedWidth(52)
             btn.setToolTip("点击删除")
             btn.clicked.connect(
                 lambda _checked, i=idx, e=is_enemy: self._on_discard_tile_click(i, e)
@@ -1159,7 +1159,7 @@ class BattlePanel(QWidget):
             conf = float(getattr(tile, "confidence", 1.0) or 1.0)
             label = tile_display(tile.tile_id)
             btn = QPushButton(label)
-            btn.setFixedWidth(70)
+            btn.setFixedWidth(52)
             btn.setToolTip(f"置信度: {conf:.0%}  点击操作")
             if conf < 0.9:
                 btn.setStyleSheet("color: red; font-weight: bold;")
@@ -1308,7 +1308,7 @@ class BattlePanel(QWidget):
         for number, tile_id in tiles:
             label = TILE_NAME_MAP.get(tile_id, tile_id)
             btn = QPushButton(label)
-            btn.setFixedWidth(52)
+            btn.setFixedWidth(40)
             btn.clicked.connect(lambda _=None, n=number: self._shortcut_select(n))
             self._tile_strip_btns.append(btn)
             self._tile_strip_layout.addWidget(btn)

@@ -220,10 +220,6 @@ class DiscardAreaRecognizer:
 # ------------------------------------------------------------------ #
 
 def _resolve_discard_samples_dir(template_dir: str) -> str:
-    """从 template_dir 推导 data/tile_samples_discard_cleaned/ 路径。
-
-    template_dir 一般为 <project>/templates/tiles，
-    data/ 在项目根目录下，即两级向上。
-    """
-    root = os.path.abspath(os.path.join(template_dir, "..", ".."))
-    return os.path.join(root, "data", "tile_samples_discard_cleaned")
+    """返回弃牌样本目录，兼容开发环境和打包后的 exe。"""
+    from utils.paths import data_path
+    return data_path(os.path.join("data", "tile_samples_discard_cleaned"))

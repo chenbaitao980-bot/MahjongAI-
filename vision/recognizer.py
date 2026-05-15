@@ -98,8 +98,8 @@ class TileRecognizer:
 
         if os.path.isdir(template_dir):
             self.load_templates(template_dir)
-            root_dir = os.path.abspath(os.path.join(template_dir, "..", ".."))
-            self.load_training_samples(os.path.join(root_dir, "data", "tile_samples_cleaned"))
+            from utils.paths import data_path
+            self.load_training_samples(data_path(os.path.join("data", "tile_samples_cleaned")))
 
     def load_templates(self, template_dir: str) -> int:
         loaded = 0

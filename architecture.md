@@ -1,10 +1,23 @@
 # MahjongAI 知识图谱
 
-> 自动生成于 2026-05-04 20:49 | 最后人工更新：2026-05-15（回合指示器 + 快捷键操作模块）
+> 自动生成于 2026-05-04 20:49 | 最后人工更新：2026-05-15（快捷键配置持久化 + 分析按钮改名）
 
 ---
 
 ## 变更日志
+
+### 2026-05-15 — 快捷键配置持久化 + 分析按钮改名
+
+#### 修改 `ui/battle_panel.py`
+- "重试"按钮改名为**"分析"**
+- 快捷键配置新增"分析"选项，默认键 `A`，触发 `reanalyze_with_ai_requested`
+- `__init__` 从 `config["shortcut_keys"]` 读取已保存键位（合并到硬编码默认值）
+- `_open_shortcut_config()` 保存后将键位写入 `self._config["shortcut_keys"]` 并发射 `config_save_requested` 信号
+- 新增信号 `config_save_requested = pyqtSignal()`
+- 快捷键配置对话框支持输入 `Space`/`空格`/空格字符均识别为空格键
+
+#### 修改 `ui/main_window.py`
+- 连接 `battle_panel.config_save_requested` → `_save_config()`，配置修改后立即写入 `config/settings.yaml`
 
 ### 2026-05-15 — 回合指示器 + 快捷键操作模块
 

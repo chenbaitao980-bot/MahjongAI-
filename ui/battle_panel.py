@@ -646,12 +646,12 @@ class BattlePanel(QWidget):
         center = QVBoxLayout()
         center.addWidget(center_box)
         center.addWidget(self._train_success_label)
-        center.addWidget(self._analysis_panel)
         center.addStretch()
         content.addLayout(center, 1)
 
         right = QVBoxLayout()
         right.addWidget(self._build_advice_group())
+        right.addWidget(self._analysis_panel)
         content.addLayout(right, 1)
 
     def _build_player_group(self, title: str, enemy: bool) -> QGroupBox:

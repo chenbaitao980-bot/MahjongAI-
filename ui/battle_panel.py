@@ -656,9 +656,13 @@ class BattlePanel(QWidget):
         center.addStretch()
         content.addLayout(center, 1)
 
+        self._meta_label = QLabel("最近一次分析：--")
+        self._meta_label.setWordWrap(True)
+        self._meta_label.setStyleSheet("color:#aaa; font-size:10px; padding: 2px 4px;")
         right = QVBoxLayout()
         right.addWidget(self._build_advice_group())
         right.addWidget(self._analysis_panel)
+        right.addWidget(self._meta_label)
         content.addLayout(right, 1)
 
     def _build_player_group(self, title: str, enemy: bool) -> QGroupBox:
@@ -867,10 +871,6 @@ class BattlePanel(QWidget):
         self._progress_label.setVisible(False)
         layout.addWidget(self._progress_label)
 
-        self._meta_label = QLabel("最近一次分析：--")
-        self._meta_label.setWordWrap(True)
-        self._meta_label.setStyleSheet("color:#aaa; font-size:10px;")
-        layout.addWidget(self._meta_label)
         return box
 
     def _provider_text(self) -> str:

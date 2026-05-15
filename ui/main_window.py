@@ -538,6 +538,7 @@ class MainWindow(QMainWindow):
         self._hog_train_thread: HOGTrainerThread | None = None
 
         self.setWindowTitle("台州麻将AI — 视觉识别层 v1.0")
+        self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint)
         self.resize(1000, 680)
 
         # 初始化各模块

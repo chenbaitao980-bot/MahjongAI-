@@ -847,10 +847,6 @@ class BattlePanel(QWidget):
         self._candidate_label.setWordWrap(True)
         layout.addWidget(self._candidate_label)
 
-        self._meta_label = QLabel("最近一次分析：--")
-        self._meta_label.setWordWrap(True)
-        layout.addWidget(self._meta_label)
-
         self._error_label = QLabel("")
         self._error_label.setWordWrap(True)
         self._error_label.setStyleSheet("color:#c0392b;")
@@ -866,6 +862,11 @@ class BattlePanel(QWidget):
         self._progress_label.setStyleSheet("color:#8e44ad; font-size:11px;")
         self._progress_label.setVisible(False)
         layout.addWidget(self._progress_label)
+
+        self._meta_label = QLabel("最近一次分析：--")
+        self._meta_label.setWordWrap(True)
+        self._meta_label.setStyleSheet("color:#aaa; font-size:10px;")
+        layout.addWidget(self._meta_label)
         return box
 
     def _provider_text(self) -> str:

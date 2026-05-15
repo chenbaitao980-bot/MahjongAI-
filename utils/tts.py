@@ -6,6 +6,10 @@ import threading
 _q: queue.Queue[str | None] = queue.Queue()
 _thread: threading.Thread | None = None
 
+# SAPI flags
+_SVSFlagsAsync = 1
+_SVSFIsXML = 0x20
+
 
 def _tts_worker() -> None:
     import pythoncom
@@ -13,8 +17,8 @@ def _tts_worker() -> None:
 
     pythoncom.CoInitialize()
     speaker = win32com.client.Dispatch("SAPI.SpVoice")
-    speaker.Volume = 100   # 0-100
-    speaker.Rate = -1      # -10(最慢) ~ +10(最快)，-1 接近正常语速
+    speaker.Volume = 100
+    speaker.Rate = -2   # 稍慢，吐字更清晰
 
     # 优先选中文语音
     voices = speaker.GetVoices()
@@ -24,12 +28,19 @@ def _tts_worker() -> None:
             speaker.Voice = voices.Item(i)
             break
 
+    # 预热音频设备：播一段静音，避免第一次真正播报时被硬件丢开头
+    speaker.Speak('<silence msec="300"/>', _SVSFIsXML)
+    speaker.WaitUntilDone(-1)
+
     while True:
         text = _q.get()
         if text is None:
             break
         try:
-            speaker.Speak(text)   # 同步阻塞，说完再取下一条
+            # 每条前加 80ms 静音垫片，防止音频设备省电后截断开头
+            xml = f'<silence msec="80"/>{text}'
+            speaker.Speak(xml, _SVSFlagsAsync | _SVSFIsXML)
+            speaker.WaitUntilDone(-1)
         except Exception:
             pass
 

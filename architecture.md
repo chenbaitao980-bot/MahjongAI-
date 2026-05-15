@@ -1,10 +1,22 @@
 # MahjongAI 知识图谱
 
-> 自动生成于 2026-05-04 20:49 | 最后人工更新：2026-05-15（修复语音播报无声）
+> 自动生成于 2026-05-04 20:49 | 最后人工更新：2026-05-15（语音播报改用 win32com SAPI）
 
 ---
 
 ## 变更日志
+
+### 2026-05-15 — 语音播报改用 win32com SAPI（洪亮稳定）
+
+#### 修改 `utils/tts.py`
+- **根本原因**：pyttsx3 的 `runAndWait()` 在同一引擎循环调用时内部状态卡死，导致首次播报不完整、后续完全无声
+- **修复**：放弃 pyttsx3，改为 `win32com.client.Dispatch("SAPI.SpVoice")` 直接调用 Windows SAPI COM API
+- `speaker.Speak(text)` 同步阻塞，说完再取队列下一条，不存在状态残留问题
+- `Volume=100`（最大音量）、`Rate=-1`（接近正常语速，比默认稍慢更清晰）
+- 依赖 `pythoncom.CoInitialize()` 初始化 COM，`pywin32` 已由 pyttsx3 一并安装
+- `_ensure_thread()` 保持不变：线程死亡时自动重建
+
+---
 
 ### 2026-05-15 — 修复语音播报无声（线程模型重构）
 

@@ -1407,6 +1407,7 @@ class BattlePanel(QWidget):
         toggle_key = self._shortcut_keys.get("切换回合", "Q")
         if toggle_key:
             _sc(toggle_key, self._shortcut_toggle_turn)
+        self._install_global_hook()
 
     def _open_shortcut_config(self) -> None:
         from PyQt6.QtWidgets import QDialog, QFormLayout, QLineEdit, QDialogButtonBox
@@ -1712,10 +1713,69 @@ class BattlePanel(QWidget):
         self._meta_label.setText("最近一次分析：--")
         self._error_label.clear()
 
+    @staticmethod
+    def _qkey_to_kb(qkey: str) -> str:
+        return {
+            "Return": "enter", "Space": "space",
+            "Delete": "delete", "Backspace": "backspace",
+            "Escape": "escape",
+        }.get(qkey, qkey.lower())
+
+    def _install_global_hook(self) -> None:
+        self._uninstall_global_hook()
+        try:
+            import keyboard as _kb
+        except ImportError:
+            return
+        actions: dict[str, callable] = {}
+        suit_map = {"万": "m", "筒": "p", "条": "s", "字": "z"}
+        for suit_label, suit_code in suit_map.items():
+            k = self._qkey_to_kb(self._shortcut_keys.get(suit_label, ""))
+            if k:
+                actions[k] = lambda c=suit_code: self._switch_shortcut_suit(c)
+        for n in range(1, 10):
+            actions[str(n)] = lambda v=n: self._shortcut_select(v)
+        for label, fn in [
+            ("添加", self._shortcut_add),
+            ("撤销", self._shortcut_undo),
+            ("清空", self._shortcut_clear),
+            ("切换回合", self._shortcut_toggle_turn),
+            ("分析", lambda: self.reanalyze_with_ai_requested.emit("retry")),
+        ]:
+            k = self._qkey_to_kb(self._shortcut_keys.get(label, ""))
+            if k:
+                actions[k] = fn
+        from PyQt6.QtCore import QTimer
+
+        def _on_key(event):
+            if event.event_type != "down":
+                return
+            if not self._game_in_progress:
+                return
+            fn = actions.get(event.name)
+            if fn:
+                QTimer.singleShot(0, fn)
+
+        self._global_kb_hook = _kb.hook(_on_key, suppress=False)
+
+    def _uninstall_global_hook(self) -> None:
+        hook = getattr(self, "_global_kb_hook", None)
+        if hook is not None:
+            try:
+                import keyboard as _kb
+                _kb.unhook(hook)
+            except Exception:
+                pass
+            self._global_kb_hook = None
+
     def set_game_started(self, started: bool) -> None:
         self._game_in_progress = started
         self._start_btn.setEnabled(not started)
         self._end_btn.setEnabled(started)
+        if started:
+            self._install_global_hook()
+        else:
+            self._uninstall_global_hook()
 
     def set_busy(self, busy: bool, message: str = "") -> None:
         self._start_btn.setEnabled(not busy and not self._game_in_progress)

@@ -589,7 +589,7 @@ class BattlePanel(QWidget):
         self._tile_strip_btns: list[QPushButton] = []
         _default_shortcut_keys = {
             "万": "W", "筒": "T", "条": "B", "字": "Z",
-            "添加": "Return", "撤销": "U", "清空": "C", "分析": "A",
+            "添加": "Return", "撤销": "U", "清空": "C", "分析": "A", "切换回合": "Q",
         }
         saved = self._config.get("shortcut_keys", {})
         self._shortcut_keys = {**_default_shortcut_keys, **saved}
@@ -1248,8 +1248,9 @@ class BattlePanel(QWidget):
         undo_key = self._shortcut_keys.get("撤销", "U")
         clear_key = self._shortcut_keys.get("清空", "C")
         analyze_key = self._shortcut_keys.get("分析", "A")
+        toggle_key = self._shortcut_keys.get("切换回合", "Q")
         self._shortcut_hint_label = QLabel(
-            f"添加:{add_key}  撤销:{undo_key}  清空:{clear_key}  分析:{analyze_key}  (数字键1-9选牌)"
+            f"添加:{add_key}  撤销:{undo_key}  清空:{clear_key}  分析:{analyze_key}  切换回合:{toggle_key}  (数字键1-9选牌)"
         )
         self._shortcut_hint_label.setStyleSheet("color: #555; font-size: 11px;")
         vbox.addWidget(self._shortcut_hint_label)
@@ -1342,6 +1343,16 @@ class BattlePanel(QWidget):
         enemy = (turn == "enemy")
         self._clear_discards(enemy)
 
+    def _shortcut_toggle_turn(self) -> None:
+        if self._state.current_turn == "enemy":
+            self._state.current_turn = "self"
+        else:
+            self._state.current_turn = "enemy"
+        self._update_turn_label()
+        self._update_shortcut_status()
+        if self._state.current_turn == "self":
+            self.recognition_only_requested.emit("manual_recognize")
+
     def _update_shortcut_status(self) -> None:
         if not hasattr(self, "_shortcut_status_label"):
             return
@@ -1387,6 +1398,9 @@ class BattlePanel(QWidget):
         analyze_key = self._shortcut_keys.get("分析", "A")
         if analyze_key:
             _sc(analyze_key, lambda: self.reanalyze_with_ai_requested.emit("retry"))
+        toggle_key = self._shortcut_keys.get("切换回合", "Q")
+        if toggle_key:
+            _sc(toggle_key, self._shortcut_toggle_turn)
 
     def _open_shortcut_config(self) -> None:
         from PyQt6.QtWidgets import QDialog, QFormLayout, QLineEdit, QDialogButtonBox
@@ -1431,7 +1445,8 @@ class BattlePanel(QWidget):
             f"添加:{self._shortcut_keys.get('添加','Return')}  "
             f"撤销:{self._shortcut_keys.get('撤销','U')}  "
             f"清空:{self._shortcut_keys.get('清空','C')}  "
-            f"分析:{self._shortcut_keys.get('分析','A')}  (数字键1-9选牌)"
+            f"分析:{self._shortcut_keys.get('分析','A')}  "
+            f"切换回合:{self._shortcut_keys.get('切换回合','Q')}  (数字键1-9选牌)"
         )
         self._rebuild_shortcuts()
         self.config_save_requested.emit({"shortcut_keys": dict(self._shortcut_keys)})

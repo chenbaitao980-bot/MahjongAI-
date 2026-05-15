@@ -1005,6 +1005,8 @@ class BattlePanel(QWidget):
         self._state.current_turn = "self" if enemy else "enemy"
         self._update_turn_label()
         self._update_shortcut_status()
+        if enemy:
+            self.recognition_only_requested.emit("manual_recognize")
 
     def _undo_discard(self, enemy: bool) -> None:
         discards = self._state.enemy_discards if enemy else self._state.self_discards

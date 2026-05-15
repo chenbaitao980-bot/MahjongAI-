@@ -1,10 +1,32 @@
 # MahjongAI 知识图谱
 
-> 自动生成于 2026-05-04 20:49 | 最后人工更新：2026-05-15（快捷键配置持久化 + 分析按钮改名）
+> 自动生成于 2026-05-04 20:49 | 最后人工更新：2026-05-15（语音播报出牌功能）
 
 ---
 
 ## 变更日志
+
+### 2026-05-15 — 语音播报出牌功能
+
+#### 新增 `utils/tts.py`
+- 封装 pyttsx3 Windows TTS，模块级单例 `_engine`，懒初始化
+- 启动时自动选取中文语音（微软慧慧 / 雅雅），语速设为 150（比默认 200 更清晰）
+- `speak_discard(tile_chinese_name)` 在后台 daemon 线程播报 `"打X万/条/筒/字"`，不阻塞 UI 主线程
+- 线程间互斥锁 `_lock` 防止并发调用导致引擎状态错误
+
+#### 修改 `ui/battle_panel.py`
+- `__init__` 新增实例变量 `_voice_enabled: bool`，从 `config["battle"]["voice_enabled"]` 读取
+- `_build_advice_group()` 在 AI 开关行下方添加"语音播报出牌"复选框（默认不勾选）
+- 新增 `_on_voice_toggle(checked)` 处理器：更新 `_voice_enabled`，同步写入 `_config["battle"]["voice_enabled"]`，发射 `config_save_requested` 持久化
+- `_render_advice()` 在渲染推荐出牌后，若 `_voice_enabled` 且牌名非空，调用 `speak_discard(discard)`
+
+#### 修改 `config/settings.yaml`
+- `battle` 节点新增 `voice_enabled: false`（默认关闭）
+
+#### 修改 `requirements.txt`
+- 新增依赖 `pyttsx3>=2.90`
+
+---
 
 ### 2026-05-15 — 快捷键配置持久化 + 分析按钮改名
 
@@ -566,6 +588,7 @@
 | `ui\region_selector.py` | 1 | 0 | 7KB |
 | `vision\layout.py` | 2 | 0 | 7KB |
 | `debug_recognition.py` | 0 | 2 | 6KB |
+| `utils\tts.py` | 0 | 2 | 1KB |
 | `battle\state.py` | 2 | 5 | 5KB |
 | `game\state.py` | 6 | 0 | 4KB |
 | `game\tiles.py` | 0 | 8 | 3KB |

@@ -108,7 +108,7 @@ QWEN_VISION_MODELS = [
 
 
 def tile_display(tile_id: str) -> str:
-    return f"{TILE_NAME_MAP.get(tile_id, tile_id)} ({tile_id})"
+    return TILE_NAME_MAP.get(tile_id, tile_id)
 
 
 def _replace_tile_codes(text: str) -> str:

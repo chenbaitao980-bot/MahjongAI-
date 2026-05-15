@@ -1386,6 +1386,9 @@ class BattlePanel(QWidget):
         dlg = QDialog(self)
         dlg.setWindowTitle("快捷键配置")
         form = QFormLayout(dlg)
+        hint = QLabel("空格键请输入：Space（或直接按空格）")
+        hint.setStyleSheet("color: #888; font-size: 11px;")
+        form.addRow(hint)
         editors: dict[str, QLineEdit] = {}
         for label, default_key in self._shortcut_keys.items():
             ed = QLineEdit(default_key)
@@ -1401,7 +1404,12 @@ class BattlePanel(QWidget):
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
         for label, ed in editors.items():
-            val = ed.text().strip()
+            val = ed.text()
+            # 将空格字符/中文"空格"统一转为 QKeySequence 识别的 "Space"
+            if val == " " or val.strip().lower() in ("space", "空格"):
+                val = "Space"
+            else:
+                val = val.strip()
             if val:
                 self._shortcut_keys[label] = val
         # 更新牌型按钮文本

@@ -1404,16 +1404,40 @@ class BattlePanel(QWidget):
 
     def _open_shortcut_config(self) -> None:
         from PyQt6.QtWidgets import QDialog, QFormLayout, QLineEdit, QDialogButtonBox
+        from PyQt6.QtCore import Qt
+        from PyQt6.QtGui import QKeySequence, QKeyEvent
+
+        # 按键录入框：获得焦点后直接按键录入，无需手动输入字符串
+        class _KeyCaptureEdit(QLineEdit):
+            _MODIFIERS = {
+                Qt.Key.Key_Control, Qt.Key.Key_Shift,
+                Qt.Key.Key_Alt, Qt.Key.Key_Meta,
+            }
+
+            def keyPressEvent(self, e: QKeyEvent):
+                if e.key() in self._MODIFIERS:
+                    return
+                seq = QKeySequence(e.key()).toString()
+                if not seq:
+                    return
+                self.setText(seq)
+
+            def focusInEvent(self, e):
+                super().focusInEvent(e)
+                self.setPlaceholderText("")
+                self.selectAll()
+
         dlg = QDialog(self)
         dlg.setWindowTitle("快捷键配置")
         form = QFormLayout(dlg)
-        hint = QLabel("空格键请输入：Space（或直接按空格）")
+        hint = QLabel("点击输入框后直接按目标键即可录入")
         hint.setStyleSheet("color: #888; font-size: 11px;")
         form.addRow(hint)
-        editors: dict[str, QLineEdit] = {}
+        editors: dict[str, _KeyCaptureEdit] = {}
         for label, default_key in self._shortcut_keys.items():
-            ed = QLineEdit(default_key)
-            ed.setMaxLength(20)
+            ed = _KeyCaptureEdit(default_key)
+            ed.setPlaceholderText("点击后按键...")
+            ed.setReadOnly(False)
             editors[label] = ed
             form.addRow(label, ed)
         btns = QDialogButtonBox(
@@ -1425,12 +1449,7 @@ class BattlePanel(QWidget):
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
         for label, ed in editors.items():
-            val = ed.text()
-            # 将空格字符/中文"空格"统一转为 QKeySequence 识别的 "Space"
-            if val == " " or val.strip().lower() in ("space", "空格"):
-                val = "Space"
-            else:
-                val = val.strip()
+            val = ed.text().strip()
             if val:
                 self._shortcut_keys[label] = val
         # 更新牌型按钮文本

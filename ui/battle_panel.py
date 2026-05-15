@@ -571,6 +571,7 @@ class BattlePanel(QWidget):
     reanalyze_with_ai_requested = pyqtSignal(str)  # 重试：不识别，重跑本地+AI
     config_requested = pyqtSignal()
     config_save_requested = pyqtSignal(dict)        # 请求主窗口保存 config 到磁盘（携带需更新的 key→value）
+    _global_key_pressed = pyqtSignal(str)           # 全局键盘钩子 → 主线程（内部使用）
     tile_correction_requested = pyqtSignal(int, str)   # (tile_index, correct_tile_id)
     meld_correction_requested = pyqtSignal(int, str)   # (flat_meld_tile_index, correct_tile_id)
 
@@ -594,6 +595,9 @@ class BattlePanel(QWidget):
         saved = self._config.get("shortcut_keys", {})
         self._shortcut_keys = {**_default_shortcut_keys, **saved}
         self._active_shortcuts: list = []
+        self._global_kb_hook = None
+        self._global_actions: dict = {}
+        self._global_key_pressed.connect(self._on_global_key)
         self._setup_ui()
         self._rebuild_shortcuts()
         self._render_state()
@@ -1727,6 +1731,7 @@ class BattlePanel(QWidget):
             import keyboard as _kb
         except ImportError:
             return
+        # 构建 key_name → action 映射，存到实例变量供槽函数使用
         actions: dict[str, callable] = {}
         suit_map = {"万": "m", "筒": "p", "条": "s", "字": "z"}
         for suit_label, suit_code in suit_map.items():
@@ -1745,18 +1750,23 @@ class BattlePanel(QWidget):
             k = self._qkey_to_kb(self._shortcut_keys.get(label, ""))
             if k:
                 actions[k] = fn
-        from PyQt6.QtCore import QTimer
+        self._global_actions = actions
 
+        # 使用 pyqtSignal 跨线程安全通信（比 QTimer.singleShot 更可靠）
         def _on_key(event):
             if event.event_type != "down":
                 return
             if not self._game_in_progress:
                 return
-            fn = actions.get(event.name)
-            if fn:
-                QTimer.singleShot(0, fn)
+            if event.name in self._global_actions:
+                self._global_key_pressed.emit(event.name)
 
         self._global_kb_hook = _kb.hook(_on_key, suppress=False)
+
+    def _on_global_key(self, key_name: str) -> None:
+        fn = self._global_actions.get(key_name)
+        if fn:
+            fn()
 
     def _uninstall_global_hook(self) -> None:
         hook = getattr(self, "_global_kb_hook", None)

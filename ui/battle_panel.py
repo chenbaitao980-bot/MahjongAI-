@@ -522,7 +522,7 @@ class _TileCorrectDialog(QDialog):
 class AnalysisPanel(QGroupBox):
     """展示每次 AI 分析的候选牌评分表格。"""
 
-    COLS = ["出牌", "向听后", "进张数", "危险度", "潜在番", "综合分", "MC胜率"]
+    COLS = ["出牌", "听后", "进张", "危险", "潜番", "综合", "MC%"]
 
     def __init__(self) -> None:
         super().__init__("候选分析")

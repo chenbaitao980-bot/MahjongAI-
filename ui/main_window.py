@@ -997,7 +997,7 @@ class MainWindow(QMainWindow):
         self._battle_panel.state_reanalyze_requested.connect(self._on_battle_state_reanalyze_requested)
         self._battle_panel.reanalyze_with_ai_requested.connect(self._on_battle_reanalyze_with_ai_requested)
         self._battle_panel.config_requested.connect(self._open_api_config_dialog)
-        self._battle_panel.config_save_requested.connect(self._save_config)
+        self._battle_panel.config_save_requested.connect(self._on_battle_config_save)
         self._battle_panel.tile_correction_requested.connect(self._on_battle_tile_correction)
         self._battle_panel.meld_correction_requested.connect(self._on_battle_meld_correction)
         layout.addWidget(self._battle_panel)
@@ -1868,6 +1868,10 @@ class MainWindow(QMainWindow):
 
     def _refresh_template_status(self):
         self._tmpl_status.setText(self._get_template_status())
+
+    def _on_battle_config_save(self, updates: dict):
+        self._config.update(updates)
+        self._save_config()
 
     def _save_config(self):
         """将当前 config 写回 settings.yaml。"""

@@ -6,21 +6,18 @@ app:
   version: 1.0.0
 battle:
   ai_recognition_enabled: false
+  voice_enabled: false
 deepseek:
   api_key: sk-1287db910c9146e8aba8240f6e01c053
   base_url: https://api.deepseek.com
   model: deepseek-chat
-qianwen:
-  api_key: sk-6cd1e408ea5745dc83cf3c1d39f2e5e1
-  base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
-  model: qwen-turbo-latest
 event_reference:
   image: C:\MahjongAI\data\event_reference\current.png
 game_window:
-  height: 360
-  left: 3
-  top: 436
-  width: 628
+  height: 352
+  left: 7
+  top: 400
+  width: 630
 layout:
   decision_buttons:
     h: 0.217593
@@ -80,6 +77,20 @@ layout:
     y: 0.777778
 layout_reference:
   image: D:\claude\project\MahjongAI\MahjongAI\data\layout_reference\current.png
+qianwen:
+  api_key: sk-6cd1e408ea5745dc83cf3c1d39f2e5e1
+  base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  model: qwen-turbo-latest
+shortcut_keys:
+  万: Q
+  分析: A
+  切换回合: F
+  字: R
+  撤销: Del
+  条: E
+  添加: Space
+  清空: P
+  筒: W
 vision:
   glm:
     api_key: 1c11cc76a4a242b0be30acae10d21f1d.o9Pebs7w3FibolNo

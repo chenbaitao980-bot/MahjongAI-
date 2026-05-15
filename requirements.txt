@@ -5,3 +5,4 @@ pyyaml>=6.0.1
 numpy>=1.26.0
 pyinstaller>=6.5.0
 keyboard>=0.13.5
+pyttsx3>=2.90

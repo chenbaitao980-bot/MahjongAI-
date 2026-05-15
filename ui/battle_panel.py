@@ -594,6 +594,7 @@ class BattlePanel(QWidget):
             ai_recognition_enabled=bool(self._config.get("battle", {}).get("ai_recognition_enabled", False)),
             vision_provider=self._config.get("vision", {}).get("provider", "auto"),
         )
+        self._voice_enabled: bool = bool(self._config.get("battle", {}).get("voice_enabled", False))
         self._stream_buffer = ""
         self._stream_discard_found = False
         self._shortcut_suit = "m"
@@ -848,6 +849,14 @@ class BattlePanel(QWidget):
         ai_row.addStretch()
         layout.addLayout(ai_row)
 
+        voice_row = QHBoxLayout()
+        self._voice_checkbox = QCheckBox("语音播报出牌")
+        self._voice_checkbox.setChecked(self._voice_enabled)
+        self._voice_checkbox.toggled.connect(self._on_voice_toggle)
+        voice_row.addWidget(self._voice_checkbox)
+        voice_row.addStretch()
+        layout.addLayout(voice_row)
+
         self._recommended_label = QLabel("当前推荐出牌：--")
         self._recommended_label.setWordWrap(True)
         layout.addWidget(self._recommended_label)
@@ -946,6 +955,11 @@ class BattlePanel(QWidget):
         self._ai_provider_combo.setEnabled(checked)
         self._ai_model_edit.setEnabled(checked)
         self._record_and_emit("toggle_deepseek", {"enabled": checked})
+
+    def _on_voice_toggle(self, checked: bool) -> None:
+        self._voice_enabled = checked
+        self._config.setdefault("battle", {})["voice_enabled"] = checked
+        self.config_save_requested.emit(self._config)
 
     def _on_ai_provider_changed(self, index: int) -> None:
         provider = str(self._ai_provider_combo.itemData(index) or "deepseek")
@@ -1655,6 +1669,9 @@ class BattlePanel(QWidget):
         discard_id = advice.recommended_discard or ""
         discard = TILE_NAME_MAP.get(discard_id, discard_id) if discard_id else "--"
         self._recommended_label.setText(f"当前推荐出牌：{discard}")
+        if self._voice_enabled and discard_id:
+            from utils.tts import speak_discard
+            speak_discard(discard)
         self._recommended_label.setStyleSheet(
             f"color:{_C_OK}; font-weight:bold;" if advice.recommended_discard else ""
         )

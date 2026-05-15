@@ -8,22 +8,28 @@ _thread: threading.Thread | None = None
 
 
 def _tts_worker() -> None:
-    import pyttsx3
-    engine = pyttsx3.init()
-    engine.setProperty("rate", 150)
-    for voice in engine.getProperty("voices"):
-        vid = voice.id.lower() if voice.id else ""
-        vname = voice.name.lower() if voice.name else ""
-        if "zh" in vid or "chinese" in vname or "huihui" in vname or "yaoyao" in vname:
-            engine.setProperty("voice", voice.id)
+    import pythoncom
+    import win32com.client
+
+    pythoncom.CoInitialize()
+    speaker = win32com.client.Dispatch("SAPI.SpVoice")
+    speaker.Volume = 100   # 0-100
+    speaker.Rate = -1      # -10(最慢) ~ +10(最快)，-1 接近正常语速
+
+    # 优先选中文语音
+    voices = speaker.GetVoices()
+    for i in range(voices.Count):
+        desc = voices.Item(i).GetDescription()
+        if "Chinese" in desc or "Huihui" in desc or "Yaoyao" in desc:
+            speaker.Voice = voices.Item(i)
             break
+
     while True:
         text = _q.get()
         if text is None:
             break
         try:
-            engine.say(text)
-            engine.runAndWait()
+            speaker.Speak(text)   # 同步阻塞，说完再取下一条
         except Exception:
             pass
 

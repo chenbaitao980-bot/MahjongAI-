@@ -1,0 +1,71 @@
+graph TD
+    %% MahjongAI 知识图谱
+
+    subgraph root_grp[root/]
+        backfill_session_db[backfill_session_db]
+        battle\__init__[battle\__init__]
+        battle\service[battle\service]
+        battle\state[battle\state]
+        debug_recognition[debug_recognition]
+        diagnose_region[diagnose_region]
+        extract_frames_debug[extract_frames_debug]
+        extract_templates[extract_templates]
+        extract_templates_final[extract_templates_final]
+        extract_templates_seed[extract_templates_seed]
+        extract_templates_v2[extract_templates_v2]
+        extract_templates_v3[extract_templates_v3]
+        game\__init__[game\__init__]
+        game\session[game\session]
+        game\state[game\state]
+    end
+
+    backfill_session_db --> battle\state
+    backfill_session_db --> game\session
+    backfill_session_db --> game\state
+    battle\__init__ --> battle\service
+    battle\__init__ --> battle\state
+    battle\__init__ --> game\state
+    battle\service --> battle\__init__
+    battle\service --> battle\state
+    battle\service --> game\__init__
+    battle\service --> game\session
+    battle\service --> game\state
+    battle\service --> ui\__init__
+    battle\service --> utils\__init__
+    battle\service --> utils\paths
+    battle\service --> vision\__init__
+    battle\service --> vision\capture
+    battle\service --> vision\hand_region_module
+    battle\service --> vision\hog_classifier
+    battle\service --> vision\layout
+    battle\service --> vision\recognizer
+    battle\state --> game\state
+    debug_recognition --> game\session
+    debug_recognition --> utils\paths
+    debug_recognition --> vision\capture
+    debug_recognition --> vision\layout
+    debug_recognition --> vision\pipeline
+    debug_recognition --> vision\recognizer
+    diagnose_region --> vision\layout
+    diagnose_region --> vision\pipeline
+    game\session --> battle\__init__
+    game\session --> battle\state
+    game\session --> game\__init__
+    game\session --> game\state
+    game\session --> ui\__init__
+    game\session --> utils\__init__
+    game\session --> vision\__init__
+    scripts\clean_tile_samples --> battle\state
+    scripts\clean_tile_samples --> game\state
+    scripts\collect_tile_samples --> game\session
+    scripts\collect_tile_samples --> utils\paths
+    scripts\collect_tile_samples --> vision\layout
+    scripts\collect_tile_samples --> vision\recognizer
+    scripts\diagnose_discard_grid --> game\session
+    scripts\diagnose_discard_grid --> utils\paths
+    scripts\diagnose_discard_grid --> vision\layout
+    scripts\extract_samples_from_media --> scripts\collect_tile_samples
+    scripts\extract_samples_from_media --> vision\hog_classifier
+    scripts\extract_samples_from_media --> vision\recognizer
+    scripts\refresh_templates --> game\session
+    scripts\refresh_templates --> vision\hog_classifier

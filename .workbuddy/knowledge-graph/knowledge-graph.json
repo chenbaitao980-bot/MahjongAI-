@@ -1,0 +1,3442 @@
+{
+  "nodes": [
+    {
+      "id": "backfill_session_db.py",
+      "type": "file",
+      "classes": 0,
+      "functions": 4,
+      "size": 13924
+    },
+    {
+      "id": "battle\\__init__.py",
+      "type": "file",
+      "classes": 0,
+      "functions": 0,
+      "size": 81
+    },
+    {
+      "id": "battle\\service.py",
+      "type": "file",
+      "classes": 1,
+      "functions": 0,
+      "size": 62885
+    },
+    {
+      "id": "battle\\state.py",
+      "type": "file",
+      "classes": 2,
+      "functions": 4,
+      "size": 4967
+    },
+    {
+      "id": "debug_recognition.py",
+      "type": "file",
+      "classes": 0,
+      "functions": 2,
+      "size": 7091
+    },
+    {
+      "id": "diagnose_region.py",
+      "type": "file",
+      "classes": 0,
+      "functions": 0,
+      "size": 3469
+    },
+    {
+      "id": "extract_frames_debug.py",
+      "type": "file",
+      "classes": 0,
+      "functions": 0,
+      "size": 850
+    },
+    {
+      "id": "extract_templates.py",
+      "type": "file",
+      "classes": 0,
+      "functions": 13,
+      "size": 12123
+    },
+    {
+      "id": "extract_templates_final.py",
+      "type": "file",
+      "classes": 0,
+      "functions": 12,
+      "size": 11812
+    },
+    {
+      "id": "extract_templates_seed.py",
+      "type": "file",
+      "classes": 0,
+      "functions": 10,
+      "size": 9680
+    },
+    {
+      "id": "extract_templates_v2.py",
+      "type": "file",
+      "classes": 0,
+      "functions": 15,
+      "size": 15577
+    },
+    {
+      "id": "extract_templates_v3.py",
+      "type": "file",
+      "classes": 0,
+      "functions": 12,
+      "size": 10477
+    },
+    {
+      "id": "game\\__init__.py",
+      "type": "file",
+      "classes": 0,
+      "functions": 0,
+      "size": 0
+    },
+    {
+      "id": "game\\session.py",
+      "type": "file",
+      "classes": 1,
+      "functions": 0,
+      "size": 24473
+    },
+    {
+      "id": "game\\state.py",
+      "type": "file",
+      "classes": 6,
+      "functions": 0,
+      "size": 4433
+    },
+    {
+      "id": "scripts\\clean_tile_samples.py",
+      "type": "file",
+      "classes": 0,
+      "functions": 10,
+      "size": 13015
+    },
+    {
+      "id": "scripts\\collect_tile_samples.py",
+      "type": "file",
+      "classes": 0,
+      "functions": 4,
+      "size": 7573
+    },
+    {
+      "id": "scripts\\diagnose_discard_grid.py",
+      "type": "file",
+      "classes": 0,
+      "functions": 0,
+      "size": 3439
+    },
+    {
+      "id": "scripts\\extract_samples_from_media.py",
+      "type": "file",
+      "classes": 0,
+      "functions": 5,
+      "size": 10244
+    },
+    {
+      "id": "scripts\\generate_knowledge_graph.py",
+      "type": "file",
+      "classes": 0,
+      "functions": 7,
+      "size": 9595
+    },
+    {
+      "id": "scripts\\refresh_templates.py",
+      "type": "file",
+      "classes": 0,
+      "functions": 4,
+      "size": 7991
+    },
+    {
+      "id": "scripts\\train_hog_svm.py",
+      "type": "file",
+      "classes": 0,
+      "functions": 2,
+      "size": 2632
+    },
+    {
+      "id": "ui\\__init__.py",
+      "type": "file",
+      "classes": 0,
+      "functions": 0,
+      "size": 0
+    },
+    {
+      "id": "ui\\battle_panel.py",
+      "type": "file",
+      "classes": 5,
+      "functions": 1,
+      "size": 42010
+    },
+    {
+      "id": "ui\\calibration.py",
+      "type": "file",
+      "classes": 7,
+      "functions": 0,
+      "size": 24491
+    },
+    {
+      "id": "ui\\calibration_canvas.py",
+      "type": "file",
+      "classes": 1,
+      "functions": 1,
+      "size": 10520
+    },
+    {
+      "id": "ui\\capture_panel.py",
+      "type": "file",
+      "classes": 1,
+      "functions": 0,
+      "size": 13122
+    },
+    {
+      "id": "ui\\collection_panels.py",
+      "type": "file",
+      "classes": 2,
+      "functions": 5,
+      "size": 24158
+    },
+    {
+      "id": "ui\\main_window.py",
+      "type": "file",
+      "classes": 5,
+      "functions": 6,
+      "size": 80340
+    },
+    {
+      "id": "ui\\region_selector.py",
+      "type": "file",
+      "classes": 1,
+      "functions": 0,
+      "size": 7314
+    },
+    {
+      "id": "utils\\__init__.py",
+      "type": "file",
+      "classes": 0,
+      "functions": 0,
+      "size": 0
+    },
+    {
+      "id": "utils\\paths.py",
+      "type": "file",
+      "classes": 0,
+      "functions": 3,
+      "size": 1164
+    },
+    {
+      "id": "vision\\__init__.py",
+      "type": "file",
+      "classes": 0,
+      "functions": 0,
+      "size": 0
+    },
+    {
+      "id": "vision\\capture.py",
+      "type": "file",
+      "classes": 1,
+      "functions": 0,
+      "size": 2230
+    },
+    {
+      "id": "vision\\discard_recognizer.py",
+      "type": "file",
+      "classes": 1,
+      "functions": 1,
+      "size": 9079
+    },
+    {
+      "id": "vision\\discard_tile_cropper.py",
+      "type": "file",
+      "classes": 0,
+      "functions": 15,
+      "size": 20143
+    },
+    {
+      "id": "vision\\hand_region_module.py",
+      "type": "file",
+      "classes": 1,
+      "functions": 2,
+      "size": 30249
+    },
+    {
+      "id": "vision\\hog_classifier.py",
+      "type": "file",
+      "classes": 1,
+      "functions": 2,
+      "size": 10874
+    },
+    {
+      "id": "vision\\layout.py",
+      "type": "file",
+      "classes": 2,
+      "functions": 0,
+      "size": 7241
+    },
+    {
+      "id": "vision\\pipeline.py",
+      "type": "file",
+      "classes": 1,
+      "functions": 0,
+      "size": 80617
+    },
+    {
+      "id": "vision\\recognizer.py",
+      "type": "file",
+      "classes": 4,
+      "functions": 1,
+      "size": 55374
+    }
+  ],
+  "edges": [
+    {
+      "source": "backfill_session_db.py",
+      "target": "battle\\state.py",
+      "type": "imports"
+    },
+    {
+      "source": "backfill_session_db.py",
+      "target": "game\\session.py",
+      "type": "imports"
+    },
+    {
+      "source": "backfill_session_db.py",
+      "target": "game\\state.py",
+      "type": "imports"
+    },
+    {
+      "source": "battle\\__init__.py",
+      "target": "battle\\service.py",
+      "type": "imports"
+    },
+    {
+      "source": "battle\\__init__.py",
+      "target": "battle\\state.py",
+      "type": "imports"
+    },
+    {
+      "source": "battle\\__init__.py",
+      "target": "game\\state.py",
+      "type": "imports"
+    },
+    {
+      "source": "battle\\service.py",
+      "target": "battle\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "battle\\service.py",
+      "target": "battle\\state.py",
+      "type": "imports"
+    },
+    {
+      "source": "battle\\service.py",
+      "target": "game\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "battle\\service.py",
+      "target": "game\\session.py",
+      "type": "imports"
+    },
+    {
+      "source": "battle\\service.py",
+      "target": "game\\state.py",
+      "type": "imports"
+    },
+    {
+      "source": "battle\\service.py",
+      "target": "ui\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "battle\\service.py",
+      "target": "utils\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "battle\\service.py",
+      "target": "utils\\paths.py",
+      "type": "imports"
+    },
+    {
+      "source": "battle\\service.py",
+      "target": "vision\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "battle\\service.py",
+      "target": "vision\\capture.py",
+      "type": "imports"
+    },
+    {
+      "source": "battle\\service.py",
+      "target": "vision\\hand_region_module.py",
+      "type": "imports"
+    },
+    {
+      "source": "battle\\service.py",
+      "target": "vision\\hog_classifier.py",
+      "type": "imports"
+    },
+    {
+      "source": "battle\\service.py",
+      "target": "vision\\layout.py",
+      "type": "imports"
+    },
+    {
+      "source": "battle\\service.py",
+      "target": "vision\\recognizer.py",
+      "type": "imports"
+    },
+    {
+      "source": "battle\\state.py",
+      "target": "game\\state.py",
+      "type": "imports"
+    },
+    {
+      "source": "debug_recognition.py",
+      "target": "game\\session.py",
+      "type": "imports"
+    },
+    {
+      "source": "debug_recognition.py",
+      "target": "utils\\paths.py",
+      "type": "imports"
+    },
+    {
+      "source": "debug_recognition.py",
+      "target": "vision\\capture.py",
+      "type": "imports"
+    },
+    {
+      "source": "debug_recognition.py",
+      "target": "vision\\layout.py",
+      "type": "imports"
+    },
+    {
+      "source": "debug_recognition.py",
+      "target": "vision\\pipeline.py",
+      "type": "imports"
+    },
+    {
+      "source": "debug_recognition.py",
+      "target": "vision\\recognizer.py",
+      "type": "imports"
+    },
+    {
+      "source": "diagnose_region.py",
+      "target": "vision\\layout.py",
+      "type": "imports"
+    },
+    {
+      "source": "diagnose_region.py",
+      "target": "vision\\pipeline.py",
+      "type": "imports"
+    },
+    {
+      "source": "game\\session.py",
+      "target": "battle\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "game\\session.py",
+      "target": "battle\\state.py",
+      "type": "imports"
+    },
+    {
+      "source": "game\\session.py",
+      "target": "game\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "game\\session.py",
+      "target": "game\\state.py",
+      "type": "imports"
+    },
+    {
+      "source": "game\\session.py",
+      "target": "ui\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "game\\session.py",
+      "target": "utils\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "game\\session.py",
+      "target": "vision\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "scripts\\clean_tile_samples.py",
+      "target": "battle\\state.py",
+      "type": "imports"
+    },
+    {
+      "source": "scripts\\clean_tile_samples.py",
+      "target": "game\\state.py",
+      "type": "imports"
+    },
+    {
+      "source": "scripts\\collect_tile_samples.py",
+      "target": "game\\session.py",
+      "type": "imports"
+    },
+    {
+      "source": "scripts\\collect_tile_samples.py",
+      "target": "utils\\paths.py",
+      "type": "imports"
+    },
+    {
+      "source": "scripts\\collect_tile_samples.py",
+      "target": "vision\\layout.py",
+      "type": "imports"
+    },
+    {
+      "source": "scripts\\collect_tile_samples.py",
+      "target": "vision\\recognizer.py",
+      "type": "imports"
+    },
+    {
+      "source": "scripts\\diagnose_discard_grid.py",
+      "target": "game\\session.py",
+      "type": "imports"
+    },
+    {
+      "source": "scripts\\diagnose_discard_grid.py",
+      "target": "utils\\paths.py",
+      "type": "imports"
+    },
+    {
+      "source": "scripts\\diagnose_discard_grid.py",
+      "target": "vision\\layout.py",
+      "type": "imports"
+    },
+    {
+      "source": "scripts\\extract_samples_from_media.py",
+      "target": "scripts\\collect_tile_samples.py",
+      "type": "imports"
+    },
+    {
+      "source": "scripts\\extract_samples_from_media.py",
+      "target": "vision\\hog_classifier.py",
+      "type": "imports"
+    },
+    {
+      "source": "scripts\\extract_samples_from_media.py",
+      "target": "vision\\recognizer.py",
+      "type": "imports"
+    },
+    {
+      "source": "scripts\\refresh_templates.py",
+      "target": "game\\session.py",
+      "type": "imports"
+    },
+    {
+      "source": "scripts\\refresh_templates.py",
+      "target": "vision\\hog_classifier.py",
+      "type": "imports"
+    },
+    {
+      "source": "scripts\\refresh_templates.py",
+      "target": "vision\\recognizer.py",
+      "type": "imports"
+    },
+    {
+      "source": "scripts\\train_hog_svm.py",
+      "target": "vision\\hog_classifier.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\battle_panel.py",
+      "target": "battle\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\battle_panel.py",
+      "target": "battle\\service.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\battle_panel.py",
+      "target": "battle\\state.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\battle_panel.py",
+      "target": "game\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\battle_panel.py",
+      "target": "game\\state.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\battle_panel.py",
+      "target": "ui\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\battle_panel.py",
+      "target": "utils\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\battle_panel.py",
+      "target": "vision\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\battle_panel.py",
+      "target": "vision\\layout.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\calibration.py",
+      "target": "battle\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\calibration.py",
+      "target": "battle\\state.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\calibration.py",
+      "target": "game\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\calibration.py",
+      "target": "game\\state.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\calibration.py",
+      "target": "ui\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\calibration.py",
+      "target": "ui\\calibration_canvas.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\calibration.py",
+      "target": "ui\\region_selector.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\calibration.py",
+      "target": "utils\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\calibration.py",
+      "target": "vision\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\calibration.py",
+      "target": "vision\\capture.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\calibration.py",
+      "target": "vision\\layout.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\calibration.py",
+      "target": "vision\\recognizer.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\calibration_canvas.py",
+      "target": "battle\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\calibration_canvas.py",
+      "target": "game\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\calibration_canvas.py",
+      "target": "ui\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\calibration_canvas.py",
+      "target": "utils\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\calibration_canvas.py",
+      "target": "vision\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\capture_panel.py",
+      "target": "battle\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\capture_panel.py",
+      "target": "battle\\state.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\capture_panel.py",
+      "target": "game\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\capture_panel.py",
+      "target": "game\\state.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\capture_panel.py",
+      "target": "ui\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\capture_panel.py",
+      "target": "utils\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\capture_panel.py",
+      "target": "vision\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\capture_panel.py",
+      "target": "vision\\layout.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\collection_panels.py",
+      "target": "battle\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\collection_panels.py",
+      "target": "game\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\collection_panels.py",
+      "target": "game\\session.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\collection_panels.py",
+      "target": "ui\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\collection_panels.py",
+      "target": "ui\\calibration.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\collection_panels.py",
+      "target": "ui\\calibration_canvas.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\collection_panels.py",
+      "target": "ui\\region_selector.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\collection_panels.py",
+      "target": "utils\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\collection_panels.py",
+      "target": "utils\\paths.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\collection_panels.py",
+      "target": "vision\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\collection_panels.py",
+      "target": "vision\\capture.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\collection_panels.py",
+      "target": "vision\\layout.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\main_window.py",
+      "target": "battle\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\main_window.py",
+      "target": "battle\\service.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\main_window.py",
+      "target": "battle\\state.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\main_window.py",
+      "target": "game\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\main_window.py",
+      "target": "game\\session.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\main_window.py",
+      "target": "game\\state.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\main_window.py",
+      "target": "ui\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\main_window.py",
+      "target": "ui\\battle_panel.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\main_window.py",
+      "target": "ui\\calibration.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\main_window.py",
+      "target": "ui\\capture_panel.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\main_window.py",
+      "target": "ui\\collection_panels.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\main_window.py",
+      "target": "ui\\region_selector.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\main_window.py",
+      "target": "utils\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\main_window.py",
+      "target": "utils\\paths.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\main_window.py",
+      "target": "vision\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\main_window.py",
+      "target": "vision\\capture.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\main_window.py",
+      "target": "vision\\discard_recognizer.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\main_window.py",
+      "target": "vision\\discard_tile_cropper.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\main_window.py",
+      "target": "vision\\hand_region_module.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\main_window.py",
+      "target": "vision\\hog_classifier.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\main_window.py",
+      "target": "vision\\layout.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\main_window.py",
+      "target": "vision\\pipeline.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\main_window.py",
+      "target": "vision\\recognizer.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\region_selector.py",
+      "target": "battle\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\region_selector.py",
+      "target": "game\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\region_selector.py",
+      "target": "ui\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\region_selector.py",
+      "target": "utils\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "ui\\region_selector.py",
+      "target": "vision\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\capture.py",
+      "target": "battle\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\capture.py",
+      "target": "game\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\capture.py",
+      "target": "ui\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\capture.py",
+      "target": "utils\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\capture.py",
+      "target": "vision\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\capture.py",
+      "target": "vision\\layout.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\discard_recognizer.py",
+      "target": "battle\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\discard_recognizer.py",
+      "target": "game\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\discard_recognizer.py",
+      "target": "ui\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\discard_recognizer.py",
+      "target": "utils\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\discard_recognizer.py",
+      "target": "vision\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\discard_recognizer.py",
+      "target": "vision\\capture.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\discard_recognizer.py",
+      "target": "vision\\discard_tile_cropper.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\discard_recognizer.py",
+      "target": "vision\\layout.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\discard_recognizer.py",
+      "target": "vision\\recognizer.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\discard_tile_cropper.py",
+      "target": "vision\\recognizer.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\hand_region_module.py",
+      "target": "game\\session.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\hand_region_module.py",
+      "target": "utils\\paths.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\hand_region_module.py",
+      "target": "vision\\capture.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\hand_region_module.py",
+      "target": "vision\\layout.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\hog_classifier.py",
+      "target": "battle\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\hog_classifier.py",
+      "target": "game\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\hog_classifier.py",
+      "target": "scripts\\collect_tile_samples.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\hog_classifier.py",
+      "target": "scripts\\train_hog_svm.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\hog_classifier.py",
+      "target": "ui\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\hog_classifier.py",
+      "target": "utils\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\hog_classifier.py",
+      "target": "vision\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\layout.py",
+      "target": "battle\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\layout.py",
+      "target": "game\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\layout.py",
+      "target": "ui\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\layout.py",
+      "target": "utils\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\layout.py",
+      "target": "vision\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\pipeline.py",
+      "target": "battle\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\pipeline.py",
+      "target": "battle\\state.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\pipeline.py",
+      "target": "game\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\pipeline.py",
+      "target": "game\\session.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\pipeline.py",
+      "target": "game\\state.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\pipeline.py",
+      "target": "ui\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\pipeline.py",
+      "target": "utils\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\pipeline.py",
+      "target": "vision\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\pipeline.py",
+      "target": "vision\\capture.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\pipeline.py",
+      "target": "vision\\discard_recognizer.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\pipeline.py",
+      "target": "vision\\discard_tile_cropper.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\pipeline.py",
+      "target": "vision\\hand_region_module.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\pipeline.py",
+      "target": "vision\\layout.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\pipeline.py",
+      "target": "vision\\recognizer.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\recognizer.py",
+      "target": "battle\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\recognizer.py",
+      "target": "battle\\state.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\recognizer.py",
+      "target": "game\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\recognizer.py",
+      "target": "game\\state.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\recognizer.py",
+      "target": "ui\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\recognizer.py",
+      "target": "ui\\calibration.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\recognizer.py",
+      "target": "utils\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\recognizer.py",
+      "target": "utils\\paths.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\recognizer.py",
+      "target": "vision\\__init__.py",
+      "type": "imports"
+    },
+    {
+      "source": "vision\\recognizer.py",
+      "target": "vision\\hog_classifier.py",
+      "type": "imports"
+    }
+  ],
+  "modules": {
+    "backfill_session_db.py": {
+      "classes": [],
+      "functions": [
+        "_connect_db",
+        "_load_recognition_summary",
+        "_visible_counts",
+        "backfill"
+      ],
+      "imports": [
+        "json",
+        "os",
+        "sqlite3",
+        "sys"
+      ],
+      "from_imports": [
+        {
+          "module": "__future__",
+          "name": "annotations",
+          "alias": null
+        },
+        {
+          "module": "datetime",
+          "name": "datetime",
+          "alias": null
+        }
+      ]
+    },
+    "battle\\__init__.py": {
+      "classes": [],
+      "functions": [],
+      "imports": [],
+      "from_imports": [
+        {
+          "module": "state",
+          "name": "BattleAdvice",
+          "alias": null
+        },
+        {
+          "module": "state",
+          "name": "BattleState",
+          "alias": null
+        },
+        {
+          "module": "service",
+          "name": "BattleService",
+          "alias": null
+        }
+      ]
+    },
+    "battle\\service.py": {
+      "classes": [
+        "BattleService"
+      ],
+      "functions": [],
+      "imports": [
+        "base64",
+        "concurrent.futures",
+        "json",
+        "os",
+        "re",
+        "time",
+        "threading",
+        "urllib.error",
+        "urllib.request",
+        "cv2",
+        "numpy"
+      ],
+      "from_imports": [
+        {
+          "module": "__future__",
+          "name": "annotations",
+          "alias": null
+        },
+        {
+          "module": "datetime",
+          "name": "datetime",
+          "alias": null
+        },
+        {
+          "module": "typing",
+          "name": "Any",
+          "alias": null
+        },
+        {
+          "module": "typing",
+          "name": "TYPE_CHECKING",
+          "alias": null
+        },
+        {
+          "module": "battle.state",
+          "name": "BattleAdvice",
+          "alias": null
+        },
+        {
+          "module": "battle.state",
+          "name": "BattleState",
+          "alias": null
+        },
+        {
+          "module": "battle.state",
+          "name": "tile_from_id",
+          "alias": null
+        },
+        {
+          "module": "game.state",
+          "name": "MeldGroup",
+          "alias": null
+        },
+        {
+          "module": "game.state",
+          "name": "TileMatch",
+          "alias": null
+        },
+        {
+          "module": "utils.paths",
+          "name": "data_path",
+          "alias": null
+        },
+        {
+          "module": "vision.hand_region_module",
+          "name": "prepare_trainable_hand_roi_image",
+          "alias": null
+        },
+        {
+          "module": "vision.hog_classifier",
+          "name": "TileHOGClassifier",
+          "alias": null
+        },
+        {
+          "module": "game.session",
+          "name": "GameSession",
+          "alias": null
+        }
+      ]
+    },
+    "battle\\state.py": {
+      "classes": [
+        "BattleAdvice",
+        "BattleState"
+      ],
+      "functions": [
+        "tile_from_id",
+        "meld_from_ids",
+        "tiles_to_ids",
+        "melds_to_payload"
+      ],
+      "imports": [],
+      "from_imports": [
+        {
+          "module": "__future__",
+          "name": "annotations",
+          "alias": null
+        },
+        {
+          "module": "dataclasses",
+          "name": "dataclass",
+          "alias": null
+        },
+        {
+          "module": "dataclasses",
+          "name": "field",
+          "alias": null
+        },
+        {
+          "module": "datetime",
+          "name": "datetime",
+          "alias": null
+        },
+        {
+          "module": "game.state",
+          "name": "MeldGroup",
+          "alias": null
+        },
+        {
+          "module": "game.state",
+          "name": "TileMatch",
+          "alias": null
+        }
+      ]
+    },
+    "debug_recognition.py": {
+      "classes": [],
+      "functions": [
+        "load_config",
+        "diagnose_image"
+      ],
+      "imports": [
+        "sys",
+        "os",
+        "cv2",
+        "numpy",
+        "json",
+        "yaml"
+      ],
+      "from_imports": [
+        {
+          "module": "__future__",
+          "name": "annotations",
+          "alias": null
+        },
+        {
+          "module": "vision.recognizer",
+          "name": "TileRecognizer",
+          "alias": null
+        },
+        {
+          "module": "vision.layout",
+          "name": "LayoutCalculator",
+          "alias": null
+        },
+        {
+          "module": "vision.capture",
+          "name": "ScreenCapture",
+          "alias": null
+        },
+        {
+          "module": "vision.pipeline",
+          "name": "RecognitionPipeline",
+          "alias": null
+        },
+        {
+          "module": "game.session",
+          "name": "GameSession",
+          "alias": null
+        },
+        {
+          "module": "utils.paths",
+          "name": "data_path",
+          "alias": null
+        },
+        {
+          "module": "utils.paths",
+          "name": "template_dir",
+          "alias": null
+        }
+      ]
+    },
+    "diagnose_region.py": {
+      "classes": [],
+      "functions": [],
+      "imports": [
+        "os",
+        "sys",
+        "yaml",
+        "cv2",
+        "numpy",
+        "mss"
+      ],
+      "from_imports": []
+    },
+    "extract_frames_debug.py": {
+      "classes": [],
+      "functions": [],
+      "imports": [
+        "cv2",
+        "os"
+      ],
+      "from_imports": []
+    },
+    "extract_templates.py": {
+      "classes": [],
+      "functions": [
+        "dhash",
+        "hamming",
+        "preprocess_tile",
+        "resize_tile",
+        "detect_hand_tiles",
+        "green_ratio",
+        "circle_count",
+        "count_bamboo_sticks",
+        "is_fapat",
+        "classify_tile",
+        "extract_templates",
+        "extract_buttons",
+        "print_report"
+      ],
+      "imports": [
+        "cv2",
+        "numpy",
+        "os",
+        "json"
+      ],
+      "from_imports": [
+        {
+          "module": "pathlib",
+          "name": "Path",
+          "alias": null
+        }
+      ]
+    },
+    "extract_templates_final.py": {
+      "classes": [],
+      "functions": [
+        "dhash",
+        "hamming",
+        "preprocess",
+        "segment_hand",
+        "count_tong_circles",
+        "count_bamboo",
+        "color_features",
+        "estimate_wan_number",
+        "classify",
+        "extract",
+        "extract_buttons",
+        "print_report"
+      ],
+      "imports": [
+        "cv2",
+        "numpy",
+        "os"
+      ],
+      "from_imports": []
+    },
+    "extract_templates_seed.py": {
+      "classes": [],
+      "functions": [
+        "dhash",
+        "hamming",
+        "preprocess",
+        "segment_hand",
+        "seed_from_frame0",
+        "load_templates",
+        "match_tile",
+        "scan_video",
+        "extract_buttons",
+        "print_report"
+      ],
+      "imports": [
+        "cv2",
+        "numpy",
+        "os"
+      ],
+      "from_imports": []
+    },
+    "extract_templates_v2.py": {
+      "classes": [],
+      "functions": [
+        "dhash",
+        "hamming",
+        "preprocess",
+        "segment_tiles_from_strip",
+        "circle_count",
+        "bamboo_stick_count",
+        "has_vertical_bamboo",
+        "red_ratio",
+        "green_ratio",
+        "has_wan_character",
+        "count_wan_number",
+        "classify_tile",
+        "extract",
+        "extract_buttons",
+        "print_report"
+      ],
+      "imports": [
+        "cv2",
+        "numpy",
+        "os"
+      ],
+      "from_imports": []
+    },
+    "extract_templates_v3.py": {
+      "classes": [],
+      "functions": [
+        "dhash",
+        "hamming",
+        "preprocess",
+        "segment_hand",
+        "circle_count",
+        "bamboo_sticks",
+        "color_ratios",
+        "stroke_peaks_top",
+        "classify",
+        "extract",
+        "extract_buttons",
+        "print_report"
+      ],
+      "imports": [
+        "cv2",
+        "numpy",
+        "os"
+      ],
+      "from_imports": []
+    },
+    "game\\__init__.py": {
+      "classes": [],
+      "functions": [],
+      "imports": [],
+      "from_imports": []
+    },
+    "game\\session.py": {
+      "classes": [
+        "GameSession"
+      ],
+      "functions": [],
+      "imports": [
+        "json",
+        "os",
+        "queue",
+        "shutil",
+        "sqlite3",
+        "threading"
+      ],
+      "from_imports": [
+        {
+          "module": "__future__",
+          "name": "annotations",
+          "alias": null
+        },
+        {
+          "module": "datetime",
+          "name": "datetime",
+          "alias": null
+        },
+        {
+          "module": "typing",
+          "name": "TYPE_CHECKING",
+          "alias": null
+        },
+        {
+          "module": "game.state",
+          "name": "GameState",
+          "alias": null
+        }
+      ]
+    },
+    "game\\state.py": {
+      "classes": [
+        "TileMatch",
+        "RegionObservation",
+        "MeldGroup",
+        "PlayerState",
+        "OpponentState",
+        "GameState"
+      ],
+      "functions": [],
+      "imports": [
+        "time"
+      ],
+      "from_imports": [
+        {
+          "module": "__future__",
+          "name": "annotations",
+          "alias": null
+        },
+        {
+          "module": "dataclasses",
+          "name": "dataclass",
+          "alias": null
+        },
+        {
+          "module": "dataclasses",
+          "name": "field",
+          "alias": null
+        },
+        {
+          "module": "typing",
+          "name": "Optional",
+          "alias": null
+        }
+      ]
+    },
+    "scripts\\clean_tile_samples.py": {
+      "classes": [],
+      "functions": [
+        "avg_hash",
+        "hamming_distance",
+        "is_valid_size",
+        "load_templates",
+        "ncc_score",
+        "cross_validate",
+        "parse_source_info",
+        "clean_folder",
+        "reclassify_unclassified",
+        "main"
+      ],
+      "imports": [
+        "os",
+        "sys",
+        "shutil",
+        "glob",
+        "hashlib",
+        "argparse",
+        "cv2",
+        "numpy",
+        "logging"
+      ],
+      "from_imports": [
+        {
+          "module": "__future__",
+          "name": "annotations",
+          "alias": null
+        },
+        {
+          "module": "collections",
+          "name": "defaultdict",
+          "alias": null
+        },
+        {
+          "module": "game.state",
+          "name": "ALL_TILE_IDS",
+          "alias": null
+        }
+      ]
+    },
+    "scripts\\collect_tile_samples.py": {
+      "classes": [],
+      "functions": [
+        "load_config",
+        "crop_hand_region",
+        "segment_equal",
+        "collect"
+      ],
+      "imports": [
+        "os",
+        "sys",
+        "argparse",
+        "glob",
+        "json",
+        "cv2",
+        "numpy",
+        "logging",
+        "yaml"
+      ],
+      "from_imports": [
+        {
+          "module": "__future__",
+          "name": "annotations",
+          "alias": null
+        },
+        {
+          "module": "vision.recognizer",
+          "name": "TileRecognizer",
+          "alias": null
+        }
+      ]
+    },
+    "scripts\\diagnose_discard_grid.py": {
+      "classes": [],
+      "functions": [],
+      "imports": [
+        "os",
+        "sys",
+        "json",
+        "cv2",
+        "numpy",
+        "yaml"
+      ],
+      "from_imports": [
+        {
+          "module": "utils.paths",
+          "name": "data_path",
+          "alias": null
+        },
+        {
+          "module": "game.session",
+          "name": "GameSession",
+          "alias": null
+        }
+      ]
+    },
+    "scripts\\extract_samples_from_media.py": {
+      "classes": [],
+      "functions": [
+        "detect_hand_region",
+        "segment_hand_strip",
+        "extract_from_image",
+        "extract_from_video",
+        "main"
+      ],
+      "imports": [
+        "os",
+        "sys",
+        "argparse",
+        "glob",
+        "cv2",
+        "numpy",
+        "logging"
+      ],
+      "from_imports": [
+        {
+          "module": "__future__",
+          "name": "annotations",
+          "alias": null
+        },
+        {
+          "module": "vision.recognizer",
+          "name": "TileRecognizer",
+          "alias": null
+        },
+        {
+          "module": "vision.hog_classifier",
+          "name": "extract_hog",
+          "alias": null
+        }
+      ]
+    },
+    "scripts\\generate_knowledge_graph.py": {
+      "classes": [],
+      "functions": [
+        "scan_python_files",
+        "extract_module_info",
+        "find_file_references",
+        "build_knowledge_graph",
+        "generate_mermaid_graph",
+        "generate_architecture_doc",
+        "main"
+      ],
+      "imports": [
+        "os",
+        "json",
+        "ast",
+        "re"
+      ],
+      "from_imports": [
+        {
+          "module": "pathlib",
+          "name": "Path",
+          "alias": null
+        },
+        {
+          "module": "collections",
+          "name": "defaultdict",
+          "alias": null
+        },
+        {
+          "module": "collections",
+          "name": "Counter",
+          "alias": null
+        },
+        {
+          "module": "typing",
+          "name": "Dict",
+          "alias": null
+        },
+        {
+          "module": "typing",
+          "name": "List",
+          "alias": null
+        },
+        {
+          "module": "typing",
+          "name": "Set",
+          "alias": null
+        },
+        {
+          "module": "typing",
+          "name": "Tuple",
+          "alias": null
+        },
+        {
+          "module": "typing",
+          "name": "Any",
+          "alias": null
+        }
+      ]
+    },
+    "scripts\\refresh_templates.py": {
+      "classes": [],
+      "functions": [
+        "collect_rois",
+        "refresh_templates",
+        "train_svm",
+        "test_ncc_improvement"
+      ],
+      "imports": [
+        "os",
+        "sys",
+        "json",
+        "glob",
+        "time",
+        "cv2",
+        "numpy",
+        "logging",
+        "sys"
+      ],
+      "from_imports": [
+        {
+          "module": "__future__",
+          "name": "annotations",
+          "alias": null
+        },
+        {
+          "module": "vision.hog_classifier",
+          "name": "TileHOGClassifier",
+          "alias": null
+        },
+        {
+          "module": "vision.recognizer",
+          "name": "TileRecognizer",
+          "alias": null
+        }
+      ]
+    },
+    "scripts\\train_hog_svm.py": {
+      "classes": [],
+      "functions": [
+        "load_samples",
+        "main"
+      ],
+      "imports": [
+        "os",
+        "sys",
+        "argparse",
+        "glob",
+        "cv2",
+        "numpy",
+        "logging"
+      ],
+      "from_imports": [
+        {
+          "module": "__future__",
+          "name": "annotations",
+          "alias": null
+        },
+        {
+          "module": "vision.hog_classifier",
+          "name": "TileHOGClassifier",
+          "alias": null
+        }
+      ]
+    },
+    "ui\\__init__.py": {
+      "classes": [],
+      "functions": [],
+      "imports": [],
+      "from_imports": []
+    },
+    "ui\\battle_panel.py": {
+      "classes": [
+        "TileSelectionDialog",
+        "MeldSelectionDialog",
+        "ApiConfigDialog",
+        "_TileCorrectDialog",
+        "BattlePanel"
+      ],
+      "functions": [
+        "tile_display"
+      ],
+      "imports": [
+        "html"
+      ],
+      "from_imports": [
+        {
+          "module": "__future__",
+          "name": "annotations",
+          "alias": null
+        },
+        {
+          "module": "copy",
+          "name": "deepcopy",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtCore",
+          "name": "pyqtSignal",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtCore",
+          "name": "QUrl",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtCore",
+          "name": "Qt",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtGui",
+          "name": "QDesktopServices",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QCheckBox",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QComboBox",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QDialog",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QDialogButtonBox",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QFormLayout",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QGridLayout",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QGroupBox",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QHBoxLayout",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QLabel",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QLineEdit",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QMessageBox",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QPushButton",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QPlainTextEdit",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QScrollArea",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QTextEdit",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QSpinBox",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QTabWidget",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QVBoxLayout",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QWidget",
+          "alias": null
+        },
+        {
+          "module": "battle.service",
+          "name": "QWEN_VISION_SYSTEM_PROMPT",
+          "alias": null
+        },
+        {
+          "module": "battle.service",
+          "name": "QWEN_VISION_USER_PROMPT_TEMPLATE",
+          "alias": null
+        },
+        {
+          "module": "battle.service",
+          "name": "VOLC_VISION_PROMPT_TEMPLATE",
+          "alias": null
+        },
+        {
+          "module": "battle.state",
+          "name": "BattleAdvice",
+          "alias": null
+        },
+        {
+          "module": "battle.state",
+          "name": "BattleState",
+          "alias": null
+        },
+        {
+          "module": "battle.state",
+          "name": "meld_from_ids",
+          "alias": null
+        },
+        {
+          "module": "battle.state",
+          "name": "tile_from_id",
+          "alias": null
+        },
+        {
+          "module": "game.state",
+          "name": "ALL_TILE_IDS",
+          "alias": null
+        },
+        {
+          "module": "game.state",
+          "name": "MeldGroup",
+          "alias": null
+        }
+      ]
+    },
+    "ui\\calibration.py": {
+      "classes": [
+        "CalibrationWizard",
+        "WelcomePage",
+        "ScreenshotPage",
+        "HandRegionPage",
+        "SlotLabelPage",
+        "ButtonCalibPage",
+        "FinishPage"
+      ],
+      "functions": [],
+      "imports": [
+        "os",
+        "cv2",
+        "numpy",
+        "mss"
+      ],
+      "from_imports": [
+        {
+          "module": "__future__",
+          "name": "annotations",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtCore",
+          "name": "Qt",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtCore",
+          "name": "QRect",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtCore",
+          "name": "QTimer",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtCore",
+          "name": "pyqtSignal",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtGui",
+          "name": "QFont",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtGui",
+          "name": "QPixmap",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtGui",
+          "name": "QImage",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QWizard",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QWizardPage",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QLabel",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QVBoxLayout",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QHBoxLayout",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QPushButton",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QSpinBox",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QComboBox",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QFileDialog",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QScrollArea",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QWidget",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QGridLayout",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QGroupBox",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QLineEdit",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QMessageBox",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QProgressBar",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QFrame",
+          "alias": null
+        },
+        {
+          "module": "ui.calibration_canvas",
+          "name": "CalibrationCanvas",
+          "alias": null
+        },
+        {
+          "module": "ui.region_selector",
+          "name": "RegionSelectorOverlay",
+          "alias": null
+        },
+        {
+          "module": "vision.recognizer",
+          "name": "TileRecognizer",
+          "alias": null
+        },
+        {
+          "module": "vision.recognizer",
+          "name": "ButtonRecognizer",
+          "alias": null
+        },
+        {
+          "module": "game.state",
+          "name": "ALL_TILE_IDS",
+          "alias": null
+        },
+        {
+          "module": "game.state",
+          "name": "BUTTON_IDS",
+          "alias": null
+        }
+      ]
+    },
+    "ui\\calibration_canvas.py": {
+      "classes": [
+        "CalibrationCanvas"
+      ],
+      "functions": [
+        "_cv2_to_qimage"
+      ],
+      "imports": [
+        "numpy",
+        "cv2"
+      ],
+      "from_imports": [
+        {
+          "module": "__future__",
+          "name": "annotations",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtCore",
+          "name": "Qt",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtCore",
+          "name": "QRect",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtCore",
+          "name": "QPoint",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtCore",
+          "name": "pyqtSignal",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtGui",
+          "name": "QPixmap",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtGui",
+          "name": "QPainter",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtGui",
+          "name": "QColor",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtGui",
+          "name": "QPen",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtGui",
+          "name": "QImage",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtGui",
+          "name": "QFont",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QWidget",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QSizePolicy",
+          "alias": null
+        }
+      ]
+    },
+    "ui\\capture_panel.py": {
+      "classes": [
+        "CapturePanel"
+      ],
+      "functions": [],
+      "imports": [],
+      "from_imports": [
+        {
+          "module": "__future__",
+          "name": "annotations",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtCore",
+          "name": "Qt",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtCore",
+          "name": "pyqtSignal",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtGui",
+          "name": "QFont",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtGui",
+          "name": "QColor",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QWidget",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QVBoxLayout",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QHBoxLayout",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QPushButton",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QLabel",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QSpinBox",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QGroupBox",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QTextEdit",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QCheckBox",
+          "alias": null
+        },
+        {
+          "module": "game.state",
+          "name": "GameState",
+          "alias": null
+        },
+        {
+          "module": "game.state",
+          "name": "PHASE_PLAYING",
+          "alias": null
+        },
+        {
+          "module": "game.state",
+          "name": "PHASE_SHENGJIA",
+          "alias": null
+        },
+        {
+          "module": "game.state",
+          "name": "PHASE_LIUJU",
+          "alias": null
+        },
+        {
+          "module": "game.state",
+          "name": "PHASE_HUPAI",
+          "alias": null
+        },
+        {
+          "module": "game.state",
+          "name": "ALL_TILE_IDS",
+          "alias": null
+        }
+      ]
+    },
+    "ui\\collection_panels.py": {
+      "classes": [
+        "RegionDivisionPanel",
+        "EventCollectionPanel"
+      ],
+      "functions": [
+        "_app_data_path",
+        "_cv_to_pixmap",
+        "_capture_region",
+        "_hide_window_for_capture",
+        "_restore_window_after_capture"
+      ],
+      "imports": [
+        "json",
+        "os",
+        "cv2",
+        "mss",
+        "numpy",
+        "yaml"
+      ],
+      "from_imports": [
+        {
+          "module": "__future__",
+          "name": "annotations",
+          "alias": null
+        },
+        {
+          "module": "datetime",
+          "name": "datetime",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtCore",
+          "name": "QRect",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtCore",
+          "name": "Qt",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtCore",
+          "name": "QTimer",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtCore",
+          "name": "pyqtSignal",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtGui",
+          "name": "QColor",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtGui",
+          "name": "QImage",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtGui",
+          "name": "QPixmap",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QWidget",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QVBoxLayout",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QHBoxLayout",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QPushButton",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QLabel",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QGroupBox",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QComboBox",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QFileDialog",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QMessageBox",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QTextEdit",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QLineEdit",
+          "alias": null
+        },
+        {
+          "module": "ui.calibration_canvas",
+          "name": "CalibrationCanvas",
+          "alias": null
+        },
+        {
+          "module": "ui.region_selector",
+          "name": "RegionSelectorOverlay",
+          "alias": null
+        },
+        {
+          "module": "utils.paths",
+          "name": "data_path",
+          "alias": null
+        },
+        {
+          "module": "collections",
+          "name": "Counter",
+          "alias": null
+        }
+      ]
+    },
+    "ui\\main_window.py": {
+      "classes": [
+        "RoiTrainingDialog",
+        "HOGTrainerThread",
+        "CaptureWorkerThread",
+        "BattleAnalysisThread",
+        "MainWindow"
+      ],
+      "functions": [
+        "_hog_sample_counts",
+        "_read_image",
+        "_cleanup_debug_dir",
+        "_prepare_trainable_roi_image",
+        "_is_trainable_roi_image",
+        "_ensure_battle_config_defaults"
+      ],
+      "imports": [
+        "os",
+        "yaml",
+        "glob",
+        "time",
+        "math",
+        "shutil",
+        "json",
+        "cv2",
+        "numpy",
+        "mss",
+        "time"
+      ],
+      "from_imports": [
+        {
+          "module": "__future__",
+          "name": "annotations",
+          "alias": null
+        },
+        {
+          "module": "copy",
+          "name": "deepcopy",
+          "alias": null
+        },
+        {
+          "module": "datetime",
+          "name": "datetime",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtCore",
+          "name": "Qt",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtCore",
+          "name": "QThread",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtCore",
+          "name": "QTimer",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtCore",
+          "name": "pyqtSignal",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtCore",
+          "name": "QSize",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtGui",
+          "name": "QFont",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtGui",
+          "name": "QCloseEvent",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtGui",
+          "name": "QPixmap",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtGui",
+          "name": "QImage",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QMainWindow",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QTabWidget",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QWidget",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QVBoxLayout",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QHBoxLayout",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QPushButton",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QLabel",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QGroupBox",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QStatusBar",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QMessageBox",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QGridLayout",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QScrollArea",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QFileDialog",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QProgressDialog",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QDialog",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QComboBox",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QDialogButtonBox",
+          "alias": null
+        },
+        {
+          "module": "ui.region_selector",
+          "name": "RegionSelectorOverlay",
+          "alias": null
+        },
+        {
+          "module": "ui.calibration",
+          "name": "CalibrationWizard",
+          "alias": null
+        },
+        {
+          "module": "ui.capture_panel",
+          "name": "CapturePanel",
+          "alias": null
+        },
+        {
+          "module": "ui.battle_panel",
+          "name": "ApiConfigDialog",
+          "alias": null
+        },
+        {
+          "module": "ui.battle_panel",
+          "name": "BattlePanel",
+          "alias": null
+        },
+        {
+          "module": "ui.collection_panels",
+          "name": "RegionDivisionPanel",
+          "alias": null
+        },
+        {
+          "module": "ui.collection_panels",
+          "name": "EventCollectionPanel",
+          "alias": null
+        },
+        {
+          "module": "battle",
+          "name": "BattleService",
+          "alias": null
+        },
+        {
+          "module": "battle.state",
+          "name": "BattleAdvice",
+          "alias": null
+        },
+        {
+          "module": "battle.state",
+          "name": "BattleState",
+          "alias": null
+        },
+        {
+          "module": "vision.capture",
+          "name": "ScreenCapture",
+          "alias": null
+        },
+        {
+          "module": "vision.discard_tile_cropper",
+          "name": "extract_discard_tile_candidates",
+          "alias": null
+        },
+        {
+          "module": "vision.discard_tile_cropper",
+          "name": "prepare_trainable_discard_roi_image",
+          "alias": null
+        },
+        {
+          "module": "vision.hand_region_module",
+          "name": "HandRegionModule",
+          "alias": null
+        },
+        {
+          "module": "vision.hand_region_module",
+          "name": "prepare_trainable_hand_roi_image",
+          "alias": null
+        },
+        {
+          "module": "vision.layout",
+          "name": "LayoutCalculator",
+          "alias": null
+        },
+        {
+          "module": "vision.recognizer",
+          "name": "TileRecognizer",
+          "alias": null
+        },
+        {
+          "module": "vision.recognizer",
+          "name": "ButtonRecognizer",
+          "alias": null
+        },
+        {
+          "module": "vision.discard_recognizer",
+          "name": "DiscardAreaRecognizer",
+          "alias": null
+        },
+        {
+          "module": "vision.hog_classifier",
+          "name": "TileHOGClassifier",
+          "alias": null
+        },
+        {
+          "module": "vision.hog_classifier",
+          "name": "MIN_TRUSTED_SAMPLES_PER_CLASS",
+          "alias": null
+        },
+        {
+          "module": "vision.pipeline",
+          "name": "RecognitionPipeline",
+          "alias": null
+        },
+        {
+          "module": "game.session",
+          "name": "GameSession",
+          "alias": null
+        },
+        {
+          "module": "game.state",
+          "name": "ALL_TILE_IDS",
+          "alias": null
+        },
+        {
+          "module": "game.state",
+          "name": "GameState",
+          "alias": null
+        },
+        {
+          "module": "utils.paths",
+          "name": "data_path",
+          "alias": null
+        },
+        {
+          "module": "utils.paths",
+          "name": "template_dir",
+          "alias": null
+        },
+        {
+          "module": "game.state",
+          "name": "ALL_TILE_IDS",
+          "alias": null
+        },
+        {
+          "module": "game.state",
+          "name": "ALL_TILE_IDS",
+          "alias": null
+        },
+        {
+          "module": "vision.hand_region_module",
+          "name": "prepare_trainable_hand_roi_image",
+          "alias": null
+        }
+      ]
+    },
+    "ui\\region_selector.py": {
+      "classes": [
+        "RegionSelectorOverlay"
+      ],
+      "functions": [],
+      "imports": [
+        "numpy",
+        "mss",
+        "cv2"
+      ],
+      "from_imports": [
+        {
+          "module": "__future__",
+          "name": "annotations",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtCore",
+          "name": "Qt",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtCore",
+          "name": "QRect",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtCore",
+          "name": "pyqtSignal",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtCore",
+          "name": "QPoint",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtGui",
+          "name": "QPainter",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtGui",
+          "name": "QColor",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtGui",
+          "name": "QPen",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtGui",
+          "name": "QFont",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtGui",
+          "name": "QImage",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtGui",
+          "name": "QPixmap",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtWidgets",
+          "name": "QWidget",
+          "alias": null
+        }
+      ]
+    },
+    "utils\\__init__.py": {
+      "classes": [],
+      "functions": [],
+      "imports": [],
+      "from_imports": []
+    },
+    "utils\\paths.py": {
+      "classes": [],
+      "functions": [
+        "resource_path",
+        "data_path",
+        "template_dir"
+      ],
+      "imports": [
+        "os",
+        "sys"
+      ],
+      "from_imports": []
+    },
+    "vision\\__init__.py": {
+      "classes": [],
+      "functions": [],
+      "imports": [],
+      "from_imports": []
+    },
+    "vision\\capture.py": {
+      "classes": [
+        "ScreenCapture"
+      ],
+      "functions": [],
+      "imports": [
+        "numpy",
+        "mss",
+        "mss.tools",
+        "threading",
+        "cv2"
+      ],
+      "from_imports": [
+        {
+          "module": "__future__",
+          "name": "annotations",
+          "alias": null
+        },
+        {
+          "module": "typing",
+          "name": "TYPE_CHECKING",
+          "alias": null
+        },
+        {
+          "module": "vision.layout",
+          "name": "Rect",
+          "alias": null
+        }
+      ]
+    },
+    "vision\\discard_recognizer.py": {
+      "classes": [
+        "DiscardAreaRecognizer"
+      ],
+      "functions": [
+        "_resolve_discard_samples_dir"
+      ],
+      "imports": [
+        "os",
+        "logging",
+        "cv2",
+        "numpy"
+      ],
+      "from_imports": [
+        {
+          "module": "__future__",
+          "name": "annotations",
+          "alias": null
+        },
+        {
+          "module": "typing",
+          "name": "TYPE_CHECKING",
+          "alias": null
+        },
+        {
+          "module": "vision.discard_tile_cropper",
+          "name": "extract_primary_discard_tile",
+          "alias": null
+        },
+        {
+          "module": "vision.discard_tile_cropper",
+          "name": "prepare_trainable_discard_roi_image",
+          "alias": null
+        },
+        {
+          "module": "vision.recognizer",
+          "name": "TileRecognizer",
+          "alias": null
+        },
+        {
+          "module": "vision.recognizer",
+          "name": "MatchResult",
+          "alias": null
+        },
+        {
+          "module": "vision.layout",
+          "name": "LayoutCalculator",
+          "alias": null
+        },
+        {
+          "module": "vision.layout",
+          "name": "Rect",
+          "alias": null
+        },
+        {
+          "module": "vision.capture",
+          "name": "ScreenCapture",
+          "alias": null
+        }
+      ]
+    },
+    "vision\\discard_tile_cropper.py": {
+      "classes": [],
+      "functions": [
+        "_ensure_bgr",
+        "_build_tile_face_mask",
+        "_build_white_face_mask",
+        "_find_face_box_by_projection",
+        "_expand_face_box_to_tile",
+        "_tighten_box_to_mask",
+        "_component_boxes",
+        "_split_wide_box",
+        "_score_box",
+        "_content_window_crop",
+        "_prepare_full_tile_crop",
+        "_refine_crop_to_tile_face",
+        "extract_discard_tile_candidates",
+        "extract_primary_discard_tile",
+        "prepare_trainable_discard_roi_image"
+      ],
+      "imports": [
+        "cv2",
+        "numpy"
+      ],
+      "from_imports": [
+        {
+          "module": "__future__",
+          "name": "annotations",
+          "alias": null
+        }
+      ]
+    },
+    "vision\\hand_region_module.py": {
+      "classes": [
+        "HandRegionModule"
+      ],
+      "functions": [
+        "read_image",
+        "prepare_trainable_hand_roi_image"
+      ],
+      "imports": [
+        "json",
+        "logging",
+        "os",
+        "cv2",
+        "numpy"
+      ],
+      "from_imports": [
+        {
+          "module": "__future__",
+          "name": "annotations",
+          "alias": null
+        },
+        {
+          "module": "game.session",
+          "name": "GameSession",
+          "alias": null
+        }
+      ]
+    },
+    "vision\\hog_classifier.py": {
+      "classes": [
+        "TileHOGClassifier"
+      ],
+      "functions": [
+        "_make_hog",
+        "extract_hog"
+      ],
+      "imports": [
+        "os",
+        "json",
+        "cv2",
+        "numpy",
+        "logging"
+      ],
+      "from_imports": [
+        {
+          "module": "__future__",
+          "name": "annotations",
+          "alias": null
+        },
+        {
+          "module": "typing",
+          "name": "Optional",
+          "alias": null
+        }
+      ]
+    },
+    "vision\\layout.py": {
+      "classes": [
+        "Rect",
+        "LayoutCalculator"
+      ],
+      "functions": [],
+      "imports": [
+        "math"
+      ],
+      "from_imports": [
+        {
+          "module": "__future__",
+          "name": "annotations",
+          "alias": null
+        },
+        {
+          "module": "dataclasses",
+          "name": "dataclass",
+          "alias": null
+        }
+      ]
+    },
+    "vision\\pipeline.py": {
+      "classes": [
+        "RecognitionPipeline"
+      ],
+      "functions": [],
+      "imports": [
+        "os",
+        "time",
+        "csv",
+        "cv2",
+        "numpy",
+        "json",
+        "logging"
+      ],
+      "from_imports": [
+        {
+          "module": "__future__",
+          "name": "annotations",
+          "alias": null
+        },
+        {
+          "module": "typing",
+          "name": "Optional",
+          "alias": null
+        },
+        {
+          "module": "typing",
+          "name": "Callable",
+          "alias": null
+        },
+        {
+          "module": "vision.capture",
+          "name": "ScreenCapture",
+          "alias": null
+        },
+        {
+          "module": "vision.discard_tile_cropper",
+          "name": "prepare_trainable_discard_roi_image",
+          "alias": null
+        },
+        {
+          "module": "vision.layout",
+          "name": "LayoutCalculator",
+          "alias": null
+        },
+        {
+          "module": "vision.recognizer",
+          "name": "TileRecognizer",
+          "alias": null
+        },
+        {
+          "module": "vision.recognizer",
+          "name": "ButtonRecognizer",
+          "alias": null
+        },
+        {
+          "module": "vision.recognizer",
+          "name": "MatchResult",
+          "alias": null
+        },
+        {
+          "module": "vision.recognizer",
+          "name": "StripMatch",
+          "alias": null
+        },
+        {
+          "module": "vision.discard_recognizer",
+          "name": "DiscardAreaRecognizer",
+          "alias": null
+        },
+        {
+          "module": "vision.hand_region_module",
+          "name": "HandRegionModule",
+          "alias": null
+        },
+        {
+          "module": "game.state",
+          "name": "GameState",
+          "alias": null
+        },
+        {
+          "module": "game.state",
+          "name": "PlayerState",
+          "alias": null
+        },
+        {
+          "module": "game.state",
+          "name": "OpponentState",
+          "alias": null
+        },
+        {
+          "module": "game.state",
+          "name": "TileMatch",
+          "alias": null
+        },
+        {
+          "module": "game.state",
+          "name": "MeldGroup",
+          "alias": null
+        },
+        {
+          "module": "game.state",
+          "name": "RegionObservation",
+          "alias": null
+        },
+        {
+          "module": "game.state",
+          "name": "PHASE_PLAYING",
+          "alias": null
+        },
+        {
+          "module": "game.state",
+          "name": "PHASE_SHENGJIA",
+          "alias": null
+        },
+        {
+          "module": "game.state",
+          "name": "PHASE_LIUJU",
+          "alias": null
+        },
+        {
+          "module": "game.state",
+          "name": "PHASE_HUPAI",
+          "alias": null
+        },
+        {
+          "module": "game.session",
+          "name": "GameSession",
+          "alias": null
+        },
+        {
+          "module": "PyQt6.QtCore",
+          "name": "QTimer",
+          "alias": null
+        }
+      ]
+    },
+    "vision\\recognizer.py": {
+      "classes": [
+        "MatchResult",
+        "StripMatch",
+        "TileRecognizer",
+        "ButtonRecognizer"
+      ],
+      "functions": [
+        "_read_image"
+      ],
+      "imports": [
+        "os",
+        "cv2",
+        "numpy",
+        "logging"
+      ],
+      "from_imports": [
+        {
+          "module": "__future__",
+          "name": "annotations",
+          "alias": null
+        },
+        {
+          "module": "dataclasses",
+          "name": "dataclass",
+          "alias": null
+        },
+        {
+          "module": "typing",
+          "name": "Optional",
+          "alias": null
+        },
+        {
+          "module": "game.state",
+          "name": "ALL_TILE_IDS",
+          "alias": null
+        },
+        {
+          "module": "game.state",
+          "name": "BUTTON_IDS",
+          "alias": null
+        },
+        {
+          "module": "vision.hog_classifier",
+          "name": "TileHOGClassifier",
+          "alias": null
+        }
+      ]
+    }
+  },
+  "stats": {
+    "total_files": 41,
+    "total_classes": 43,
+    "total_functions": 141,
+    "total_edges": 182
+  }
+}

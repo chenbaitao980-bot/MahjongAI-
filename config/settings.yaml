@@ -6,7 +6,7 @@ app:
   version: 1.0.0
 battle:
   ai_recognition_enabled: false
-  voice_enabled: false
+  voice_enabled: true
 deepseek:
   api_key: sk-1287db910c9146e8aba8240f6e01c053
   base_url: https://api.deepseek.com
@@ -14,10 +14,10 @@ deepseek:
 event_reference:
   image: C:\MahjongAI\data\event_reference\current.png
 game_window:
-  height: 352
-  left: 7
-  top: 400
-  width: 630
+  height: 492
+  left: 0
+  top: 118
+  width: 853
 layout:
   decision_buttons:
     h: 0.217593

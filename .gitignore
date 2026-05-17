@@ -22,3 +22,5 @@ models/*.yaml
 *.tmp
 *.bak
 .gitnexus
+build/
+dist/

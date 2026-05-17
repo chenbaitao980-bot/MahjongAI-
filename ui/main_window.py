@@ -6,6 +6,7 @@ import time
 import math
 import shutil
 import json
+import subprocess
 from copy import deepcopy
 from datetime import datetime
 
@@ -25,9 +26,13 @@ from ui.region_selector import RegionSelectorOverlay
 from ui.calibration import CalibrationWizard
 from ui.capture_panel import CapturePanel
 from ui.battle_panel import ApiConfigDialog, BattlePanel
+from ui.stable_battle_panel import StableBattlePanel
 from ui.collection_panels import RegionDivisionPanel, EventCollectionPanel
 from battle import BattleService
 from battle.state import BattleAdvice, BattleState
+from stable.mapping import MappingStore
+from stable.protocol import MJProtocol, PcapParser, build_tcpdump_command
+from stable.tracker import PacketStateTracker
 from vision.capture import ScreenCapture
 from vision.discard_tile_cropper import (
     extract_discard_tile_candidates,
@@ -424,6 +429,18 @@ def _ensure_battle_config_defaults(config: dict) -> dict:
 
     battle_cfg = config.setdefault("battle", {})
     battle_cfg.setdefault("ai_recognition_enabled", False)
+
+    stable_cfg = config.setdefault("stable_reader", {})
+    stable_cfg.setdefault("adb_path", r"D:\Program Files\Netease\MuMu\nx_main\adb.exe")
+    stable_cfg.setdefault("device_serial", "127.0.0.1:16384")
+    stable_cfg.setdefault("server_port", 7777)
+    stable_cfg.setdefault("tcpdump_interface", "wlan0")
+    stable_cfg.setdefault("save_raw_pcap", True)
+    stable_cfg.setdefault("save_events_jsonl", True)
+    stable_cfg.setdefault("local_player", 0)
+    stable_cfg.setdefault("deepseek_enabled", True)
+    stable_cfg.setdefault("ai_provider", "deepseek")
+    stable_cfg.setdefault("ai_model", "")
     return config
 
 
@@ -782,6 +799,92 @@ class CaptureWorkerThread(QThread):
         self._pipeline.stop()
 
 
+class StableCaptureThread(QThread):
+    message_ready = pyqtSignal(object)
+    status_changed = pyqtSignal(str)
+    failed = pyqtSignal(str)
+
+    def __init__(self, config: dict, parent=None):
+        super().__init__(parent)
+        self._config = deepcopy(config)
+        self._running = True
+        self._proc = None
+
+    def request_stop(self) -> None:
+        self._running = False
+        proc = self._proc
+        if proc is not None:
+            try:
+                proc.terminate()
+            except Exception:
+                pass
+
+    def run(self):
+        stable_cfg = self._config.get("stable_reader", {})
+        adb_path = stable_cfg.get("adb_path", "")
+        device_serial = stable_cfg.get("device_serial", "")
+        port = int(stable_cfg.get("server_port", 7777))
+        interface = stable_cfg.get("tcpdump_interface", "wlan0")
+        if not adb_path:
+            self.failed.emit("stable_reader.adb_path is empty")
+            return
+        if not device_serial:
+            self.failed.emit("stable_reader.device_serial is empty")
+            return
+
+        out_dir = os.path.join(data_path("data"), "stable_reader")
+        os.makedirs(out_dir, exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        raw_fp = None
+        event_fp = None
+        if stable_cfg.get("save_raw_pcap", True):
+            raw_fp = open(os.path.join(out_dir, f"raw_{ts}.pcap"), "wb")
+        if stable_cfg.get("save_events_jsonl", True):
+            event_fp = open(os.path.join(out_dir, f"events_{ts}.jsonl"), "w", encoding="utf-8")
+
+        parser = PcapParser()
+        protocol = MJProtocol(server_port=port)
+        cmd = build_tcpdump_command(adb_path, device_serial, interface, port)
+        self.status_changed.emit(f"starting tcpdump on {device_serial}:{port}")
+        try:
+            self._proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+            )
+            if self._proc.stdout is None:
+                raise RuntimeError("tcpdump stdout is unavailable")
+            self.status_changed.emit("reading packets")
+            while self._running:
+                chunk = self._proc.stdout.read(4096)
+                if not chunk:
+                    break
+                if raw_fp is not None:
+                    raw_fp.write(chunk)
+                    raw_fp.flush()
+                packets = parser.feed(chunk)
+                for pkt in packets:
+                    for msg in protocol.process_packet(pkt):
+                        if event_fp is not None:
+                            event_fp.write(json.dumps(msg.to_dict(), ensure_ascii=False) + "\n")
+                            event_fp.flush()
+                        self.message_ready.emit(msg)
+        except Exception as exc:
+            self.failed.emit(str(exc))
+        finally:
+            self.status_changed.emit("stopped")
+            if self._proc is not None:
+                try:
+                    self._proc.terminate()
+                except Exception:
+                    pass
+                self._proc = None
+            if raw_fp is not None:
+                raw_fp.close()
+            if event_fp is not None:
+                event_fp.close()
+
+
 class BattleAnalysisThread(QThread):
     finished_ok = pyqtSignal(object, object)
     finished_err = pyqtSignal(str)
@@ -819,6 +922,9 @@ class MainWindow(QMainWindow):
         self._session: GameSession | None = None
         self._capture_worker: CaptureWorkerThread | None = None
         self._battle_worker: BattleAnalysisThread | None = None
+        self._stable_capture_worker: StableCaptureThread | None = None
+        self._stable_analysis_worker: BattleAnalysisThread | None = None
+        self._stable_pending_state: BattleState | None = None
         self._battle_analysis_started_at: float | None = None
         self._hog_train_thread: HOGTrainerThread | None = None
 
@@ -866,6 +972,11 @@ class MainWindow(QMainWindow):
             self._tile_rec,
             self._config,
         )
+        self._stable_mapping_store = MappingStore()
+        self._stable_tracker = PacketStateTracker(
+            self._stable_mapping_store,
+            local_player=int(self._config.get("stable_reader", {}).get("local_player", 1)),
+        )
 
         self._region_selector = RegionSelectorOverlay()
         self._region_selector.region_selected.connect(self._on_region_selected)
@@ -907,6 +1018,7 @@ class MainWindow(QMainWindow):
         tabs.addTab(self._build_event_tab(), "④ 事件收集")
         tabs.addTab(self._build_capture_tab(), "⑤ 识别运行")
         tabs.addTab(self._build_battle_tab(), "⑥ 正式战斗")
+        tabs.addTab(self._build_stable_tab(), "⑦ 稳定版")
         root.addWidget(tabs)
 
         self.setStatusBar(QStatusBar())
@@ -1288,6 +1400,17 @@ class MainWindow(QMainWindow):
         self._battle_panel.tile_correction_requested.connect(self._on_battle_tile_correction)
         self._battle_panel.meld_correction_requested.connect(self._on_battle_meld_correction)
         layout.addWidget(self._battle_panel)
+        return w
+
+    def _build_stable_tab(self) -> QWidget:
+        w = QWidget()
+        layout = QVBoxLayout(w)
+        self._stable_panel = StableBattlePanel(self._config)
+        self._stable_panel.start_requested.connect(self._on_stable_start_requested)
+        self._stable_panel.stop_requested.connect(self._on_stable_stop_requested)
+        self._stable_panel.config_requested.connect(self._open_api_config_dialog)
+        self._stable_panel.mapping_save_requested.connect(self._on_stable_mapping_save)
+        layout.addWidget(self._stable_panel)
         return w
 
     def _build_region_tab(self) -> QWidget:
@@ -2049,6 +2172,125 @@ class MainWindow(QMainWindow):
             self._battle_worker = None
         self._battle_analysis_started_at = None
 
+    # ------------------------------------------------------------------ #
+    #  Stable packet-reader battle
+    # ------------------------------------------------------------------ #
+
+    def _on_stable_start_requested(self):
+        self._on_stable_stop_requested()
+        self._stable_mapping_store.load()
+        self._stable_tracker = PacketStateTracker(
+            self._stable_mapping_store,
+            local_player=int(self._config.get("stable_reader", {}).get("local_player", 1)),
+        )
+        self._stable_panel.set_snapshot(self._stable_tracker.snapshot())
+        self._stable_capture_worker = StableCaptureThread(self._config, self)
+        self._stable_capture_worker.message_ready.connect(self._on_stable_message)
+        self._stable_capture_worker.status_changed.connect(self._stable_panel.set_capture_status)
+        self._stable_capture_worker.failed.connect(self._on_stable_capture_failed)
+        self._stable_capture_worker.finished.connect(self._on_stable_capture_finished)
+        self._stable_panel.set_running(True)
+        self._stable_capture_worker.start()
+        self.statusBar().showMessage("稳定版：抓包读取已启动")
+
+    def _on_stable_stop_requested(self):
+        if self._stable_capture_worker and self._stable_capture_worker.isRunning():
+            self._stable_capture_worker.request_stop()
+            self._stable_capture_worker.wait(3000)
+        self._stable_capture_worker = None
+        if hasattr(self, "_stable_panel"):
+            self._stable_panel.set_running(False)
+            self._stable_panel.set_capture_status("idle")
+
+    def _on_stable_capture_failed(self, err: str):
+        if hasattr(self, "_stable_panel"):
+            self._stable_panel.set_error(err)
+            self._stable_panel.set_running(False)
+        self.statusBar().showMessage(f"稳定版：抓包失败 - {err}")
+
+    def _on_stable_capture_finished(self):
+        if self._stable_capture_worker and not self._stable_capture_worker.isRunning():
+            self._stable_capture_worker = None
+        if hasattr(self, "_stable_panel"):
+            self._stable_panel.set_running(False)
+
+    def _on_stable_message(self, message):
+        changed = self._stable_tracker.apply(message)
+        if not changed:
+            return
+        self._refresh_stable_snapshot()
+        if self._stable_tracker.should_analyze():
+            state = self._stable_tracker.to_battle_state()
+            options = self._stable_panel.analysis_options()
+            state.deepseek_enabled = bool(options.get("deepseek_enabled", True))
+            state.ai_provider = str(options.get("ai_provider") or "deepseek")
+            state.ai_model = str(options.get("ai_model") or "")
+            state.ai_recognition_enabled = False
+            self._start_stable_analysis(state)
+
+    def _start_stable_analysis(self, state: BattleState):
+        if self._stable_analysis_worker and self._stable_analysis_worker.isRunning():
+            self._stable_pending_state = state
+            return
+        mode = "state_with_ai" if state.deepseek_enabled else "state_only"
+        self._stable_panel.set_busy(True, "稳定版：正在分析策略...")
+        self._stable_tracker.mark_analyzed()
+        self._stable_analysis_worker = BattleAnalysisThread(
+            self._battle_service,
+            state,
+            "stable_packet",
+            self,
+            mode=mode,
+        )
+        if state.deepseek_enabled:
+            self._stable_panel.clear_stream_buffer()
+        self._stable_analysis_worker.stream_chunk.connect(self._stable_panel.append_stream_chunk)
+        self._stable_analysis_worker.finished_ok.connect(self._on_stable_analysis_finished)
+        self._stable_analysis_worker.finished_err.connect(self._on_stable_analysis_failed)
+        self._stable_analysis_worker.finished.connect(self._on_stable_analysis_worker_finished)
+        self._stable_analysis_worker.start()
+
+    def _on_stable_analysis_finished(self, state: BattleState, advice: BattleAdvice):
+        self._stable_panel.set_advice(state, advice)
+        self._stable_panel.set_busy(False, "稳定版：策略已更新")
+        self.statusBar().showMessage(
+            f"稳定版：策略完成，推荐 {advice.recommended_discard or '--'}"
+        )
+
+    def _on_stable_analysis_failed(self, err: str):
+        self._stable_panel.set_error(err)
+        self._stable_panel.set_busy(False, "稳定版：分析失败")
+        self.statusBar().showMessage(f"稳定版：分析失败 - {err}")
+
+    def _on_stable_analysis_worker_finished(self):
+        if self._stable_analysis_worker and not self._stable_analysis_worker.isRunning():
+            self._stable_analysis_worker = None
+        pending = self._stable_pending_state
+        self._stable_pending_state = None
+        if pending is not None:
+            self._start_stable_analysis(pending)
+
+    def _on_stable_mapping_save(self, raw_key: str, tile_id: str):
+        try:
+            self._stable_mapping_store.save_tile_mapping(raw_key, tile_id)
+            self._stable_tracker.rebuild_from_history()
+            self._refresh_stable_snapshot()
+            if self._stable_tracker.should_analyze():
+                state = self._stable_tracker.to_battle_state()
+                options = self._stable_panel.analysis_options()
+                state.deepseek_enabled = bool(options.get("deepseek_enabled", True))
+                state.ai_provider = str(options.get("ai_provider") or "deepseek")
+                state.ai_model = str(options.get("ai_model") or "")
+                state.ai_recognition_enabled = False
+                self._start_stable_analysis(state)
+            self.statusBar().showMessage(f"稳定版：已保存映射 {raw_key} -> {tile_id}")
+        except Exception as exc:
+            self._stable_panel.set_error(str(exc))
+
+    def _refresh_stable_snapshot(self):
+        if hasattr(self, "_stable_panel"):
+            self._stable_panel.set_snapshot(self._stable_tracker.snapshot())
+
     def _on_battle_tile_correction(self, tile_index: int, correct_tile_id: str) -> None:
         """用户在手牌区点击纠正了一张牌：保存 ROI 到训练集并后台重训 HOG。"""
         rois = getattr(self._battle_service, "_last_match_rois", [])
@@ -2116,6 +2358,8 @@ class MainWindow(QMainWindow):
         self._config = _ensure_battle_config_defaults(dlg.updated_config())
         self._battle_service._config = self._config
         self._battle_panel.apply_config(self._config)
+        if hasattr(self, "_stable_panel"):
+            self._stable_panel.apply_config(self._config)
         self._save_config()
         self.statusBar().showMessage("API 配置已保存")
 
@@ -2171,8 +2415,13 @@ class MainWindow(QMainWindow):
         if self._capture_worker and self._capture_worker.isRunning():
             self._capture_worker.request_stop()
             self._capture_worker.wait(3000)
+        if self._stable_capture_worker and self._stable_capture_worker.isRunning():
+            self._stable_capture_worker.request_stop()
+            self._stable_capture_worker.wait(3000)
         if self._battle_worker and self._battle_worker.isRunning():
             self._battle_worker.wait(3000)
+        if self._stable_analysis_worker and self._stable_analysis_worker.isRunning():
+            self._stable_analysis_worker.wait(3000)
         self._pipeline.stop()
         if self._session:
             self._session.close()

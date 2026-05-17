@@ -1,0 +1,14 @@
+schema: spec-driven
+
+context: |
+  Project: MahjongAI desktop assistant.
+  Stable packet reader change lives in this repository under openspecs/.
+  The stable reader uses adb exec-out + tcpdump to read the game TCP protocol.
+  Frida and image recognition are out of scope for this change.
+
+rules:
+  implementation:
+    - Keep the existing vision-based formal battle tab working.
+    - The stable tab must not trigger screenshot or AI image recognition code paths.
+    - Missing baida data blocks strategy analysis but must not block data display.
+

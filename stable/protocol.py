@@ -216,6 +216,7 @@ class PcapParser:
         tcp = ip[ihl:]
         src_port = struct.unpack(">H", tcp[0:2])[0]
         dst_port = struct.unpack(">H", tcp[2:4])[0]
+        seq = struct.unpack(">I", tcp[4:8])[0]
         tcp_hlen = ((tcp[12] >> 4) & 0x0F) * 4
         if tcp_hlen < 20 or len(tcp) < tcp_hlen:
             return None
@@ -227,6 +228,7 @@ class PcapParser:
             "dst": f"{dst_ip}:{dst_port}",
             "src_port": src_port,
             "dst_port": dst_port,
+            "seq": seq,
             "payload": payload,
         }
 
@@ -234,19 +236,35 @@ class PcapParser:
 class MJProtocol:
     """Decode MahjongAI game protocol frames from TCP packets."""
 
-    def __init__(self, server_port: int = GAME_SERVER_PORT):
+    def __init__(self, server_port: int = GAME_SERVER_PORT, auto_detect_frames: bool = False):
         self.server_port = int(server_port)
+        self.auto_detect_frames = bool(auto_detect_frames)
         self.stream_bufs: dict[tuple[str, str], bytes] = {}
+        self.stream_next_seq: dict[tuple[str, str], int] = {}
 
     def process_packet(self, pkt: dict[str, Any]) -> list[ProtocolMessage]:
         src_port = int(pkt["src_port"])
         dst_port = int(pkt["dst_port"])
-        if src_port != self.server_port and dst_port != self.server_port:
+        payload = bytes(pkt["payload"])
+        port_matches = src_port == self.server_port or dst_port == self.server_port
+        if not port_matches and not (self.auto_detect_frames and self._looks_like_frame(payload)):
             return []
 
-        direction = "S->C" if src_port == self.server_port else "C->S"
+        direction = "S->C" if self.server_port <= 0 or src_port == self.server_port else "C->S"
         key = (str(pkt["src"]), str(pkt["dst"]))
-        buf = self.stream_bufs.get(key, b"") + bytes(pkt["payload"])
+        if "seq" in pkt:
+            seq = int(pkt["seq"]) & 0xFFFFFFFF
+            prev_next = self.stream_next_seq.get(key)
+            if prev_next is not None:
+                end_seq = (seq + len(payload)) & 0xFFFFFFFF
+                if self._seq_le(end_seq, prev_next):
+                    return []
+                if self._seq_lt(seq, prev_next):
+                    offset = (prev_next - seq) & 0xFFFFFFFF
+                    payload = payload[offset:]
+                    seq = prev_next
+            self.stream_next_seq[key] = (seq + len(payload)) & 0xFFFFFFFF
+        buf = self.stream_bufs.get(key, b"") + payload
 
         messages: list[ProtocolMessage] = []
         while len(buf) >= HDR_LEN:
@@ -265,6 +283,18 @@ class MJProtocol:
 
         self.stream_bufs[key] = buf
         return messages
+
+    @staticmethod
+    def _seq_lt(a: int, b: int) -> bool:
+        a &= 0xFFFFFFFF
+        b &= 0xFFFFFFFF
+        return a != b and ((a - b) & 0x80000000) != 0
+
+    @staticmethod
+    def _seq_le(a: int, b: int) -> bool:
+        a &= 0xFFFFFFFF
+        b &= 0xFFFFFFFF
+        return a == b or MJProtocol._seq_lt(a, b)
 
     @staticmethod
     def _looks_like_frame(buf: bytes) -> bool:
@@ -335,19 +365,26 @@ class MJProtocol:
             player = int(body[0])
             count = int(body[2])
             if 0 < count <= 20 and len(body) >= 3 + count:
+                hand_raw = list(body[3 : 3 + count])
+                tail = list(body[3 + count :])
+                extra_raw = self._extract_hand_tail_tile(count, tail)
+                if extra_raw is not None:
+                    hand_raw.append(extra_raw)
                 result.update(
                     {
                         "event": "hand_update",
                         "player": player,
-                        "hand_raw": list(body[3 : 3 + count]),
+                        "hand_raw": hand_raw,
                         "hand_context": TILE_CONTEXT_STABLE,
                         "hand_count_raw": count,
                         "source": SOURCE_TRUSTED_HAND,
                         "trusted": True,
                     }
                 )
-                if len(body) > 3 + count:
-                    result["hand_tail_raw"] = list(body[3 + count :])
+                if extra_raw is not None:
+                    result["hand_extra_raw"] = extra_raw
+                if tail:
+                    result["hand_tail_raw"] = tail
         elif sub_cmd == 0x021B and len(body) >= 2:
             result.update(
                 {
@@ -391,6 +428,9 @@ class MJProtocol:
                         "tile_context": TILE_CONTEXT_STABLE,
                     }
                 )
+            meld_info = self._extract_meld_info(body)
+            if meld_info:
+                result.update(meld_info)
         elif sub_cmd == 0x0220:
             result["event"] = "win"
             result["source"] = SOURCE_TRUSTED_ACTION
@@ -427,9 +467,28 @@ class MJProtocol:
         return None
 
     @staticmethod
+    def _extract_hand_tail_tile(count: int, tail: list[int]) -> int | None:
+        if count != 13 or len(tail) < 2:
+            return None
+        marker, raw = int(tail[0]), int(tail[1])
+        if marker != 0x01:
+            return None
+        if raw in (0, HIDDEN_TILE):
+            return None
+        if stable_tile_id(raw) is None:
+            return None
+        return raw
+
+    @staticmethod
     def _extract_kong_tile(body: bytes) -> int | None:
         if len(body) >= 9:
             meld_bytes = [int(body[i]) for i in (4, 5, 6, 8)]
+            claimed = meld_bytes[-1]
+            if stable_tile_id(claimed) is not None:
+                return claimed
+            stable_tiles = [stable_tile_id(raw) for raw in meld_bytes if raw not in (0, HIDDEN_TILE)]
+            if stable_tiles and len(set(stable_tiles)) == 1:
+                return meld_bytes[0]
             meld_indexes = [instance_tile_index(raw) for raw in meld_bytes if raw not in (0, HIDDEN_TILE)]
             if meld_indexes and len(set(meld_indexes)) == 1:
                 return meld_bytes[0]
@@ -447,6 +506,37 @@ class MJProtocol:
             if count >= 4:
                 return first_raw
         return None
+
+    @staticmethod
+    def _extract_meld_info(body: bytes) -> dict[str, Any]:
+        if len(body) < 9:
+            return {}
+        exposed = [int(body[i]) for i in (4, 5, 6)]
+        claimed = int(body[8])
+        if stable_tile_id(claimed) is None:
+            return {}
+        if any(stable_tile_id(raw) is None for raw in exposed):
+            return {}
+
+        tiles_raw = exposed + [claimed]
+        if len(set(tiles_raw)) == 1:
+            return {"meld_type": "kan_open", "meld_tiles_raw": tiles_raw}
+        if len(set(exposed)) == 1:
+            return {"meld_type": "pon", "meld_tiles_raw": exposed}
+        if MJProtocol._is_stable_sequence(exposed):
+            return {"meld_type": "chi", "meld_tiles_raw": exposed}
+        return {}
+
+    @staticmethod
+    def _is_stable_sequence(raw_values: list[int]) -> bool:
+        tiles = [stable_tile_id(raw) for raw in raw_values]
+        if any(tile is None for tile in tiles):
+            return False
+        suits = [str(tile)[-1] for tile in tiles]
+        if len(set(suits)) != 1 or suits[0] == "z":
+            return False
+        ranks = sorted(int(str(tile)[:-1]) for tile in tiles)
+        return ranks[1] == ranks[0] + 1 and ranks[2] == ranks[1] + 1
 
 
 class NpcapCapture:
@@ -466,7 +556,7 @@ class NpcapCapture:
         self._running = False
         self._sock = None
 
-    def sniff(self, callback):
+    def sniff(self, callback, port_filter: int | None = None):
         """阻塞式嗅探，每个包调用 *callback(raw_ip_bytes)*。"""
         import scapy.config
 
@@ -478,17 +568,17 @@ class NpcapCapture:
         from scapy.all import sniff as scapy_sniff
 
         self._running = True
-        port = self.server_port
+        port = int(self.server_port if port_filter is None else port_filter)
 
-        def port_filter(pkt):
+        def dispatch_packet(pkt):
             self._dispatch(pkt, callback, port)
 
         use_l3 = False
         # 先尝试 L2（支持 BPF 硬件过滤，性能最优）
         try:
             kw = dict(
-                filter=f"tcp port {port}",
-                prn=port_filter,
+                filter=f"tcp port {port}" if port > 0 else "tcp",
+                prn=dispatch_packet,
                 stop_filter=lambda _: not self._running,
                 store=False,
             )
@@ -511,7 +601,7 @@ class NpcapCapture:
                 while self._running:
                     scapy_sniff(
                         opened_socket=sock,
-                        prn=port_filter,
+                        prn=dispatch_packet,
                         stop_filter=lambda _: not self._running,
                         timeout=2,
                         store=False,

@@ -38,6 +38,21 @@ def rank_of(tile_id: str) -> int:
     return int(tile_id[:-1])
 
 
+def tile_sort_key(tile_id: str) -> tuple[int, int, str]:
+    """Display sort key: 万 -> 条 -> 筒 -> 字, then rank; unknowns last."""
+    if not tile_id or len(tile_id) < 2:
+        return (99, 99, str(tile_id))
+    suit = tile_id[-1]
+    try:
+        rank = int(tile_id[:-1])
+    except (TypeError, ValueError):
+        return (99, 99, str(tile_id))
+    suit_order = {"m": 0, "s": 1, "p": 2, "z": 3}
+    if suit not in suit_order:
+        return (99, 99, str(tile_id))
+    return (suit_order[suit], rank, str(tile_id))
+
+
 def is_honor(tile_id: str) -> bool:
     return tile_id.endswith("z")
 

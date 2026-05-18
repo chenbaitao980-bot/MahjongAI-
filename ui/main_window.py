@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 import os
 import yaml
 import glob
@@ -439,6 +439,7 @@ def _ensure_battle_config_defaults(config: dict) -> dict:
     stable_cfg.setdefault("npcap_iface", "")
     stable_cfg.setdefault("save_raw_pcap", True)
     stable_cfg.setdefault("save_events_jsonl", True)
+    stable_cfg.setdefault("player_count", 2)
     stable_cfg.setdefault("local_player", 0)
     stable_cfg.setdefault("deepseek_enabled", True)
     stable_cfg.setdefault("ai_provider", "deepseek")
@@ -861,10 +862,10 @@ class StableCaptureThread(QThread):
         npcap_iface = stable_cfg.get("npcap_iface", "") or None
         raw_fp, event_fp = self._open_output_files(stable_cfg)
 
-        protocol = MJProtocol(server_port=port)
+        protocol = MJProtocol(server_port=port, auto_detect_frames=True)
         capture = NpcapCapture(server_port=port, iface=npcap_iface)
         self._npcap = capture
-        self.status_changed.emit(f"starting npcap on host (port {port})")
+        self.status_changed.emit(f"starting npcap on host (auto tcp; preferred port {port})")
         try:
             def on_ip_packet(ip_bytes: bytes):
                 if raw_fp is not None:
@@ -875,7 +876,7 @@ class StableCaptureThread(QThread):
                     self._emit_messages(protocol, pkt, event_fp)
 
             self.status_changed.emit("reading packets")
-            capture.sniff(on_ip_packet)
+            capture.sniff(on_ip_packet, port_filter=0)
         except Exception as exc:
             self.failed.emit(str(exc))
         finally:
@@ -969,6 +970,42 @@ class BattleAnalysisThread(QThread):
             self.finished_err.emit(str(exc))
 
 
+def _parse_stable_event_text(text: str) -> tuple[str, str, str]:
+    """
+    从 tracker event_log 中文条目（如 "12:34:56 我方打出三万"）解析
+    (事件类型中文, 触发方中文, 涉及牌文本)。
+    """
+    import re
+    body = re.sub(r"^\d{2}:\d{2}:\d{2}\s*", "", text).strip()
+
+    for raw_actor, disp_actor in [("我方", "我方"), ("对面", "对方"), ("旁家", "旁家")]:
+        if body.startswith(raw_actor):
+            rest = body[len(raw_actor):]
+            for kw, ev in [
+                ("摸牌", "摸牌"), ("打出", "出牌"),
+                ("明杠", "明杠"), ("暗杠", "暗杠"), ("补杠", "补杠"),
+                ("碰", "碰牌"), ("吃", "吃牌"),
+                ("手牌更新", "手牌更新"),
+            ]:
+                if rest.startswith(kw):
+                    raw_tile = rest[len(kw):]
+                    # 去掉 "：13 张" 这类计数后缀，以及残留中文冒号
+                    tile = re.sub(r"[：:\s]*\d+\s*张.*$", "", raw_tile).strip()
+                    tile = re.sub(r"^[：:\s]+", "", tile).strip()
+                    return ev, disp_actor, tile
+            return rest[:12], disp_actor, ""
+
+    if "开局发牌" in body:
+        return "开局发牌", "—", ""
+    if "开局标记" in body:
+        return "开局标记", "—", ""
+    if "财神更新" in body:
+        return "财神", "—", body.replace("财神更新：", "").strip()
+    if "胡牌" in body:
+        return "胡牌", "—", ""
+    return body[:12], "—", ""
+
+
 class MainWindow(QMainWindow):
     def __init__(self, config: dict):
         super().__init__()
@@ -979,6 +1016,8 @@ class MainWindow(QMainWindow):
         self._stable_capture_worker: StableCaptureThread | None = None
         self._stable_analysis_worker: BattleAnalysisThread | None = None
         self._stable_pending_state: BattleState | None = None
+        self._stable_non_game_messages = 0
+        self._stable_excel_logger = None   # ExcelGameLogger，启动抓包时懒创建
         self._battle_analysis_started_at: float | None = None
         self._hog_train_thread: HOGTrainerThread | None = None
 
@@ -1030,6 +1069,7 @@ class MainWindow(QMainWindow):
         self._stable_tracker = PacketStateTracker(
             self._stable_mapping_store,
             local_player=int(self._config.get("stable_reader", {}).get("local_player", 1)),
+            player_count=int(self._config.get("stable_reader", {}).get("player_count", 2)),
         )
 
         self._region_selector = RegionSelectorOverlay()
@@ -2238,7 +2278,9 @@ class MainWindow(QMainWindow):
         self._stable_tracker = PacketStateTracker(
             self._stable_mapping_store,
             local_player=int(self._config.get("stable_reader", {}).get("local_player", 1)),
+            player_count=int(self._config.get("stable_reader", {}).get("player_count", 2)),
         )
+        self._stable_non_game_messages = 0
         self._stable_panel.set_snapshot(self._stable_tracker.snapshot())
         self._stable_capture_worker = StableCaptureThread(self._config, self)
         self._stable_capture_worker.message_ready.connect(self._on_stable_message)
@@ -2254,6 +2296,7 @@ class MainWindow(QMainWindow):
             self._stable_capture_worker.request_stop()
             self._stable_capture_worker.wait(5000)
         self._stable_capture_worker = None
+        self._close_stable_excel_logger()
         if hasattr(self, "_stable_panel"):
             self._stable_panel.set_running(False)
             self._stable_panel.set_capture_status("idle")
@@ -2270,10 +2313,74 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_stable_panel"):
             self._stable_panel.set_running(False)
 
+    # ---- Excel 流水记录（npcap 模式）----
+
+    def _close_stable_excel_logger(self) -> None:
+        logger = self._stable_excel_logger
+        if logger is not None:
+            path = logger.close()
+            self._stable_excel_logger = None
+            if hasattr(self, "_stable_panel") and path:
+                self._stable_panel.set_capture_status(f"Excel 已保存：{os.path.basename(path)}")
+
+    def _log_stable_excel_row(self, message, event_text: str) -> None:
+        try:
+            from game.excel_logger import ExcelGameLogger
+            if self._stable_excel_logger is None:
+                out_dir = os.path.join(data_path("data"), "stable_logs")
+                os.makedirs(out_dir, exist_ok=True)
+                ts_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+                path = os.path.join(out_dir, f"牌面流水_{ts_str}.xlsx")
+                self._stable_excel_logger = ExcelGameLogger(path)
+
+            snap = self._stable_tracker.snapshot()
+            local_pid = snap["local_player"]
+            opp_pid   = snap["opponent_player"]
+            players   = snap.get("players", {})
+            self_p    = players.get(local_pid, {})
+            opp_p     = players.get(opp_pid, {})
+
+            event_type, actor, tile = _parse_stable_event_text(event_text)
+
+            # message.ts 格式类似 "2026-05-18T12:34:56.789000"
+            raw_ts = getattr(message, "ts", "") or ""
+            row_ts = raw_ts[11:19] if len(raw_ts) >= 19 else datetime.now().strftime("%H:%M:%S")
+
+            self._stable_excel_logger.log_row(
+                event_type=event_type,
+                actor=actor,
+                tile=tile,
+                self_hand=list(self_p.get("hand", [])),
+                self_discards=list(self_p.get("discards", [])),
+                self_melds=list(self_p.get("melds", [])),
+                enemy_discards=list(opp_p.get("discards", [])),
+                enemy_melds=list(opp_p.get("melds", [])),
+                remaining=int(snap.get("remaining_tiles", 0)),
+                source="抓包",
+                ts=row_ts,
+            )
+        except Exception:
+            pass
+
     def _on_stable_message(self, message):
+        prev_log_len = len(self._stable_tracker.event_log)
         changed = self._stable_tracker.apply(message)
         if not changed:
+            self._stable_non_game_messages += 1
+            if (
+                not self._stable_tracker.hand_trusted
+                and self._stable_non_game_messages >= 3
+                and hasattr(self, "_stable_panel")
+            ):
+                self._stable_panel.set_capture_status(
+                    "只收到心跳/非牌局包；npcap 已抓取全 TCP，请确认网络接口或等待业务包"
+                )
             return
+        self._stable_non_game_messages = 0
+        # 写 Excel 流水行
+        new_events = self._stable_tracker.event_log[prev_log_len:]
+        event_text = new_events[-1] if new_events else ""
+        self._log_stable_excel_row(message, event_text)
         self._refresh_stable_snapshot()
         if self._stable_tracker.should_analyze():
             state = self._stable_tracker.to_battle_state()

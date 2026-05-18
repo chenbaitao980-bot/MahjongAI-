@@ -1,10 +1,32 @@
 # MahjongAI 知识图谱
 
-> 自动生成于 2026-05-04 20:49 | 最后人工更新：2026-05-17（stable 模块 instance 牌型编码顺序修复）
+> 自动生成于 2026-05-04 20:49 | 最后人工更新：2026-05-18（npcap 模式 Excel 牌面流水记录）
 
 ---
 
 ## 变更日志
+
+### 2026-05-18 — npcap 抓包模式 Excel 牌面流水 & 纠错模板
+
+#### 新增 `game/excel_logger.py`
+- `ExcelGameLogger` 类：每次牌面变更追加一行到 xlsx 文件
+- 15 列：序号/时间/事件/触发方/涉及牌/我方手牌/我方弃牌/我方副露/对方弃牌/对方副露/剩余牌数/数据来源/识别正确?/纠正值/备注
+- 全中文（`tile_display_name` 转换），`识别正确?` 列带下拉校验（未确认/✓正确/✗错误）
+- 我方区/对方区/纠错列分别着色（蓝/橙/黄），开局行绿色，胡牌行橙色，首行冻结+自动筛选
+
+#### 修改 `ui/main_window.py`
+- 新增模块级函数 `_parse_stable_event_text(text)` — 从 tracker event_log 文本解析（事件类型, 触发方, 涉及牌）
+- 新增 `MainWindow._close_stable_excel_logger()` — 保存并关闭 xlsx，显示路径到状态栏
+- 新增 `MainWindow._log_stable_excel_row(message, event_text)` — 懒创建 `ExcelGameLogger`（第一次有效包时），从 `snapshot()` 提取数据写一行
+- `_on_stable_message()` 在 `changed=True` 后调用 `_log_stable_excel_row`
+- `_on_stable_stop_requested()` 停止时自动保存 Excel
+
+#### 修改 `requirements.txt`
+- 新增 `openpyxl>=3.1.0`
+
+**使用说明**：打完一局停止抓包 → `data/stable_logs/牌面流水_时间戳.xlsx` 自动生成 → 对照录屏在 M 列打勾/标错 → N 列填实际值 → O 列备注具体哪里错了
+
+---
 
 ### 2026-05-17 — 修复抓包模式牌型全部错位（instance 编码顺序与游戏不符）
 

@@ -5,7 +5,7 @@ from typing import Any
 
 from battle.state import BattleState, meld_from_ids, tile_from_id
 from game.state import ALL_TILE_IDS
-from game.tiles import tile_display_name
+from game.tiles import tile_display_name, tile_sort_key
 from stable.mapping import MappingStore
 from stable.protocol import (
     HIDDEN_TILE,
@@ -48,9 +48,10 @@ class PacketPlayerState:
 class PacketStateTracker:
     """Build a decision-ready battle state from decoded packet events."""
 
-    def __init__(self, mapping_store: MappingStore, local_player: int = LOCAL_PLAYER_DEFAULT):
+    def __init__(self, mapping_store: MappingStore, local_player: int = LOCAL_PLAYER_DEFAULT, player_count: int = 4):
         self.mapping_store = mapping_store
         self.local_player = int(local_player)
+        self.player_count = max(2, min(4, int(player_count)))
         self.history: list[ProtocolMessage] = []
         self._last_analyzed_signature: tuple[Any, ...] | None = None
         self.reset()
@@ -68,9 +69,12 @@ class PacketStateTracker:
         self.phase = "idle"
         self.event_log: list[str] = []
         self.last_error = ""
+        self._last_discard_echo: tuple[int, str] | None = None
 
     @property
     def opponent_player(self) -> int:
+        if self.player_count == 2:
+            return 1 - self.local_player if self.local_player in (0, 1) else (self.local_player + 1) % 4
         return (self.local_player + 2) % 4
 
     def _maybe_lock_local_player(self, player_id: int, raw_len: int, source: str) -> None:
@@ -110,9 +114,10 @@ class PacketStateTracker:
         except Exception as exc:
             self.last_error = str(exc)
             return False
-        if changed:
+        if changed and not bool(game.get("suppress_event_log")):
             self._append_event(message, game)
         return changed
+
 
     def _apply_game_event(self, game: dict[str, Any]) -> bool:
         event = str(game.get("event") or "")
@@ -144,6 +149,11 @@ class PacketStateTracker:
         if event == "hand_update":
             player_id = int(player)
             raw_len = len(game.get("hand_raw", []))
+            if self._is_new_round_hand_update(player_id, raw_len, source):
+                history = self.history
+                self.reset(keep_history=True)
+                self.history = history
+                self.phase = "playing"
             self._maybe_lock_local_player(player_id, raw_len, source)
             if self._is_relevant_player(player_id):
                 if source == SOURCE_TRUSTED_HAND:
@@ -165,6 +175,16 @@ class PacketStateTracker:
         if event == "draw":
             player_id = int(player if player is not None else -1)
             tile = self._resolve_tile_from_game(game, "draw", note_zero=False) if self._is_relevant_player(player_id) else None
+            if tile and self._consume_discard_echo(player_id, tile):
+                game["suppress_event_log"] = True
+                if player_id == self.local_player:
+                    self.current_turn = "self"
+                    self.turn_trusted = source == SOURCE_TRUSTED_ACTION
+                elif player_id == self.opponent_player:
+                    self.current_turn = "enemy"
+                    self.turn_trusted = source == SOURCE_TRUSTED_ACTION
+                return True
+            self._last_discard_echo = None
             self.remaining_tiles = max(0, self.remaining_tiles - 1)
             if player_id in self.players:
                 self.players[player_id].hand_count += 1
@@ -184,6 +204,7 @@ class PacketStateTracker:
             if player_id in self.players:
                 if tile:
                     self.players[player_id].discards.append(tile)
+                    self._last_discard_echo = (player_id, tile)
                 self.players[player_id].hand_count = max(0, self.players[player_id].hand_count - 1)
                 if player_id == self.local_player:
                     if tile:
@@ -196,14 +217,26 @@ class PacketStateTracker:
             return True
 
         if event == "kong":
+            self._last_discard_echo = None
             player_id = int(player if player is not None else self.local_player)
-            tile = self._resolve_tile_from_game(game, "kong") if self._is_relevant_player(player_id) else None
-            if player_id in self.players and tile:
-                self.players[player_id].melds.append({"type": "kan_open", "tiles": [tile] * 4})
+            tile = self._resolve_tile_from_game(game, "kong", note_zero=self._is_relevant_player(player_id))
+            if tile:
+                self._remove_claimed_discard(tile, claimant=player_id)
+            if player_id in self.players and self._is_relevant_player(player_id) and tile and game.get("meld_type"):
+                meld_type = str(game.get("meld_type") or "kan_open")
+                meld_tiles = self._resolve_tiles(
+                    list(game.get("meld_tiles_raw") or []),
+                    str(game.get("tile_context") or "stable"),
+                    "kong",
+                ) or [tile] * 4
+                self.players[player_id].melds.append(
+                    {"type": meld_type, "tiles": meld_tiles}
+                )
                 if player_id == self.local_player:
-                    for _ in range(4):
-                        self._remove_one(self.players[player_id].hand, tile)
-                self.remaining_tiles = max(0, self.remaining_tiles - 1)
+                    for meld_tile in meld_tiles:
+                        self._remove_one(self.players[player_id].hand, meld_tile)
+                if meld_type.startswith("kan"):
+                    self.remaining_tiles = max(0, self.remaining_tiles - 1)
             return True
 
         if event == "win":
@@ -262,12 +295,47 @@ class PacketStateTracker:
         self.mapping_store.note_unknown(key, note)
         return None
 
+    def _is_new_round_hand_update(self, player_id: int, raw_len: int, source: str) -> bool:
+        if source != SOURCE_TRUSTED_HAND:
+            return False
+        if player_id != self.local_player:
+            return False
+        if raw_len not in (13, 14):
+            return False
+        if not self.hand_trusted:
+            return False
+        if self.phase == "hupai":
+            return True
+        has_visible_old_round = any(
+            p.discards or p.melds
+            for p in self.players.values()
+        )
+        return self.phase == "playing" and has_visible_old_round and self.remaining_tiles <= 70
+
     @staticmethod
     def _remove_one(items: list[str], tile: str) -> None:
         try:
             items.remove(tile)
         except ValueError:
             pass
+
+    def _consume_discard_echo(self, player_id: int, tile: str) -> bool:
+        if self._last_discard_echo is None:
+            return False
+        discard_player, discard_tile = self._last_discard_echo
+        self._last_discard_echo = None
+        return discard_player != player_id and discard_tile == tile
+
+
+    def _remove_claimed_discard(self, tile: str, claimant: int) -> None:
+        for pid in (self.local_player, self.opponent_player):
+            if pid == claimant:
+                continue
+            discards = self.players[pid].discards
+            for idx in range(len(discards) - 1, -1, -1):
+                if discards[idx] == tile:
+                    del discards[idx]
+                    return
 
     def _append_event(self, message: ProtocolMessage, game: dict[str, Any]) -> None:
         event = game.get("event", "")
@@ -289,7 +357,8 @@ class PacketStateTracker:
         elif event == "discard":
             text = f"{time_text} {actor}打出" + (tile_text if tile_text else "")
         elif event == "kong":
-            text = f"{time_text} {actor}杠牌" + (tile_text if tile_text else "")
+            meld_text = MELD_TYPE_CN.get(str(game.get("meld_type") or "kan_open"), "副露")
+            text = f"{time_text} {actor}{meld_text}" + (tile_text if tile_text else "")
         elif event == "win":
             text = f"{time_text} 胡牌结算"
         elif "baida_raw" in game:
@@ -352,7 +421,7 @@ class PacketStateTracker:
             "turn_trusted": self.turn_trusted,
             "players": {
                 pid: {
-                    "hand": list(p.hand),
+                    "hand": sorted(p.hand, key=tile_sort_key) if pid == self.local_player else list(p.hand),
                     "hand_count": p.hand_count,
                     "discards": list(p.discards),
                     "melds": list(p.melds),

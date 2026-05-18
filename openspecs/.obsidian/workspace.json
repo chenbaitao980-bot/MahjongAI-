@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "changes/stable-reader-display-fixes/tasks.md",
+                "file": "changes/excel-game-logger/design.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "tasks"
+              "title": "design"
             }
           }
         ]
@@ -185,25 +185,31 @@
   },
   "active": "6c9c152d7114b458",
   "lastOpenFiles": [
+    "changes/excel-game-logger/tasks.md.tmp.29660.5325db565672",
+    "changes/excel-game-logger/tasks.md",
+    "changes/stable-reader-display-fixes/design.md",
+    "changes/excel-game-logger/tasks.md.tmp.29660.b0d57c8beada",
+    "changes/excel-game-logger/specs/excel-logger/spec.md",
+    "changes/excel-game-logger/specs/excel-logger/spec.md.tmp.29660.46dd7ec944ba",
+    "changes/excel-game-logger/design.md",
+    "changes/excel-game-logger/design.md.tmp.29660.5f943b8b678d",
+    "changes/excel-game-logger/proposal.md",
+    "changes/excel-game-logger/proposal.md.tmp.29660.679c22e26abf",
+    "changes/excel-game-logger/specs/excel-logger",
+    "changes/excel-game-logger/specs",
+    "changes/excel-game-logger",
+    "changes/stable-reader-display-fixes/delivery.md",
+    "changes/stable-reader-display-fixes/tasks.md",
     "changes/stable-reader-display-fixes/specs/stable-reader/spec.md",
     "archive/2026-05-18-stable-packet-reader/tasks.md",
     "changes/stable-reader-display-fixes/specs/stable-reader/spec.md.tmp.7988.6da9d131f5d8",
-    "changes/stable-reader-display-fixes/tasks.md",
     "changes/stable-reader-display-fixes/tasks.md.tmp.7988.9d0200616e7f",
-    "changes/stable-reader-display-fixes/design.md",
     "changes/stable-reader-display-fixes/design.md.tmp.7988.145b6394f99e",
     "changes/stable-reader-display-fixes/proposal.md",
-    "changes/stable-reader-display-fixes/proposal.md.tmp.7988.eac4f38769f8",
-    "changes/stable-reader-display-fixes/specs/stable-reader",
-    "changes/stable-reader-display-fixes/specs",
-    "changes/stable-reader-display-fixes",
     "changes/anti-detection/design.md",
     "archive/anti-detection/specs/stealth-hardening/spec.md",
     "archive/anti-detection/specs/npcap-capture/spec.md",
-    "archive/anti-detection/specs/stealth-hardening",
-    "archive/anti-detection/specs/npcap-capture",
     "archive/anti-detection/tasks.md",
-    "archive/anti-detection/specs",
     "archive/anti-detection/proposal.md",
     "archive/anti-detection/design.md",
     "changes/anti-detection/tasks.md",
@@ -214,7 +220,6 @@
     "archive/2026-05-18-stable-packet-reader/design.md",
     "changes/stable-packet-reader/tasks.md",
     "changes/stable-packet-reader/specs/stable-reader/spec.md",
-    "changes/stable-packet-reader/design.md",
-    "changes/stable-packet-reader/proposal.md"
+    "changes/stable-packet-reader/design.md"
   ]
 }

@@ -31,7 +31,7 @@ from ui.collection_panels import RegionDivisionPanel, EventCollectionPanel
 from battle import BattleService
 from battle.state import BattleAdvice, BattleState
 from stable.mapping import MappingStore
-from stable.protocol import MJProtocol, PcapParser, build_tcpdump_command
+from stable.protocol import MJProtocol, NpcapCapture, PcapParser, build_tcpdump_command
 from stable.tracker import PacketStateTracker
 from vision.capture import ScreenCapture
 from vision.discard_tile_cropper import (
@@ -435,6 +435,8 @@ def _ensure_battle_config_defaults(config: dict) -> dict:
     stable_cfg.setdefault("device_serial", "127.0.0.1:16384")
     stable_cfg.setdefault("server_port", 7777)
     stable_cfg.setdefault("tcpdump_interface", "wlan0")
+    stable_cfg.setdefault("capture_mode", "npcap")
+    stable_cfg.setdefault("npcap_iface", "")
     stable_cfg.setdefault("save_raw_pcap", True)
     stable_cfg.setdefault("save_events_jsonl", True)
     stable_cfg.setdefault("local_player", 0)
@@ -809,9 +811,16 @@ class StableCaptureThread(QThread):
         self._config = deepcopy(config)
         self._running = True
         self._proc = None
+        self._npcap = None
 
     def request_stop(self) -> None:
         self._running = False
+        npcap = self._npcap
+        if npcap is not None:
+            try:
+                npcap.stop()
+            except Exception:
+                pass
         proc = self._proc
         if proc is not None:
             try:
@@ -821,17 +830,15 @@ class StableCaptureThread(QThread):
 
     def run(self):
         stable_cfg = self._config.get("stable_reader", {})
-        adb_path = stable_cfg.get("adb_path", "")
-        device_serial = stable_cfg.get("device_serial", "")
+        capture_mode = stable_cfg.get("capture_mode", "npcap")
         port = int(stable_cfg.get("server_port", 7777))
-        interface = stable_cfg.get("tcpdump_interface", "wlan0")
-        if not adb_path:
-            self.failed.emit("stable_reader.adb_path is empty")
-            return
-        if not device_serial:
-            self.failed.emit("stable_reader.device_serial is empty")
-            return
 
+        if capture_mode == "npcap":
+            self._run_npcap(stable_cfg, port)
+        else:
+            self._run_tcpdump(stable_cfg, port)
+
+    def _open_output_files(self, stable_cfg: dict):
         out_dir = os.path.join(data_path("data"), "stable_reader")
         os.makedirs(out_dir, exist_ok=True)
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -841,6 +848,57 @@ class StableCaptureThread(QThread):
             raw_fp = open(os.path.join(out_dir, f"raw_{ts}.pcap"), "wb")
         if stable_cfg.get("save_events_jsonl", True):
             event_fp = open(os.path.join(out_dir, f"events_{ts}.jsonl"), "w", encoding="utf-8")
+        return raw_fp, event_fp
+
+    def _emit_messages(self, protocol: MJProtocol, pkt: dict, event_fp):
+        for msg in protocol.process_packet(pkt):
+            if event_fp is not None:
+                event_fp.write(json.dumps(msg.to_dict(), ensure_ascii=False) + "\n")
+                event_fp.flush()
+            self.message_ready.emit(msg)
+
+    def _run_npcap(self, stable_cfg: dict, port: int):
+        npcap_iface = stable_cfg.get("npcap_iface", "") or None
+        raw_fp, event_fp = self._open_output_files(stable_cfg)
+
+        protocol = MJProtocol(server_port=port)
+        capture = NpcapCapture(server_port=port, iface=npcap_iface)
+        self._npcap = capture
+        self.status_changed.emit(f"starting npcap on host (port {port})")
+        try:
+            def on_ip_packet(ip_bytes: bytes):
+                if raw_fp is not None:
+                    raw_fp.write(ip_bytes)
+                    raw_fp.flush()
+                pkt = PcapParser._parse_ip_tcp_static(ip_bytes)
+                if pkt is not None:
+                    self._emit_messages(protocol, pkt, event_fp)
+
+            self.status_changed.emit("reading packets")
+            capture.sniff(on_ip_packet)
+        except Exception as exc:
+            self.failed.emit(str(exc))
+        finally:
+            self.status_changed.emit("stopped")
+            capture.stop()
+            self._npcap = None
+            if raw_fp is not None:
+                raw_fp.close()
+            if event_fp is not None:
+                event_fp.close()
+
+    def _run_tcpdump(self, stable_cfg: dict, port: int):
+        adb_path = stable_cfg.get("adb_path", "")
+        device_serial = stable_cfg.get("device_serial", "")
+        interface = stable_cfg.get("tcpdump_interface", "wlan0")
+        if not adb_path:
+            self.failed.emit("stable_reader.adb_path is empty")
+            return
+        if not device_serial:
+            self.failed.emit("stable_reader.device_serial is empty")
+            return
+
+        raw_fp, event_fp = self._open_output_files(stable_cfg)
 
         parser = PcapParser()
         protocol = MJProtocol(server_port=port)
@@ -864,11 +922,7 @@ class StableCaptureThread(QThread):
                     raw_fp.flush()
                 packets = parser.feed(chunk)
                 for pkt in packets:
-                    for msg in protocol.process_packet(pkt):
-                        if event_fp is not None:
-                            event_fp.write(json.dumps(msg.to_dict(), ensure_ascii=False) + "\n")
-                            event_fp.flush()
-                        self.message_ready.emit(msg)
+                    self._emit_messages(protocol, pkt, event_fp)
         except Exception as exc:
             self.failed.emit(str(exc))
         finally:
@@ -2178,6 +2232,8 @@ class MainWindow(QMainWindow):
 
     def _on_stable_start_requested(self):
         self._on_stable_stop_requested()
+        ui_opts = self._stable_panel.analysis_options()
+        self._config.setdefault("stable_reader", {})["capture_mode"] = ui_opts.get("capture_mode", "npcap")
         self._stable_mapping_store.load()
         self._stable_tracker = PacketStateTracker(
             self._stable_mapping_store,
@@ -2196,7 +2252,7 @@ class MainWindow(QMainWindow):
     def _on_stable_stop_requested(self):
         if self._stable_capture_worker and self._stable_capture_worker.isRunning():
             self._stable_capture_worker.request_stop()
-            self._stable_capture_worker.wait(3000)
+            self._stable_capture_worker.wait(5000)
         self._stable_capture_worker = None
         if hasattr(self, "_stable_panel"):
             self._stable_panel.set_running(False)

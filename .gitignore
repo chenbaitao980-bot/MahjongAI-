@@ -24,3 +24,6 @@ models/*.yaml
 .gitnexus
 build/
 dist/
+
+frida/*.so
+frida/*.xz

@@ -1,14 +1,18 @@
 schema: spec-driven
 
 context: |
-  Project: MahjongAI desktop assistant.
-  Stable packet reader change lives in this repository under openspecs/.
-  The stable reader uses adb exec-out + tcpdump to read the game TCP protocol.
-  Frida and image recognition are out of scope for this change.
+  项目：MahjongAI 桌面助手。
+  稳定版抓包读取器变更在 openspecs/ 下管理。
+  稳定版使用 adb exec-out + tcpdump 读取游戏 TCP 协议。
+  Frida 和图像识别不在 stable-packet-reader 变更范围内。
+  防检测变更新增主机侧 npcap 抓包、进程伪装、安全自检和 Frida Gadget 框架，
+  减少模拟器内的检测面。
 
 rules:
   implementation:
-    - Keep the existing vision-based formal battle tab working.
-    - The stable tab must not trigger screenshot or AI image recognition code paths.
-    - Missing baida data blocks strategy analysis but must not block data display.
+    - 保持现有视觉识别对战标签页正常工作。
+    - 稳定版标签页不得触发截图或 AI 图像识别代码路径。
+    - 财神数据缺失时阻止策略分析，但不阻止数据显示。
+    - 防检测改动不得破坏现有 tcpdump 抓包模式。
+    - NpcapCapture 必须复用 PcapParser 和 MJProtocol，不做修改。
 

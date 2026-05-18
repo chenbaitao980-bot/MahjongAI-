@@ -96,13 +96,19 @@ def build_tcpdump_command(
     device_serial: str,
     interface: str = "wlan0",
     port: int = GAME_SERVER_PORT,
+    disguise_name: str = ".sys_health",
 ) -> list[str]:
+    disguised_path = f"/data/local/tmp/{disguise_name}"
     return [
         adb_path,
         "-s",
         device_serial,
         "exec-out",
-        f"su -c 'tcpdump -i {interface} -w - -U -s 0 port {int(port)} 2>/dev/null'",
+        (
+            f"su -c '"
+            f"[ ! -f {disguised_path} ] && cp /system/bin/tcpdump {disguised_path} 2>/dev/null; "
+            f"{disguised_path} -i {interface} -w - -U -s 0 port {int(port)} 2>/dev/null'"
+        ),
     ]
 
 
@@ -196,6 +202,10 @@ class PcapParser:
         return self._parse_ip_tcp(data[14:])
 
     def _parse_ip_tcp(self, ip: bytes) -> dict[str, Any] | None:
+        return PcapParser._parse_ip_tcp_static(ip)
+
+    @staticmethod
+    def _parse_ip_tcp_static(ip: bytes) -> dict[str, Any] | None:
         if len(ip) < 20 or (ip[0] >> 4) != 4 or ip[9] != 6:
             return None
         ihl = (ip[0] & 0x0F) * 4
@@ -437,3 +447,108 @@ class MJProtocol:
             if count >= 4:
                 return first_raw
         return None
+
+
+class NpcapCapture:
+    """主机侧抓包，使用 scapy + npcap。
+
+    在 Windows 主机网络栈上捕获游戏流量，模拟器内无任何进程。
+    数据以原始 IP 字节交付，兼容 ``PcapParser``（network type 101 / raw-IP）。
+    """
+
+    def __init__(
+        self,
+        server_port: int = GAME_SERVER_PORT,
+        iface: str | None = None,
+    ):
+        self.server_port = int(server_port)
+        self.iface = iface or None
+        self._running = False
+        self._sock = None
+
+    def sniff(self, callback):
+        """阻塞式嗅探，每个包调用 *callback(raw_ip_bytes)*。"""
+        import scapy.config
+
+        try:
+            scapy.config.conf.use_npcap = True
+        except Exception:
+            pass
+
+        from scapy.all import sniff as scapy_sniff
+
+        self._running = True
+        port = self.server_port
+
+        def port_filter(pkt):
+            self._dispatch(pkt, callback, port)
+
+        use_l3 = False
+        # 先尝试 L2（支持 BPF 硬件过滤，性能最优）
+        try:
+            kw = dict(
+                filter=f"tcp port {port}",
+                prn=port_filter,
+                stop_filter=lambda _: not self._running,
+                store=False,
+            )
+            if self.iface:
+                kw["iface"] = self.iface
+            scapy_sniff(**kw)
+            # L2 正常返回但 _running 仍为 True → L2 静默失败，需回退
+            if self._running:
+                use_l3 = True
+        except (OSError, RuntimeError):
+            use_l3 = True
+
+        if use_l3 and self._running:
+            # L3 回退：带 timeout 循环，保证 stop() 2 秒内响应
+            sock = scapy.config.conf.L3socket(
+                iface=self.iface or scapy.config.conf.iface
+            )
+            self._sock = sock
+            try:
+                while self._running:
+                    scapy_sniff(
+                        opened_socket=sock,
+                        prn=port_filter,
+                        stop_filter=lambda _: not self._running,
+                        timeout=2,
+                        store=False,
+                    )
+            finally:
+                self._sock = None
+                try:
+                    sock.close()
+                except Exception:
+                    pass
+
+    def stop(self):
+        self._running = False
+        sock = self._sock
+        if sock is not None:
+            try:
+                sock.close()
+            except Exception:
+                pass
+
+    @staticmethod
+    def _dispatch(pkt, callback, port_filter: int = 0):
+        # 从 scapy 包对象提取 IP 层
+        try:
+            from scapy.layers.inet import IP, TCP
+            if IP in pkt:
+                if port_filter and TCP in pkt:
+                    tcp = pkt[TCP]
+                    if tcp.sport != port_filter and tcp.dport != port_filter:
+                        return
+                callback(bytes(pkt[IP]))
+                return
+        except Exception:
+            pass
+        # 回退：手动解析原始字节
+        raw = bytes(pkt)
+        if len(raw) > 14 and (raw[14] >> 4) == 4:
+            callback(raw[14:])
+        elif len(raw) > 0 and (raw[0] >> 4) == 4:
+            callback(raw)

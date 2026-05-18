@@ -88,6 +88,14 @@ class StableBattlePanel(QWidget):
         self._ai_model_edit = QLineEdit()
         self._ai_model_edit.setFixedWidth(150)
         top.addWidget(self._ai_model_edit)
+
+        top.addWidget(QLabel("抓包:"))
+        self._capture_mode_combo = QComboBox()
+        self._capture_mode_combo.addItem("npcap (主机侧)", "npcap")
+        self._capture_mode_combo.addItem("tcpdump (模拟器)", "tcpdump")
+        self._capture_mode_combo.setFixedWidth(140)
+        top.addWidget(self._capture_mode_combo)
+
         top.addStretch()
         root.addLayout(top)
 
@@ -162,12 +170,15 @@ class StableBattlePanel(QWidget):
 
     def apply_config(self, config: dict) -> None:
         self._config = deepcopy(config)
-        provider = self._config.get("stable_reader", {}).get("ai_provider", "deepseek")
+        stable = self._config.get("stable_reader", {})
+        provider = stable.get("ai_provider", "deepseek")
         idx = self._ai_provider_combo.findData(provider)
         self._ai_provider_combo.setCurrentIndex(max(0, idx))
-        self._deepseek_checkbox.setChecked(bool(self._config.get("stable_reader", {}).get("deepseek_enabled", True)))
-        self._ai_model_edit.setText(self._config.get("stable_reader", {}).get("ai_model", "") or self._default_model())
+        self._deepseek_checkbox.setChecked(bool(stable.get("deepseek_enabled", True)))
+        self._ai_model_edit.setText(stable.get("ai_model", "") or self._default_model())
         self._sync_model_placeholder()
+        cap_idx = self._capture_mode_combo.findData(stable.get("capture_mode", "npcap"))
+        self._capture_mode_combo.setCurrentIndex(max(0, cap_idx))
 
     def _default_model(self) -> str:
         provider = str(self._ai_provider_combo.currentData() or "deepseek")
@@ -195,7 +206,9 @@ class StableBattlePanel(QWidget):
         elif msg == "stopped":
             msg = "已停止"
         elif msg.startswith("starting tcpdump"):
-            msg = "正在启动抓包"
+            msg = "正在启动抓包 (tcpdump)"
+        elif msg.startswith("starting npcap"):
+            msg = "正在启动抓包 (npcap)"
         self._capture_status.setText(msg)
 
     def analysis_options(self) -> dict:
@@ -205,6 +218,7 @@ class StableBattlePanel(QWidget):
             "deepseek_enabled": self._deepseek_checkbox.isChecked(),
             "ai_provider": provider,
             "ai_model": model,
+            "capture_mode": str(self._capture_mode_combo.currentData() or "npcap"),
         }
 
     def set_snapshot(self, snapshot: dict) -> None:

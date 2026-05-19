@@ -141,10 +141,12 @@ class PacketStateTracker:
                 self._apply_baida(game)
             return True
 
-        if event in ("draw", "discard", "kong", "win") and source != SOURCE_TRUSTED_ACTION:
+        if event in ("draw", "discard", "kong", "chi", "pon", "win") and source != SOURCE_TRUSTED_ACTION:
             return False
         if event == "win" and not self.hand_trusted:
             return False
+        if event == "baida_update":
+            return self._apply_baida(game)
 
         if event == "hand_update":
             player_id = int(player)
@@ -216,27 +218,49 @@ class PacketStateTracker:
                     self.turn_trusted = source == SOURCE_TRUSTED_ACTION
             return True
 
-        if event == "kong":
+        if event in ("kong", "chi", "pon"):
             self._last_discard_echo = None
             player_id = int(player if player is not None else self.local_player)
-            tile = self._resolve_tile_from_game(game, "kong", note_zero=self._is_relevant_player(player_id))
+            note = event
+            tile = self._resolve_tile_from_game(game, note, note_zero=self._is_relevant_player(player_id))
             if tile:
                 self._remove_claimed_discard(tile, claimant=player_id)
             if player_id in self.players and self._is_relevant_player(player_id) and tile and game.get("meld_type"):
-                meld_type = str(game.get("meld_type") or "kan_open")
+                default_meld_type = {"chi": "chi", "pon": "pon", "kong": "kan_open"}[event]
+                meld_type = str(game.get("meld_type") or default_meld_type)
+                fallback_count = 4 if meld_type.startswith("kan") else 3
                 meld_tiles = self._resolve_tiles(
                     list(game.get("meld_tiles_raw") or []),
                     str(game.get("tile_context") or "stable"),
-                    "kong",
-                ) or [tile] * 4
+                    note,
+                ) or [tile] * fallback_count
+                # For chi/pon, the claimed tile is part of meld; meld_tiles_raw is the exposed 3
+                # 副露：把 claimed 之外的两张从手牌移除（claimed 来自对方弃牌区）
                 self.players[player_id].melds.append(
                     {"type": meld_type, "tiles": meld_tiles}
                 )
                 if player_id == self.local_player:
-                    for meld_tile in meld_tiles:
-                        self._remove_one(self.players[player_id].hand, meld_tile)
+                    if meld_type.startswith("kan"):
+                        for meld_tile in meld_tiles:
+                            self._remove_one(self.players[player_id].hand, meld_tile)
+                    else:
+                        # chi/pon: 留 1 张 claimed 不扣，其余从手牌移除
+                        remaining_to_remove = list(meld_tiles)
+                        try:
+                            remaining_to_remove.remove(tile)
+                        except ValueError:
+                            pass
+                        for meld_tile in remaining_to_remove:
+                            self._remove_one(self.players[player_id].hand, meld_tile)
                 if meld_type.startswith("kan"):
                     self.remaining_tiles = max(0, self.remaining_tiles - 1)
+                # 副露后由 player_id 出牌
+                if player_id == self.local_player:
+                    self.current_turn = "self"
+                    self.turn_trusted = source == SOURCE_TRUSTED_ACTION
+                elif player_id == self.opponent_player:
+                    self.current_turn = "enemy"
+                    self.turn_trusted = source == SOURCE_TRUSTED_ACTION
             return True
 
         if event == "win":
@@ -356,8 +380,9 @@ class PacketStateTracker:
             text = f"{time_text} {actor}摸牌" + (tile_text if tile_text else "")
         elif event == "discard":
             text = f"{time_text} {actor}打出" + (tile_text if tile_text else "")
-        elif event == "kong":
-            meld_text = MELD_TYPE_CN.get(str(game.get("meld_type") or "kan_open"), "副露")
+        elif event in ("kong", "chi", "pon"):
+            default_meld_type = {"chi": "chi", "pon": "pon", "kong": "kan_open"}[event]
+            meld_text = MELD_TYPE_CN.get(str(game.get("meld_type") or default_meld_type), "副露")
             text = f"{time_text} {actor}{meld_text}" + (tile_text if tile_text else "")
         elif event == "win":
             text = f"{time_text} 胡牌结算"
@@ -440,6 +465,7 @@ class PacketStateTracker:
             ],
             "analysis_ready": self.should_analyze(),
             "analysis_blocked_reason": self.analysis_blocked_reason(),
+            "analysis_mode": self.analysis_mode(),
             "last_error": self.last_error,
         }
 
@@ -451,6 +477,7 @@ class PacketStateTracker:
         state.remaining_tiles = self.remaining_tiles
         state.current_turn = self.current_turn
         state.recognition_source = "packet"
+        state.is_conservative = self.analysis_mode() == "conservative"
         state.self_hand = [tile_from_id(t) for t in self_player.hand]
         state.self_discards = [tile_from_id(t) for t in self_player.discards]
         state.self_melds = [meld_from_ids(m["type"], list(m["tiles"])) for m in self_player.melds]
@@ -467,8 +494,28 @@ class PacketStateTracker:
         )
         return state
 
+    def analysis_mode(self) -> str:
+        """三态分析模式：full / conservative / blocked。
+
+        - full：所有 trusted 条件满足
+        - conservative：手牌可信但缺财神 / 回合 / 计数 14（仍要求映射完整）
+        - blocked：手牌不可信
+        """
+        if not self.hand_trusted:
+            return "blocked"
+        if self.mapping_store.unknowns():
+            return "blocked"
+        if (
+            self.baida_trusted
+            and self.turn_trusted
+            and self.current_turn == "self"
+            and self._effective_self_count() == 14
+        ):
+            return "full"
+        return "conservative"
+
     def should_analyze(self) -> bool:
-        if self.analysis_blocked_reason():
+        if self.analysis_mode() == "blocked":
             return False
         sig = self.analysis_signature()
         return sig != self._last_analyzed_signature
@@ -491,6 +538,7 @@ class PacketStateTracker:
             self.hand_trusted,
             self.baida_trusted,
             self.turn_trusted,
+            self.analysis_mode(),
         )
 
     def analysis_blocked_reason(self) -> str:

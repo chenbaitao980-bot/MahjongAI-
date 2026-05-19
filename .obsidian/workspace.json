@@ -1,24 +1,24 @@
 {
   "main": {
-    "id": "de0669f8cf60f3a3",
+    "id": "dc52ea2b95514d2b",
     "type": "split",
     "children": [
       {
-        "id": "65df8189274d968e",
+        "id": "3de69136644f4548",
         "type": "tabs",
         "children": [
           {
-            "id": "6c9c152d7114b458",
+            "id": "190002a8dd8a9386",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "changes/stable-reader-display-fixes/design.md",
+                "file": "openspecs/changes/excel-game-logger/tasks.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "design"
+              "title": "tasks"
             }
           }
         ]
@@ -27,15 +27,15 @@
     "direction": "vertical"
   },
   "left": {
-    "id": "b6aec2301f49de64",
+    "id": "74ac61e551397eaf",
     "type": "split",
     "children": [
       {
-        "id": "33c9c90807da62e5",
+        "id": "453480cf3feb1e3b",
         "type": "tabs",
         "children": [
           {
-            "id": "cc64b51cfd366283",
+            "id": "d12c1d62ab7237ca",
             "type": "leaf",
             "state": {
               "type": "file-explorer",
@@ -48,7 +48,7 @@
             }
           },
           {
-            "id": "3efed31449a5d25b",
+            "id": "2a4a7ffb89482e4e",
             "type": "leaf",
             "state": {
               "type": "search",
@@ -65,7 +65,7 @@
             }
           },
           {
-            "id": "ae9f2f55d45b90db",
+            "id": "321c8d5ffc116699",
             "type": "leaf",
             "state": {
               "type": "bookmarks",
@@ -81,20 +81,19 @@
     "width": 300
   },
   "right": {
-    "id": "6a97255c73005bb7",
+    "id": "4d516610c5cd5c96",
     "type": "split",
     "children": [
       {
-        "id": "85ce4bfc29acebf1",
+        "id": "bc069b4db5dd24f9",
         "type": "tabs",
         "children": [
           {
-            "id": "03334863b55f297d",
+            "id": "688527d9e2b61ef9",
             "type": "leaf",
             "state": {
               "type": "backlink",
               "state": {
-                "file": "changes/stable-reader-display-fixes/tasks.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -104,25 +103,24 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "tasks 的反向链接列表"
+              "title": "反向链接"
             }
           },
           {
-            "id": "651d57385a168b74",
+            "id": "5ef1b0bbb7e56af1",
             "type": "leaf",
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "changes/stable-reader-display-fixes/tasks.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "tasks 的出链列表"
+              "title": "出链"
             }
           },
           {
-            "id": "de9eb7ee86e6d894",
+            "id": "914e0716ddd7e8b2",
             "type": "leaf",
             "state": {
               "type": "tag",
@@ -137,7 +135,7 @@
             }
           },
           {
-            "id": "dfad2732da524fdc",
+            "id": "bd60b3ee8578eaaa",
             "type": "leaf",
             "state": {
               "type": "all-properties",
@@ -151,18 +149,17 @@
             }
           },
           {
-            "id": "314e3c80814cb254",
+            "id": "f68d4a150adb0897",
             "type": "leaf",
             "state": {
               "type": "outline",
               "state": {
-                "file": "changes/stable-reader-display-fixes/tasks.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "tasks 的大纲"
+              "title": "大纲"
             }
           }
         ]
@@ -183,43 +180,29 @@
       "bases:新建数据库": false
     }
   },
-  "active": "cc64b51cfd366283",
+  "active": "d12c1d62ab7237ca",
   "lastOpenFiles": [
-    "changes/stable-reader-display-fixes/tasks.md.tmp.29484.55a4a8bef58b",
-    "changes/excel-game-logger/tasks.md.tmp.29484.792d376902ba",
-    "changes/stable-reader-display-fixes/specs/stable-reader/spec.md.tmp.29484.1b0d7177fb12",
-    "changes/excel-game-logger/design.md",
-    "changes/excel-game-logger/tasks.md.tmp.29660.5325db565672",
-    "changes/excel-game-logger/tasks.md",
-    "changes/stable-reader-display-fixes/design.md",
-    "changes/excel-game-logger/tasks.md.tmp.29660.b0d57c8beada",
-    "changes/excel-game-logger/specs/excel-logger/spec.md",
-    "changes/excel-game-logger/specs/excel-logger/spec.md.tmp.29660.46dd7ec944ba",
-    "changes/excel-game-logger/design.md.tmp.29660.5f943b8b678d",
-    "changes/excel-game-logger/proposal.md",
-    "changes/excel-game-logger/proposal.md.tmp.29660.679c22e26abf",
-    "changes/excel-game-logger/specs/excel-logger",
-    "changes/excel-game-logger/specs",
-    "changes/excel-game-logger",
-    "changes/stable-reader-display-fixes/delivery.md",
-    "changes/stable-reader-display-fixes/tasks.md",
-    "changes/stable-reader-display-fixes/specs/stable-reader/spec.md",
-    "archive/2026-05-18-stable-packet-reader/tasks.md",
-    "changes/stable-reader-display-fixes/proposal.md",
-    "changes/anti-detection/design.md",
-    "archive/anti-detection/specs/stealth-hardening/spec.md",
-    "archive/anti-detection/specs/npcap-capture/spec.md",
-    "archive/anti-detection/tasks.md",
-    "archive/anti-detection/proposal.md",
-    "archive/anti-detection/design.md",
-    "changes/anti-detection/tasks.md",
-    "archive/2026-05-18-stable-packet-reader/specs/stable-reader/spec.md",
-    "changes/anti-detection/proposal.md",
-    "changes/anti-detection/specs/npcap-capture/spec.md",
-    "archive/2026-05-18-stable-packet-reader/proposal.md",
-    "archive/2026-05-18-stable-packet-reader/design.md",
-    "changes/stable-packet-reader/tasks.md",
-    "changes/stable-packet-reader/specs/stable-reader/spec.md",
-    "changes/stable-packet-reader/design.md"
+    "openspecs/changes/stable-reader-feedback-fixes/delivery.md",
+    "openspecs/changes/stable-reader-feedback-fixes/delivery.md.tmp.29272.118ebe3e76ac",
+    "openspecs/changes/stable-reader-feedback-fixes/tasks.md.tmp.29272.36bcf1f7c5d4",
+    "tests/__pycache__/test_stable_reader.cpython-313.pyc.2304476534736",
+    "tests/test_stable_reader.py.tmp.29272.ee1c7a3dc846",
+    "tests/__pycache__/test_stable_reader.cpython-313.pyc",
+    "tests/__pycache__/test_stable_reader.cpython-313.pyc.1998885836464",
+    "tests/test_stable_reader.py.tmp.29272.4d28b533a978",
+    "ui/__pycache__/stable_battle_panel.cpython-313.pyc.1991808776496",
+    "ui/stable_battle_panel.py.tmp.29272.18d3f7584092",
+    "ui/stable_battle_panel.py.tmp.29272.b074ef13be2b",
+    "openspecs/archive/2026-05-19-stable-reader-display-fixes/specs/stable-reader/spec.md",
+    "openspecs/archive/2026-05-19-stable-reader-display-fixes/tasks.md",
+    "openspecs/archive/2026-05-19-stable-reader-display-fixes/proposal.md",
+    "openspecs/archive/2026-05-19-stable-reader-display-fixes/design.md",
+    "openspecs/archive/2026-05-19-stable-reader-display-fixes/delivery.md",
+    "openspecs/changes/stable-reader-feedback-fixes/tasks.md",
+    "openspecs/changes/stable-reader-feedback-fixes/specs/stable-reader/spec.md",
+    "openspecs/changes/stable-reader-feedback-fixes/design.md",
+    "openspecs/changes/stable-reader-feedback-fixes/proposal.md",
+    "openspecs/changes/excel-game-logger/tasks.md",
+    "openspecs/changes/excel-game-logger/proposal.md"
   ]
 }

@@ -4,12 +4,14 @@ import html
 from copy import deepcopy
 
 from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QPushButton,
@@ -20,6 +22,18 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+
+def _is_near_bottom(view: QTextEdit, threshold_px: int = 60) -> bool:
+    sb = view.verticalScrollBar()
+    if sb.maximum() == 0:
+        return True
+    return (sb.maximum() - sb.value()) <= threshold_px
+
+
+def _scroll_to_bottom(view: QTextEdit) -> None:
+    sb = view.verticalScrollBar()
+    sb.setValue(sb.maximum())
 
 from battle.state import BattleAdvice
 from game.state import ALL_TILE_IDS
@@ -59,6 +73,7 @@ class StableBattlePanel(QWidget):
         self._config = deepcopy(config)
         self._snapshot: dict = {}
         self._notified_unknowns: set[str] = set()
+        self._has_advice_rendered: bool = False
         self._setup_ui()
         self.apply_config(config)
         self.set_running(False)
@@ -150,18 +165,39 @@ class StableBattlePanel(QWidget):
         right.addWidget(advice_box, 2)
 
         mapping_box = QGroupBox("未知映射修正")
+        mapping_box.setMinimumHeight(220)
         mapping_layout = QVBoxLayout(mapping_box)
+
+        help_label = QLabel(
+            "① 选中表格中一条未识别牌值（点击行）\n"
+            "② 在下方下拉选择实际是哪张牌\n"
+            "③ 点「保存映射」，所有历史会按新映射重解码"
+        )
+        help_label.setStyleSheet("color: #8b949e; font-size: 11px; padding: 4px 0;")
+        help_label.setWordWrap(True)
+        mapping_layout.addWidget(help_label)
+
         self._mapping_table = QTableWidget(0, 3)
         self._mapping_table.setHorizontalHeaderLabels(["原始牌值", "次数", "来源"])
         self._mapping_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._mapping_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        mapping_layout.addWidget(self._mapping_table)
+        self._mapping_table.setFont(QFont("微软雅黑", 10))
+        self._mapping_table.verticalHeader().setDefaultSectionSize(28)
+        hh = self._mapping_table.horizontalHeader()
+        hh.setFont(QFont("微软雅黑", 10, QFont.Weight.Bold))
+        hh.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        mapping_layout.addWidget(self._mapping_table, 1)
+
         map_row = QHBoxLayout()
         self._mapping_tile_combo = QComboBox()
+        self._mapping_tile_combo.setMinimumHeight(32)
+        self._mapping_tile_combo.setFont(QFont("微软雅黑", 11))
         for tile_id in ALL_TILE_IDS:
             self._mapping_tile_combo.addItem(f"{TILE_NAME_MAP.get(tile_id, tile_id)} ({tile_id})", tile_id)
         map_row.addWidget(self._mapping_tile_combo, 1)
         self._mapping_save_btn = QPushButton("保存映射")
+        self._mapping_save_btn.setMinimumHeight(32)
+        self._mapping_save_btn.setFont(QFont("微软雅黑", 11, QFont.Weight.Bold))
         self._mapping_save_btn.clicked.connect(self._save_selected_mapping)
         map_row.addWidget(self._mapping_save_btn)
         mapping_layout.addLayout(map_row)
@@ -194,6 +230,9 @@ class StableBattlePanel(QWidget):
         self._start_btn.setEnabled(not running)
         self._stop_btn.setEnabled(running)
         self._capture_status.setText("读取中" if running else "未开始")
+        if running:
+            self._has_advice_rendered = False
+            self._notified_unknowns.clear()
 
     def set_capture_status(self, text: str) -> None:
         msg = str(text or "")
@@ -251,11 +290,39 @@ class StableBattlePanel(QWidget):
                 f"  弃牌：{_fmt_tiles(p.get('discards', []))}\n"
                 f"  副露：{self._fmt_melds(p.get('melds', []))}{trust_note}"
             )
+        data_was_near_bottom = _is_near_bottom(self._data_view)
         self._data_view.setPlainText("\n\n".join(lines))
+        if data_was_near_bottom:
+            _scroll_to_bottom(self._data_view)
+
+        event_was_near_bottom = _is_near_bottom(self._event_view)
         self._event_view.setPlainText("\n".join(snapshot.get("events", [])[-120:]))
+        if event_was_near_bottom:
+            _scroll_to_bottom(self._event_view)
+
         unknowns = snapshot.get("unknowns", [])
         self._set_unknowns(unknowns)
         self._notify_unknowns(unknowns)
+
+        self._refresh_advice_placeholder(snapshot)
+
+    def _refresh_advice_placeholder(self, snapshot: dict) -> None:
+        """在尚未渲染过真实建议时，把策略区显示为「等待中：<原因>」或保守模式标注。"""
+        if self._has_advice_rendered:
+            return
+        mode = str(snapshot.get("analysis_mode") or "")
+        reason = str(snapshot.get("analysis_blocked_reason") or "").strip()
+        if mode == "blocked":
+            text = reason or "等待可信手牌包"
+            self._recommended_label.setText(f"等待中：{text}")
+            self._strategy_label.setText("策略类型：等待门槛")
+        elif mode == "conservative":
+            text = reason or "财神或回合信息不全"
+            self._recommended_label.setText(f"等待中：{text}")
+            self._strategy_label.setText("策略类型：[保守] 等待中")
+        else:
+            self._recommended_label.setText("当前推荐出牌：等待 AI 返回...")
+            self._strategy_label.setText("策略类型：等待中")
 
     @staticmethod
     def _fmt_melds(melds: list[dict]) -> str:
@@ -333,9 +400,17 @@ class StableBattlePanel(QWidget):
     def set_advice(self, state, advice: BattleAdvice) -> None:
         discard_id = advice.recommended_discard or ""
         discard = TILE_NAME_MAP.get(discard_id, discard_id) if discard_id else "--"
+        is_conservative = bool(getattr(state, "is_conservative", False))
+        prefix = "[保守] " if is_conservative else ""
         self._recommended_label.setText(f"当前推荐出牌：{discard}")
-        self._strategy_label.setText(f"策略类型：{advice.strategy_type or '--'}")
+        self._strategy_label.setText(f"策略类型：{prefix}{advice.strategy_type or '--'}")
         parts = []
+        if is_conservative:
+            parts.append(
+                "<p style='color:#d29922'>"
+                "[保守模式] 财神或回合信息不全，建议基于已知手牌的安全弃牌。"
+                "</p>"
+            )
         if advice.reasoning_summary:
             parts.append(f"<p>{html.escape(advice.reasoning_summary)}</p>")
         if advice.risk_notes:
@@ -344,6 +419,7 @@ class StableBattlePanel(QWidget):
             parts.append(f"<p style='color:#f85149'>禁止出牌：{html.escape(' '.join(advice.forbidden_discards))}</p>")
         self._summary_edit.setHtml("".join(parts))
         self._analysis_panel.refresh(state.last_analysis, advice.recommended_discard)
+        self._has_advice_rendered = True
 
     def set_error(self, message: str) -> None:
         self._summary_edit.setPlainText(message)

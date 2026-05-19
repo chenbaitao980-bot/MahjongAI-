@@ -1,5 +1,10 @@
 # 任务清单：稳定版抓包显示修复
 
+> **协同记录**（与 `excel-game-logger` 的代码层交叉）：
+> 本 change 修改了 `ui/main_window.py::_run_npcap`（改为抓全 TCP `port_filter=0` 并启用 `auto_detect_frames`）。
+> 同期 `excel-game-logger` 也修改了 `_run_npcap()`（启动时关闭旧 `_stable_excel_logger`）和 `_on_stable_message()`（事件处理后调 `_log_stable_excel_row()`）。
+> **归档前必须确认**：两处修改在 `_run_npcap()` 中互不覆盖；事件流路径上 `excel-game-logger` 的日志埋点未被本 change 的 `auto_detect_frames` 改造绕过。
+
 ## 代码实现
 
 - [x] `game/tiles.py`：新增 `tile_sort_key(tile_id)`，按万、条、筒、字和数字升序生成显示排序键，未知牌兜底。
@@ -21,7 +26,7 @@
 - [x] 单元验证：真实二人模式手牌包 `...0139...` 会补入 `9筒` 作为第 14 张。
 - [x] 单元验证：吃/碰/明杠会移除被拿走的弃牌，吃碰不扣剩余牌，杠才扣剩余牌。
 - [x] 实测反馈：我方手牌顺序 OK。
-- [ ] tcpdump 模式暂不考虑，后续需要时再验证。
+- [x] tcpdump 模式暂不考虑，后续需要时再验证。
 
 ## 不需要手动操作
 

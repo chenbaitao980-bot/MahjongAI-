@@ -45,3 +45,41 @@
 - 打开 Excel 可见每一次牌面变更的完整中文记录（手牌/弃牌/副露均显示）
 - M 列（识别正确?）有下拉选项，可点击选「✓正确」或「✗错误」
 - 标题行、我方区、对方区、纠错列有不同颜色区分，便于视觉扫描
+
+---
+
+## 补漏：第 2 轮（2026-05-19）
+
+### 现象
+
+用户实测打了一把，关掉程序后 `data/stable_logs/` 下没有 xlsx 文件。
+
+### 根因（已查实）
+
+| 证据 | 推断 |
+|---|---|
+| 同时段 `data/stable_reader/raw_20260519_192721.pcap` 14 MB | 抓包链路正常，业务包到达 |
+| `data/stable_logs/` 创建时间 19:27（与抓包同时段） | logger 懒创建逻辑跑过，`os.makedirs` 执行了 |
+| 目录内为空 | `ExcelGameLogger.close()` 中的 `wb.save()` 从未执行 |
+| [main_window.py:2577](ui/main_window.py:2577) `closeEvent` 只 stop worker | **关程序窗口路径漏调** `_close_stable_excel_logger()` |
+| `log_row` 后立即 return，不调 `wb.save()` | openpyxl 一局全靠最后那次 save 落盘——只要 close 漏掉，整局数据全失 |
+
+### 补漏范围
+
+1. `closeEvent` 兜底：关窗口前调 `_close_stable_excel_logger()`
+2. `_on_stable_capture_failed` / `_on_stable_capture_finished` 也加入 close 兜底
+3. `ExcelGameLogger.log_row()` 每 N 行做一次 `wb.save()`（默认 N=5），异常被吞但留 INFO 日志
+4. 启动/创建/关闭时 INFO 日志记录路径，方便排查
+5. 把抓包结束时 status 栏的「Excel 已保存：...」消息也展示绝对路径
+
+### 不在范围
+
+- 不改 Excel 列结构、样式、纠错列下拉
+- 不引入额外 worker 线程
+- 不改 tracker/protocol 逻辑（那归 `stable-reader-feedback-fixes`）
+
+### 补漏验收
+
+- [ ] 打一局后**直接关程序窗口**（不点停止按钮），重新打开看 `data/stable_logs/` 下有 `牌面流水_*.xlsx`，内容完整
+- [ ] 打一局**中途**强制终止程序（Task Manager 杀进程），看 xlsx 至少保存了开局到最后一次定期 flush 的数据
+- [ ] 日志 `logs/mahjongai_*.log` 含「ExcelGameLogger created path=... seq=... saved」字样

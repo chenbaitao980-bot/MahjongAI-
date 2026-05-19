@@ -142,6 +142,17 @@ def build_system_prompt(game_features: dict | None = None) -> str:
     parts.append(_ANALYSIS_GUIDE)
     parts.append(_STRATEGY_FRAMEWORK)
 
+    if game_features.get("is_conservative"):
+        parts.append(
+            "\n【保守模式约束】\n"
+            "当前为保守模式：财神或回合归属可能尚未确认。请遵守：\n"
+            "1. 不要依赖财神信息（视作未知），不要主动凑「财神还原」相关番型；\n"
+            "2. 不要推断对方禁手（不知道谁该出牌时无法谈我方禁手）；\n"
+            "3. 仅基于「已知手牌张数 + 双方弃牌 + 双方副露」给出守势建议，"
+            "如果手牌是 13 张，给出最稳的下一张安全弃牌候选；如果是 14 张，给出风险最低的弃牌；\n"
+            "4. 在 strategy_type 字段前缀加「[保守] 」，并在 reason 中明确说明哪些信息不足。"
+        )
+
     return "\n".join(parts)
 
 

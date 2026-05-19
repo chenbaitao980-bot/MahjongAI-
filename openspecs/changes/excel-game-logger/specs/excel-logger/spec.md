@@ -142,3 +142,39 @@ ws.add_data_validation(dv)
 
 `log_row()` 内部 try/except，异常静默（不影响主流程）。
 `close()` 静默处理重复调用，文件已关闭时直接返回路径。
+
+---
+
+## MODIFIED Requirements（补漏，第 2 轮）
+
+### Requirement: 持久化时机与 close 路径覆盖
+
+`ExcelGameLogger` 必须保证调用方在以下任一路径退出时数据落盘：
+
+1. 用户点击"停止抓包"按钮 → `_on_stable_stop_requested`
+2. 用户直接关闭主窗口 → `closeEvent`
+3. 抓包线程报错失败 → `_on_stable_capture_failed`
+4. 抓包线程自然结束 → `_on_stable_capture_finished`
+
+`ExcelGameLogger.__init__` 必须接受可选参数 `flush_every: int = 5`，并在 `log_row` 每写入 `flush_every` 行时调用一次 `wb.save(path)`（吞异常）。
+
+`ExcelGameLogger.__init__` / `close` / 周期 flush 必须通过 `logging.getLogger("mahjongai.excel_logger")` 写 INFO 日志，至少包含：
+
+- created 时：完整路径、`flush_every`
+- 周期 flush 成功时：当前 `_seq`、路径
+- close 时：当前 `_seq`、路径、是否实际保存
+
+#### Scenario: 关程序窗口路径数据完整
+
+- **WHEN** 用户启动 stable 抓包写入至少 5 行后**关闭主窗口**（不点停止按钮）
+- **THEN** `data/stable_logs/牌面流水_*.xlsx` 存在且包含所有已 `log_row` 的数据
+
+#### Scenario: 进程被强制终止仍保留已 flush 数据
+
+- **WHEN** 已写入 5 行后通过任务管理器结束进程
+- **THEN** 重启后 xlsx 至少含前 5 行（受 `flush_every` 限制，最坏丢失最后 `flush_every-1` 行）
+
+#### Scenario: 多路径 close 幂等
+
+- **WHEN** 任意两条退出路径相继触发 `_close_stable_excel_logger`
+- **THEN** 不抛异常、不重复写文件，第二次调用直接返回路径

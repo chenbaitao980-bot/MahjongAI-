@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from typing import Any
 
@@ -10,6 +11,8 @@ try:
     _HAS_OPENPYXL = True
 except ImportError:
     _HAS_OPENPYXL = False
+
+_LOGGER = logging.getLogger("mahjongai.excel_logger")
 
 _MELD_CN = {
     "pon": "碰", "chi": "吃",
@@ -65,18 +68,21 @@ def _tile_cn(tile: str) -> str:
 class ExcelGameLogger:
     """把 npcap 每次牌面变更追加到 xlsx 文件。"""
 
-    def __init__(self, path: str) -> None:
+    def __init__(self, path: str, flush_every: int = 5) -> None:
         self._path = path
         self._closed = False
         self._seq = 0
+        self._flush_every = max(1, int(flush_every))
         self._wb: Any = None
         self._ws: Any = None
         if not _HAS_OPENPYXL:
+            _LOGGER.warning("ExcelGameLogger init skipped: openpyxl unavailable path=%s", path)
             return
         self._wb = openpyxl.Workbook()
         self._ws = self._wb.active
         self._ws.title = "牌面流水"
         self._init_sheet()
+        _LOGGER.info("ExcelGameLogger created path=%s flush_every=%s", path, self._flush_every)
 
     def _init_sheet(self) -> None:
         ws = self._ws
@@ -163,16 +169,30 @@ class ExcelGameLogger:
                         cell.fill = PatternFill("solid", fgColor=_FILL_OPP)
                     elif col_idx in _COL_FIX_RANGE:
                         cell.fill = PatternFill("solid", fgColor=_FILL_FIX)
-        except Exception:
-            pass
+            if self._seq % self._flush_every == 0:
+                self._flush()
+        except Exception as exc:
+            _LOGGER.warning("ExcelGameLogger log_row failed seq=%s: %s", self._seq, exc)
+
+    def _flush(self) -> None:
+        if self._wb is None or self._closed:
+            return
+        try:
+            self._wb.save(self._path)
+            _LOGGER.info("ExcelGameLogger flushed seq=%s path=%s", self._seq, self._path)
+        except Exception as exc:
+            _LOGGER.warning("ExcelGameLogger flush failed seq=%s: %s", self._seq, exc)
 
     def close(self) -> str:
         if self._closed:
             return self._path
         self._closed = True
+        saved = False
         if self._wb is not None:
             try:
                 self._wb.save(self._path)
-            except Exception:
-                pass
+                saved = True
+            except Exception as exc:
+                _LOGGER.warning("ExcelGameLogger close save failed seq=%s: %s", self._seq, exc)
+        _LOGGER.info("ExcelGameLogger closed path=%s seq=%s saved=%s", self._path, self._seq, saved)
         return self._path

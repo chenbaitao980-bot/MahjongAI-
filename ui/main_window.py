@@ -2305,11 +2305,13 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_stable_panel"):
             self._stable_panel.set_error(err)
             self._stable_panel.set_running(False)
+        self._close_stable_excel_logger()
         self.statusBar().showMessage(f"稳定版：抓包失败 - {err}")
 
     def _on_stable_capture_finished(self):
         if self._stable_capture_worker and not self._stable_capture_worker.isRunning():
             self._stable_capture_worker = None
+        self._close_stable_excel_logger()
         if hasattr(self, "_stable_panel"):
             self._stable_panel.set_running(False)
 
@@ -2321,7 +2323,7 @@ class MainWindow(QMainWindow):
             path = logger.close()
             self._stable_excel_logger = None
             if hasattr(self, "_stable_panel") and path:
-                self._stable_panel.set_capture_status(f"Excel 已保存：{os.path.basename(path)}")
+                self._stable_panel.set_capture_status(f"Excel 已保存：{path}")
 
     def _log_stable_excel_row(self, message, event_text: str) -> None:
         try:
@@ -2581,6 +2583,7 @@ class MainWindow(QMainWindow):
         if self._stable_capture_worker and self._stable_capture_worker.isRunning():
             self._stable_capture_worker.request_stop()
             self._stable_capture_worker.wait(3000)
+        self._close_stable_excel_logger()
         if self._battle_worker and self._battle_worker.isRunning():
             self._battle_worker.wait(3000)
         if self._stable_analysis_worker and self._stable_analysis_worker.isRunning():

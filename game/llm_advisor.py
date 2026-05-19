@@ -174,6 +174,8 @@ def get_final_advice(
     baida_tile = payload.get("rules", {}).get("baida_tile") or ""
     if baida_tile:
         game_features["baida_tile"] = baida_tile
+    if payload.get("is_conservative"):
+        game_features["is_conservative"] = True
     system_prompt = build_system_prompt(game_features)
     user_prompt = build_user_prompt(payload, analysis)
 

@@ -71,6 +71,7 @@ class BattleState:
     last_local_analysis_duration_ms: int = 0
     last_advice_duration_ms: int = 0
     recognition_source: str = "manual"
+    is_conservative: bool = False
     operation_logs: list[dict] = field(default_factory=list)
 
     # 能胡不胡 / 能碰不碰 限制（本回合内有效）
@@ -261,6 +262,7 @@ class BattleState:
         self.last_local_analysis_duration_ms = 0
         self.last_advice_duration_ms = 0
         self.recognition_source = "manual"
+        self.is_conservative = False
         self.operation_logs.clear()
         self.declined_hu = {0: None, 1: None}
         self.declined_peng = {0: None, 1: None}
@@ -291,6 +293,7 @@ class BattleState:
             "phase": phase,
             "remaining_tiles": remaining,
             "recognition_source": self.recognition_source,
+            "is_conservative": self.is_conservative,
             "self": {
                 "hand": tiles_to_ids(self.self_hand),
                 "discards": tiles_to_ids(self.self_discards),

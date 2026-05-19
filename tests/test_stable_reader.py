@@ -149,7 +149,7 @@ class StableReaderTests(unittest.TestCase):
         self.assertEqual(kong["meld_tiles_raw"], [0x43, 0x43, 0x43, 0x43])
 
         meld_claim = proto.process_packet(make_packet(make_game(0x021F, bytes.fromhex("03010203171819011800000000"))))[0].game
-        self.assertEqual(meld_claim["event"], "kong")
+        self.assertEqual(meld_claim["event"], "chi")
         self.assertEqual(meld_claim["player"], 3)
         self.assertEqual(meld_claim["tile_raw"], 0x18)
         self.assertEqual(meld_claim["tile_context"], "stable")
@@ -727,6 +727,107 @@ class StableReaderTests(unittest.TestCase):
             self.assertEqual(tracker.analysis_blocked_reason(), "")
             self.assertTrue(tracker.should_analyze())
             self.assertEqual(tracker.to_battle_state().recognition_source, "packet")
+
+    def test_baida_update_sub_0x0218_applied(self):
+        # body = 01 37 01 53 → baida 7p (0x37)
+        frame = make_game(0x0218, bytes([0x01, 0x37, 0x01, 0x53]))
+        proto = MJProtocol(server_port=7777)
+        msgs = proto.process_packet(make_packet(frame, seq=10))
+        self.assertEqual(len(msgs), 1)
+        g = msgs[0].game
+        self.assertEqual(g["event"], "baida_update")
+        self.assertEqual(g["baida_raw"], 0x37)
+        self.assertTrue(g["baida_trusted"])
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MappingStore(path=os.path.join(tmp, "mappings.yaml"))
+            tracker = PacketStateTracker(store, local_player=0, player_count=2)
+            tracker.apply(msgs[0])
+            self.assertEqual(tracker.baida_tile, "7p")
+            self.assertTrue(tracker.baida_trusted)
+
+    def test_chi_event_appends_meld_and_removes_discard(self):
+        # 对面打出 1m (0x11) 后我方吃 1m 2m 3m
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MappingStore(path=os.path.join(tmp, "mappings.yaml"))
+            tracker = PacketStateTracker(store, local_player=0, player_count=2)
+            # trusted hand for local
+            tracker.apply(self.make_msg({
+                "event": "hand_update",
+                "player": 0,
+                "hand_raw": [0x11, 0x12, 0x13, 0x21, 0x22, 0x23, 0x31, 0x32, 0x33, 0x41, 0x42, 0x43, 0x44],
+                "hand_context": "stable",
+                "source": "trusted_hand",
+            }))
+            # 对面打出 1m
+            tracker.apply(self.make_msg({
+                "event": "discard",
+                "player": 1,
+                "tile_raw": 0x11,
+                "tile_context": "stable",
+                "source": "trusted_action",
+            }))
+            # 我方吃 1m 2m 3m
+            tracker.apply(self.make_msg({
+                "event": "chi",
+                "player": 0,
+                "tile_raw": 0x11,
+                "tile_context": "stable",
+                "meld_type": "chi",
+                "meld_tiles_raw": [0x11, 0x12, 0x13],
+                "source": "trusted_action",
+            }))
+            snap = tracker.snapshot()
+            self.assertEqual(snap["players"][0]["melds"], [{"type": "chi", "tiles": ["1m", "2m", "3m"]}])
+            self.assertEqual(snap["players"][1]["discards"], [])
+
+    def test_pon_event_appends_meld(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MappingStore(path=os.path.join(tmp, "mappings.yaml"))
+            tracker = PacketStateTracker(store, local_player=0, player_count=2)
+            tracker.apply(self.make_msg({
+                "event": "hand_update",
+                "player": 0,
+                "hand_raw": [0x11, 0x11, 0x12, 0x13, 0x21, 0x22, 0x23, 0x31, 0x32, 0x33, 0x41, 0x42, 0x43],
+                "hand_context": "stable",
+                "source": "trusted_hand",
+            }))
+            tracker.apply(self.make_msg({
+                "event": "discard",
+                "player": 1,
+                "tile_raw": 0x11,
+                "tile_context": "stable",
+                "source": "trusted_action",
+            }))
+            tracker.apply(self.make_msg({
+                "event": "pon",
+                "player": 0,
+                "tile_raw": 0x11,
+                "tile_context": "stable",
+                "meld_type": "pon",
+                "meld_tiles_raw": [0x11, 0x11, 0x11],
+                "source": "trusted_action",
+            }))
+            snap = tracker.snapshot()
+            self.assertEqual(snap["players"][0]["melds"], [{"type": "pon", "tiles": ["1m", "1m", "1m"]}])
+            self.assertEqual(snap["players"][1]["discards"], [])
+
+    def test_conservative_mode_allows_analysis(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MappingStore(path=os.path.join(tmp, "mappings.yaml"))
+            tracker = PacketStateTracker(store, local_player=0, player_count=2)
+            tracker.apply(self.make_msg({
+                "event": "hand_update",
+                "player": 0,
+                "hand_raw": [0x11, 0x12, 0x13, 0x14, 0x21, 0x22, 0x23, 0x24, 0x31, 0x32, 0x33, 0x34, 0x41],
+                "hand_context": "stable",
+                "source": "trusted_hand",
+            }))
+            # 没有财神，没有可信回合 → 应进入 conservative
+            self.assertFalse(tracker.baida_trusted)
+            self.assertEqual(tracker.analysis_mode(), "conservative")
+            self.assertTrue(tracker.should_analyze())
+            state = tracker.to_battle_state()
+            self.assertTrue(state.is_conservative)
 
 
 if __name__ == "__main__":

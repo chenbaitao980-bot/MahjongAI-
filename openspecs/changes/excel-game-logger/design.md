@@ -274,3 +274,87 @@ def _parse_event_text(text: str) -> tuple[str, str, str]:
 - `requirements.txt` → 新增依赖
 
 不影响：`stable/tracker.py`、`battle/state.py`、`battle_panel.py`、所有 vision 模块
+
+---
+
+## 补漏方案（第 2 轮）
+
+### 当前状态
+
+| 路径 | 是否调 close | 实测 |
+|---|---|---|
+| 点「停止」按钮 → `_on_stable_stop_requested` | ✅ | OK |
+| 关程序窗口 → `closeEvent` | ❌ **漏调** | xlsx 不生成 |
+| 抓包失败 → `_on_stable_capture_failed` | ❌ | 同上 |
+| 抓包线程自然结束 → `_on_stable_capture_finished` | ❌ | 同上 |
+| 切换会话（开始抓包前自动 stop_requested） | ✅ | OK |
+
+### 方案
+
+#### 1. 关闭路径补全
+
+[ui/main_window.py](ui/main_window.py) 三处补 `self._close_stable_excel_logger()` 调用：
+
+```python
+def closeEvent(self, event):
+    # ...原有 stop worker 逻辑...
+    if self._stable_capture_worker and self._stable_capture_worker.isRunning():
+        self._stable_capture_worker.request_stop()
+        self._stable_capture_worker.wait(3000)
+    self._close_stable_excel_logger()   # ← 新增
+    # ...
+
+def _on_stable_capture_failed(self, err):
+    # ...
+    self._close_stable_excel_logger()   # ← 新增
+
+def _on_stable_capture_finished(self):
+    # ...
+    self._close_stable_excel_logger()   # ← 新增
+```
+
+`_close_stable_excel_logger` 已是幂等（内部置 None），多路径重入安全。
+
+#### 2. 周期性 flush
+
+[game/excel_logger.py::ExcelGameLogger](game/excel_logger.py) 加 `flush_every` 参数，默认 5；`log_row` 每 5 行调一次 `_wb.save(path)`，吞异常但 logger.info 记录失败次数。
+
+```python
+def __init__(self, path: str, flush_every: int = 5) -> None:
+    self._flush_every = max(1, int(flush_every))
+    # ...
+
+def log_row(self, ...):
+    # ...原 append...
+    if self._seq % self._flush_every == 0:
+        self._flush()
+
+def _flush(self) -> None:
+    if self._wb is None or self._closed:
+        return
+    try:
+        self._wb.save(self._path)
+        _LOGGER.info("ExcelGameLogger flushed seq=%s path=%s", self._seq, self._path)
+    except Exception as exc:
+        _LOGGER.warning("ExcelGameLogger flush failed seq=%s: %s", self._seq, exc)
+```
+
+权衡：5 行一存约每 10 秒一次 IO（按对局节奏估算），单文件 < 500 行总开销 < 1 秒。
+
+#### 3. 诊断日志
+
+- `__init__` 后：`logger.info("ExcelGameLogger created path=%s flush_every=%s")`
+- `close` 后：`logger.info("ExcelGameLogger closed path=%s seq=%s")`
+- 周期 flush：见上
+
+#### 4. 状态栏提示绝对路径
+
+`_close_stable_excel_logger` 内现有 `f"Excel 已保存：{os.path.basename(path)}"` → 改为完整路径，方便用户立即定位。
+
+### 关联业务行为（来自预检）
+
+[main_window.py](ui/main_window.py) 在 closeEvent 中也 stop 其他 worker（capture_worker、battle_worker、stable_analysis_worker）和 `_pipeline.stop()`。`_close_stable_excel_logger()` 安全插入在 `_stable_capture_worker.wait()` 之后即可，与其他清理路径无依赖。
+
+### 回滚方案
+
+把三处 `_close_stable_excel_logger()` 调用删掉、`flush_every=5` 改为 `flush_every=10**9`（实际禁用周期 flush），即回到补漏前行为。

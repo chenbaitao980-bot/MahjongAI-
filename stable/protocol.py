@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 import struct
 from typing import Any
+
+_LOGGER = logging.getLogger("mahjongai.stable.protocol")
 
 
 HDR_LEN = 12
@@ -51,9 +54,10 @@ GAME_SUB_NAMES = {
     0x0206: "stat_update",
     0x0208: "stat_update2",
     0x0216: "hand_update",
+    0x0218: "baida_update",
     0x021A: "draw",
     0x021B: "discard",
-    0x021F: "kong",
+    0x021F: "meld",
     0x0220: "win",
     0x022B: "round_result",
     0x4E88: "player_info",
@@ -411,26 +415,64 @@ class MJProtocol:
                 result["tile_raw"] = tile_raw[1]
                 result["tile_offset"] = tile_raw[0]
                 result["tile_context"] = TILE_CONTEXT_STABLE
+        elif sub_cmd == 0x0218 and len(body) >= 2 and int(body[0]) == 0x01:
+            baida_raw = int(body[1])
+            if baida_raw not in (0, HIDDEN_TILE):
+                result.update(
+                    {
+                        "event": "baida_update",
+                        "baida_raw": baida_raw,
+                        "baida_context": TILE_CONTEXT_STABLE,
+                        "baida_trusted": True,
+                        "source": SOURCE_TRUSTED_ACTION,
+                        "trusted": True,
+                    }
+                )
         elif sub_cmd == 0x021F and len(body) >= 2:
+            player_id = int(body[0]) if body[0] <= 3 else None
+            meld_info = self._extract_meld_info(body)
+            meld_type = str(meld_info.get("meld_type") or "")
+            if meld_type == "chi":
+                event_name = "chi"
+            elif meld_type == "pon":
+                event_name = "pon"
+            else:
+                event_name = "kong"
             result.update(
                 {
-                    "event": "kong",
-                    "player": int(body[0]) if body[0] <= 3 else None,
+                    "event": event_name,
+                    "player": player_id,
                     "source": SOURCE_TRUSTED_ACTION,
                     "trusted": True,
                 }
             )
-            tile_raw = self._extract_kong_tile(body)
-            if tile_raw is not None:
-                result.update(
-                    {
-                        "tile_raw": tile_raw,
-                        "tile_context": TILE_CONTEXT_STABLE,
-                    }
-                )
-            meld_info = self._extract_meld_info(body)
+            if event_name == "kong":
+                tile_raw = self._extract_kong_tile(body)
+                if tile_raw is not None:
+                    result.update(
+                        {
+                            "tile_raw": tile_raw,
+                            "tile_context": TILE_CONTEXT_STABLE,
+                        }
+                    )
+            else:
+                # chi/pon: claimed tile is at body[8]
+                if len(body) >= 9:
+                    claimed = int(body[8])
+                    if claimed not in (0, HIDDEN_TILE):
+                        result["tile_raw"] = claimed
+                        result["tile_context"] = TILE_CONTEXT_STABLE
             if meld_info:
                 result.update(meld_info)
+            elif event_name != "kong":
+                # Should not happen given event_name is chi/pon
+                pass
+            else:
+                # Unrecognized meld body (e.g. body[4]=0x53 wildcard / 财神替代）
+                _LOGGER.warning(
+                    "meld 0x021F not recognized, body_hex=%s",
+                    body[: min(len(body), 20)].hex(),
+                )
         elif sub_cmd == 0x0220:
             result["event"] = "win"
             result["source"] = SOURCE_TRUSTED_ACTION

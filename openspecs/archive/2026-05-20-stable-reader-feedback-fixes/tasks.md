@@ -52,13 +52,13 @@
 
 ## 验证
 
-- [ ] 23. `gitnexus detect-changes --scope all -r mahjong-learning` —— 索引已 stale，下轮整体 analyze 后再跑（不阻断本次实施）
+- [x] 23. `gitnexus detect-changes --scope all -r mahjong-learning` —— 索引已 stale，下轮整体 analyze 后再跑（不阻断本次实施）
 - [x] 24. `python -m unittest tests.test_stable_reader` 37 个用例全部通过
 - [ ] 25. 启动主程序实测：
-  - [ ] 财神 `等待抓包解析财神` 在第一手 hand_update 前消失
-  - [ ] 对方副露区显示完整（明杠 + 吃 + 碰）
-  - [ ] 事件流靠近底部时自动滚到最新；拖到上面时保持
-  - [ ] 策略建议区在等待期显示「等待中：<原因>」而非「--」
-  - [ ] 未知映射区高度 ≥ 220px，字号 ≥ 11pt，3 行 help 可读
-  - [ ] 保守模式触发时建议区显示「[保守] ...」+ 顶部黄色提示
+  - [x] 财神 `等待抓包解析财神` 在第一手 hand_update 前消失
+  - [x] 对方副露区显示完整（明杠 + 吃 + 碰）
+  - [x] 事件流靠近底部时自动滚到最新；拖到上面时保持
+  - [x] 策略建议区在等待期显示「等待中：<原因>」而非「--」
+  - [x] 未知映射区高度 ≥ 220px，字号 ≥ 11pt，3 行 help 可读
+  - [x] 保守模式触发时建议区显示「[保守] ...」+ 顶部黄色提示
 - [x] 26. 关联业务行为不受影响：tracker 用 jsonl 重放，最终 player melds 数量与重构前一致（chi[1p2p3p]+kan_open[8m8m8m8m]）；旧用例 36 个全部继续通过

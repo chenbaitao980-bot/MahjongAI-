@@ -12,7 +12,41 @@ import re
 
 from game.llm_client import LLMClient
 from game.llm_prompt import build_system_prompt, build_user_prompt
+from game.state import ALL_TILE_IDS
 from game.tiles import tile_display_name
+
+
+def normalize_discard(value, legal_discards: list[str]) -> str:
+    if value is None:
+        return ""
+    text = str(value).strip()
+    if not text:
+        return ""
+    if text in legal_discards:
+        return text
+
+    rank_names = {"1": "一", "2": "二", "3": "三", "4": "四", "5": "五", "6": "六", "7": "七", "8": "八", "9": "九"}
+    suit_names = {"m": "万", "p": "筒", "s": "条"}
+    aliases: dict[str, str] = {}
+    for tile_id in ALL_TILE_IDS:
+        display = tile_display_name(tile_id)
+        rank = tile_id[:-1]
+        suit = tile_id[-1]
+        names = {tile_id, display}
+        if rank in rank_names and suit in suit_names:
+            names.add(f"{rank_names[rank]}{suit_names[suit]}")
+        for prefix in ("", "打", "出", "弃"):
+            for name in names:
+                aliases[f"{prefix}{name}"] = tile_id
+
+    compact = re.sub(r"\s+", "", text)
+    direct = aliases.get(compact)
+    if direct in legal_discards:
+        return direct
+    for alias, tile_id in sorted(aliases.items(), key=lambda item: len(item[0]), reverse=True):
+        if tile_id in legal_discards and alias and alias in compact:
+            return tile_id
+    return ""
 
 
 def validate_llm_output(output: dict, legal_discards: list[str]) -> bool:
@@ -29,8 +63,10 @@ def validate_llm_output(output: dict, legal_discards: list[str]) -> bool:
 
     discard = output.get("recommended_discard")
     if discard is not None and discard != "" and legal_discards:
-        if str(discard) not in legal_discards:
+        normalized = normalize_discard(discard, legal_discards)
+        if normalized not in legal_discards:
             return False
+        output["recommended_discard"] = normalized
 
     strategy_type = output.get("strategy_type", "")
     if strategy_type and strategy_type not in ("攻牌", "守牌", "平衡"):
@@ -214,7 +250,7 @@ def get_final_advice(
         return advice
 
     # 构造最终 advice
-    discard = llm_output.get("recommended_discard") or ""
+    discard = normalize_discard(llm_output.get("recommended_discard"), legal_discards)
     risk_level = "medium"
     strategy_type = llm_output.get("strategy_type", "")
     if strategy_type == "守牌":

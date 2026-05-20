@@ -3,25 +3,26 @@ from __future__ import annotations
 import html
 from copy import deepcopy
 
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFont
+from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QDialog,
+    QDialogButtonBox,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
     QLineEdit,
     QPushButton,
-    QMessageBox,
-    QTableWidget,
-    QTableWidgetItem,
     QTextEdit,
     QVBoxLayout,
     QWidget,
 )
+
+from battle.state import BattleAdvice
+from game.state import ALL_TILE_IDS
+from ui.battle_panel import AnalysisPanel, TILE_NAME_MAP
 
 
 def _is_near_bottom(view: QTextEdit, threshold_px: int = 60) -> bool:
@@ -34,10 +35,6 @@ def _is_near_bottom(view: QTextEdit, threshold_px: int = 60) -> bool:
 def _scroll_to_bottom(view: QTextEdit) -> None:
     sb = view.verticalScrollBar()
     sb.setValue(sb.maximum())
-
-from battle.state import BattleAdvice
-from game.state import ALL_TILE_IDS
-from ui.battle_panel import AnalysisPanel, TILE_NAME_MAP
 
 
 def _fmt_tiles(tiles: list[str]) -> str:
@@ -62,6 +59,36 @@ def _turn_text(turn: str) -> str:
     }.get(str(turn), "等待事件")
 
 
+class UnknownTileDialog(QDialog):
+    def __init__(self, unknown: dict, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("补全未识别牌值")
+        self._raw_key = str(unknown.get("raw_key") or "")
+
+        layout = QVBoxLayout(self)
+        title = QLabel(
+            f"抓包中出现未识别牌值：{unknown.get('display_key', self._raw_key)}\n"
+            f"来源：{unknown.get('note', '')}，次数：{unknown.get('count', 1)}"
+        )
+        title.setWordWrap(True)
+        layout.addWidget(title)
+
+        self._tile_combo = QComboBox()
+        for tile_id in ALL_TILE_IDS:
+            self._tile_combo.addItem(f"{TILE_NAME_MAP.get(tile_id, tile_id)} ({tile_id})", tile_id)
+        layout.addWidget(self._tile_combo)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def selected_mapping(self) -> tuple[str, str]:
+        return self._raw_key, str(self._tile_combo.currentData() or "")
+
+
 class StableBattlePanel(QWidget):
     start_requested = pyqtSignal()
     stop_requested = pyqtSignal()
@@ -73,7 +100,8 @@ class StableBattlePanel(QWidget):
         self._config = deepcopy(config)
         self._snapshot: dict = {}
         self._notified_unknowns: set[str] = set()
-        self._has_advice_rendered: bool = False
+        self._has_advice_rendered = False
+        self._last_advice_signature: tuple | None = None
         self._setup_ui()
         self.apply_config(config)
         self.set_running(False)
@@ -120,10 +148,13 @@ class StableBattlePanel(QWidget):
         self._data_status = QLabel("--")
         self._turn_status = QLabel("--")
         self._baida_status = QLabel("--")
+        self._note_status = QLabel("--")
+        self._note_status.setWordWrap(True)
         status_form.addRow("抓包", self._capture_status)
         status_form.addRow("数据", self._data_status)
         status_form.addRow("回合", self._turn_status)
         status_form.addRow("财神", self._baida_status)
+        status_form.addRow("备注", self._note_status)
         root.addWidget(status_box)
 
         body = QHBoxLayout()
@@ -162,46 +193,7 @@ class StableBattlePanel(QWidget):
         advice_layout.addWidget(self._summary_edit)
         self._analysis_panel = AnalysisPanel()
         advice_layout.addWidget(self._analysis_panel)
-        right.addWidget(advice_box, 2)
-
-        mapping_box = QGroupBox("未知映射修正")
-        mapping_box.setMinimumHeight(220)
-        mapping_layout = QVBoxLayout(mapping_box)
-
-        help_label = QLabel(
-            "① 选中表格中一条未识别牌值（点击行）\n"
-            "② 在下方下拉选择实际是哪张牌\n"
-            "③ 点「保存映射」，所有历史会按新映射重解码"
-        )
-        help_label.setStyleSheet("color: #8b949e; font-size: 11px; padding: 4px 0;")
-        help_label.setWordWrap(True)
-        mapping_layout.addWidget(help_label)
-
-        self._mapping_table = QTableWidget(0, 3)
-        self._mapping_table.setHorizontalHeaderLabels(["原始牌值", "次数", "来源"])
-        self._mapping_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self._mapping_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self._mapping_table.setFont(QFont("微软雅黑", 10))
-        self._mapping_table.verticalHeader().setDefaultSectionSize(28)
-        hh = self._mapping_table.horizontalHeader()
-        hh.setFont(QFont("微软雅黑", 10, QFont.Weight.Bold))
-        hh.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        mapping_layout.addWidget(self._mapping_table, 1)
-
-        map_row = QHBoxLayout()
-        self._mapping_tile_combo = QComboBox()
-        self._mapping_tile_combo.setMinimumHeight(32)
-        self._mapping_tile_combo.setFont(QFont("微软雅黑", 11))
-        for tile_id in ALL_TILE_IDS:
-            self._mapping_tile_combo.addItem(f"{TILE_NAME_MAP.get(tile_id, tile_id)} ({tile_id})", tile_id)
-        map_row.addWidget(self._mapping_tile_combo, 1)
-        self._mapping_save_btn = QPushButton("保存映射")
-        self._mapping_save_btn.setMinimumHeight(32)
-        self._mapping_save_btn.setFont(QFont("微软雅黑", 11, QFont.Weight.Bold))
-        self._mapping_save_btn.clicked.connect(self._save_selected_mapping)
-        map_row.addWidget(self._mapping_save_btn)
-        mapping_layout.addLayout(map_row)
-        right.addWidget(mapping_box, 1)
+        right.addWidget(advice_box, 1)
         body.addLayout(right, 2)
 
     def apply_config(self, config: dict) -> None:
@@ -270,11 +262,12 @@ class StableBattlePanel(QWidget):
         blocked = snapshot.get("analysis_blocked_reason", "")
         ready = bool(snapshot.get("analysis_ready"))
         ready_text = "可分析" if ready else (blocked or "等待抓包数据")
-        self._data_status.setText(f"{_phase_text(phase)}｜剩余 {remaining} 张｜{ready_text}")
-        self._turn_status.setText(f"我方座位 {local}｜对面座位 {opponent}｜{_turn_text(turn)}")
+        self._data_status.setText(f"{_phase_text(phase)}；剩余 {remaining} 张；{ready_text}")
+        self._turn_status.setText(f"我方座位 {local}；对面座位 {opponent}；{_turn_text(turn)}")
         baida = snapshot.get("baida_tile") or ""
         baida_trusted = bool(snapshot.get("baida_trusted"))
         self._baida_status.setText(TILE_NAME_MAP.get(baida, baida) if baida and baida_trusted else "等待抓包解析财神")
+        self._note_status.setText(str(snapshot.get("action_note") or "暂无"))
 
         players = snapshot.get("players", {})
         lines: list[str] = []
@@ -303,19 +296,32 @@ class StableBattlePanel(QWidget):
         unknowns = snapshot.get("unknowns", [])
         self._set_unknowns(unknowns)
         self._notify_unknowns(unknowns)
-
         self._refresh_advice_placeholder(snapshot)
 
     def _refresh_advice_placeholder(self, snapshot: dict) -> None:
-        """在尚未渲染过真实建议时，把策略区显示为「等待中：<原因>」或保守模式标注。"""
-        if self._has_advice_rendered:
-            return
         mode = str(snapshot.get("analysis_mode") or "")
         reason = str(snapshot.get("analysis_blocked_reason") or "").strip()
+        ready = bool(snapshot.get("analysis_ready"))
+        players = snapshot.get("players", {})
+        local = snapshot.get("local_player")
+        local_player = players.get(local) or players.get(str(local)) if isinstance(players, dict) else {}
+        signature = (
+            snapshot.get("current_turn"),
+            tuple((local_player or {}).get("hand", [])),
+            mode,
+            reason,
+        )
+        if self._last_advice_signature != signature and (not ready or mode == "blocked"):
+            self._has_advice_rendered = False
+        self._last_advice_signature = signature
+        if self._has_advice_rendered and ready:
+            return
         if mode == "blocked":
             text = reason or "等待可信手牌包"
             self._recommended_label.setText(f"等待中：{text}")
             self._strategy_label.setText("策略类型：等待门槛")
+            self._summary_edit.setPlainText(text)
+            self._analysis_panel.refresh({"shanten": "--", "strategy_mode": "等待", "candidates": []}, "")
         elif mode == "conservative":
             text = reason or "财神或回合信息不全"
             self._recommended_label.setText(f"等待中：{text}")
@@ -343,19 +349,7 @@ class StableBattlePanel(QWidget):
         return " ".join(parts)
 
     def _set_unknowns(self, unknowns: list[dict]) -> None:
-        self._mapping_table.setRowCount(len(unknowns))
-        for row, item in enumerate(unknowns):
-            values = [
-                item.get("display_key", item.get("raw_key", "")),
-                str(item.get("count", "")),
-                item.get("note", ""),
-            ]
-            for col, value in enumerate(values):
-                cell = QTableWidgetItem(value)
-                if col == 0:
-                    cell.setData(Qt.ItemDataRole.UserRole, item.get("raw_key", ""))
-                self._mapping_table.setItem(row, col, cell)
-        self._mapping_table.resizeColumnsToContents()
+        return
 
     def _notify_unknowns(self, unknowns: list[dict]) -> None:
         fresh = [u for u in unknowns if u.get("raw_key") and u.get("raw_key") not in self._notified_unknowns]
@@ -364,35 +358,24 @@ class StableBattlePanel(QWidget):
         first = fresh[0]
         for item in fresh:
             self._notified_unknowns.add(str(item.get("raw_key")))
-        QMessageBox.information(
-            self,
-            "发现未识别牌值",
-            f"抓包中出现未识别牌值：{first.get('display_key', first.get('raw_key', ''))}\n\n"
-            "请在「未知映射修正」里选择对应牌面，然后点击「保存映射」。",
-        )
+        dialog = UnknownTileDialog(first, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            raw_key, tile_id = dialog.selected_mapping()
+            if raw_key and tile_id:
+                self.mapping_save_requested.emit(raw_key, tile_id)
 
     def _save_selected_mapping(self) -> None:
-        row = self._mapping_table.currentRow()
-        if row < 0:
-            QMessageBox.information(self, "提示", "请先选中一条未识别牌值。")
-            return
-        item = self._mapping_table.item(row, 0)
-        if item is None:
-            QMessageBox.information(self, "提示", "当前选中行没有可保存的牌值。")
-            return
-        raw_key = str(item.data(Qt.ItemDataRole.UserRole) or "").strip()
-        tile_id = str(self._mapping_tile_combo.currentData() or "")
-        if raw_key and tile_id:
-            self.mapping_save_requested.emit(raw_key, tile_id)
-        else:
-            QMessageBox.information(self, "提示", "请选择有效牌面后再保存映射。")
+        return
 
     def set_busy(self, busy: bool, message: str = "") -> None:
         self._data_status.setText(message or ("正在分析" if busy else "就绪"))
+        if busy:
+            self._has_advice_rendered = False
 
     def clear_stream_buffer(self) -> None:
         self._summary_edit.clear()
         self._recommended_label.setText("当前推荐出牌：AI 生成中...")
+        self._has_advice_rendered = False
 
     def append_stream_chunk(self, chunk: str) -> None:
         self._summary_edit.setPlainText(self._summary_edit.toPlainText() + chunk)
@@ -419,7 +402,21 @@ class StableBattlePanel(QWidget):
             parts.append(f"<p style='color:#f85149'>禁止出牌：{html.escape(' '.join(advice.forbidden_discards))}</p>")
         self._summary_edit.setHtml("".join(parts))
         self._analysis_panel.refresh(state.last_analysis, advice.recommended_discard)
+        self._note_status.setText(self._build_note_from_state(state))
         self._has_advice_rendered = True
+
+    def _build_note_from_state(self, state) -> str:
+        analysis = getattr(state, "last_analysis", {}) or {}
+        shanten = analysis.get("shanten")
+        waits = analysis.get("waiting_tiles") or analysis.get("ukeire_tiles") or []
+        if shanten == -1:
+            return "当前手牌已成胡。"
+        if shanten == 0:
+            if waits:
+                names = " ".join(TILE_NAME_MAP.get(str(t), str(t)) for t in waits)
+                return f"听牌/胡标记：可胡 {names}"
+            return "听牌/胡标记：已听牌。"
+        return "暂无"
 
     def set_error(self, message: str) -> None:
         self._summary_edit.setPlainText(message)

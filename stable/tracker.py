@@ -59,17 +59,23 @@ class PacketStateTracker:
     def reset(self, keep_history: bool = False) -> None:
         if not keep_history:
             self.history = []
+        baida_tile = getattr(self, "baida_tile", "")
+        baida_trusted = bool(getattr(self, "baida_trusted", False))
         self.players = {i: PacketPlayerState(i) for i in range(4)}
         self.remaining_tiles = 108
-        self.baida_tile = ""
+        self.baida_tile = baida_tile
+        self.baida_trusted = baida_trusted
         self.hand_trusted = False
-        self.baida_trusted = False
         self.turn_trusted = False
         self.current_turn = "none"
         self.phase = "idle"
         self.event_log: list[str] = []
         self.last_error = ""
         self._last_discard_echo: tuple[int, str] | None = None
+        self.optional_actions: list[str] = []
+        self.action_note = ""
+        self.hand_incomplete_reason = ""
+        self.marked_tiles: list[str] = []
 
     @property
     def opponent_player(self) -> int:
@@ -147,6 +153,17 @@ class PacketStateTracker:
             return False
         if event == "baida_update":
             return self._apply_baida(game)
+        if event == "optional_action":
+            labels = [str(v) for v in game.get("option_labels") or game.get("options") or [] if v]
+            self.optional_actions = labels
+            self.action_note = "可选动作：" + " / ".join(labels) if labels else ""
+            self.current_turn = "self"
+            self.turn_trusted = True
+            return True
+        if event == "meld_summary":
+            if player is not None and int(player) == self.local_player:
+                self.hand_incomplete_reason = "等待可信手牌包，忽略副露汇总包"
+            return True
 
         if event == "hand_update":
             player_id = int(player)
@@ -161,6 +178,8 @@ class PacketStateTracker:
                 if source == SOURCE_TRUSTED_HAND:
                     hand = self._resolve_tiles(game.get("hand_raw", []), str(game.get("hand_context") or "nibble"), "hand")
                     self.players[player_id].hand = hand
+                    self._apply_marked_tiles(game)
+                    self.hand_incomplete_reason = ""
                     if player_id == self.local_player:
                         self.hand_trusted = True
                 elif player_id == self.local_player:
@@ -182,6 +201,8 @@ class PacketStateTracker:
                 if player_id == self.local_player:
                     self.current_turn = "self"
                     self.turn_trusted = source == SOURCE_TRUSTED_ACTION
+                    self.optional_actions = []
+                    self.action_note = self._marked_note()
                 elif player_id == self.opponent_player:
                     self.current_turn = "enemy"
                     self.turn_trusted = source == SOURCE_TRUSTED_ACTION
@@ -213,6 +234,8 @@ class PacketStateTracker:
                         self._remove_one(self.players[player_id].hand, tile)
                     self.current_turn = "enemy"
                     self.turn_trusted = source == SOURCE_TRUSTED_ACTION
+                    self.optional_actions = []
+                    self.action_note = self._marked_note()
                 elif player_id == self.opponent_player:
                     self.current_turn = "none"
                     self.turn_trusted = source == SOURCE_TRUSTED_ACTION
@@ -236,9 +259,14 @@ class PacketStateTracker:
                 ) or [tile] * fallback_count
                 # For chi/pon, the claimed tile is part of meld; meld_tiles_raw is the exposed 3
                 # 副露：把 claimed 之外的两张从手牌移除（claimed 来自对方弃牌区）
-                self.players[player_id].melds.append(
-                    {"type": meld_type, "tiles": meld_tiles}
-                )
+                existing_meld = self._find_upgradeable_pon(player_id, meld_tiles) if meld_type.startswith("kan") else None
+                if existing_meld is not None:
+                    existing_meld["type"] = meld_type
+                    existing_meld["tiles"] = meld_tiles
+                else:
+                    self.players[player_id].melds.append(
+                        {"type": meld_type, "tiles": meld_tiles}
+                    )
                 if player_id == self.local_player:
                     if meld_type.startswith("kan"):
                         for meld_tile in meld_tiles:
@@ -258,6 +286,8 @@ class PacketStateTracker:
                 if player_id == self.local_player:
                     self.current_turn = "self"
                     self.turn_trusted = source == SOURCE_TRUSTED_ACTION
+                    self.optional_actions = []
+                    self.action_note = self._marked_note()
                 elif player_id == self.opponent_player:
                     self.current_turn = "enemy"
                     self.turn_trusted = source == SOURCE_TRUSTED_ACTION
@@ -302,6 +332,21 @@ class PacketStateTracker:
             else:
                 self.mapping_store.note_unknown(key, note)
         return tiles
+
+    def _apply_marked_tiles(self, game: dict[str, Any]) -> None:
+        raw_values = list(game.get("marked_tiles_raw") or [])
+        if not raw_values:
+            return
+        tiles = self._resolve_tiles(raw_values, str(game.get("hand_context") or "stable"), "marked")
+        if tiles:
+            self.marked_tiles = tiles
+            self.action_note = self._marked_note()
+
+    def _marked_note(self) -> str:
+        if not self.marked_tiles:
+            return ""
+        names = "、".join(tile_display_name(tile) for tile in self.marked_tiles)
+        return f"标记牌：{names}"
 
     def _resolve_tile_from_game(self, game: dict[str, Any], note: str, note_zero: bool = True) -> str | None:
         if "tile_raw" not in game:
@@ -361,6 +406,18 @@ class PacketStateTracker:
                     del discards[idx]
                     return
 
+    def _find_upgradeable_pon(self, player_id: int, meld_tiles: list[str]) -> dict[str, Any] | None:
+        if not meld_tiles:
+            return None
+        tile = meld_tiles[0]
+        if any(t != tile for t in meld_tiles):
+            return None
+        for meld in self.players[player_id].melds:
+            tiles = list(meld.get("tiles", []))
+            if str(meld.get("type")) == "pon" and len(tiles) == 3 and all(t == tile for t in tiles):
+                return meld
+        return None
+
     def _append_event(self, message: ProtocolMessage, game: dict[str, Any]) -> None:
         event = game.get("event", "")
         player_raw = game.get("player")
@@ -386,6 +443,10 @@ class PacketStateTracker:
             text = f"{time_text} {actor}{meld_text}" + (tile_text if tile_text else "")
         elif event == "win":
             text = f"{time_text} 胡牌结算"
+        elif event == "optional_action":
+            text = f"{time_text} 可选动作：" + " / ".join(str(v) for v in game.get("option_labels", []))
+        elif event == "meld_summary":
+            text = f"{time_text} {actor}副露汇总：等待可信手牌包"
         elif "baida_raw" in game:
             text = f"{time_text} 财神更新：{self._baida_text_from_game(game)}"
         else:
@@ -444,6 +505,10 @@ class PacketStateTracker:
             "hand_trusted": self.hand_trusted,
             "baida_trusted": self.baida_trusted,
             "turn_trusted": self.turn_trusted,
+            "optional_actions": list(self.optional_actions),
+            "action_note": self.action_note or self._marked_note() or self.hand_incomplete_reason,
+            "hand_incomplete_reason": self.hand_incomplete_reason,
+            "marked_tiles": list(self.marked_tiles),
             "players": {
                 pid: {
                     "hand": sorted(p.hand, key=tile_sort_key) if pid == self.local_player else list(p.hand),
@@ -490,6 +555,8 @@ class PacketStateTracker:
                 "opponent_player": self.opponent_player,
                 "phase": self.phase,
                 "events": self.event_log[-20:],
+                "optional_actions": list(self.optional_actions),
+                "marked_tiles": list(self.marked_tiles),
             },
         )
         return state
@@ -505,11 +572,12 @@ class PacketStateTracker:
             return "blocked"
         if self.mapping_store.unknowns():
             return "blocked"
+        if self.current_turn in ("enemy", "none"):
+            return "blocked"
         if (
             self.baida_trusted
             and self.turn_trusted
             and self.current_turn == "self"
-            and self._effective_self_count() == 14
         ):
             return "full"
         return "conservative"
@@ -548,6 +616,10 @@ class PacketStateTracker:
             return "等待抓包解析财神"
         if self.mapping_store.unknowns():
             return f"还有 {len(self.mapping_store.unknowns())} 个未确认牌值"
+        if self.current_turn == "enemy":
+            return "等待敌方出牌"
+        if self.current_turn == "none":
+            return "等待我方回合"
         if not self.turn_trusted:
             return "等待可信回合包"
         if self.current_turn != "self":

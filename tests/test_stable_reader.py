@@ -5,6 +5,7 @@ import struct
 import tempfile
 import unittest
 
+from game.llm_advisor import normalize_discard, validate_llm_output
 from stable.mapping import MappingStore
 from stable.protocol import MJProtocol, PcapParser, ProtocolMessage, raw_key
 from stable.tracker import PacketStateTracker
@@ -140,13 +141,20 @@ class StableReaderTests(unittest.TestCase):
         self.assertEqual(discard["tile_context"], "stable")
         self.assertEqual(discard["source"], "trusted_action")
 
-        kong = proto.process_packet(make_packet(make_game(0x021F, bytes.fromhex("01020303434343014300000000"))))[0].game
+        kong = proto.process_packet(make_packet(make_game(0x021F, bytes.fromhex("01020304434343014300000000"))))[0].game
         self.assertEqual(kong["event"], "kong")
         self.assertEqual(kong["player"], 1)
         self.assertEqual(kong["tile_raw"], 0x43)
         self.assertEqual(kong["tile_context"], "stable")
         self.assertEqual(kong["meld_type"], "kan_open")
         self.assertEqual(kong["meld_tiles_raw"], [0x43, 0x43, 0x43, 0x43])
+
+        pon_claim = proto.process_packet(make_packet(make_game(0x021F, bytes.fromhex("01020303434343014300000000"))))[0].game
+        self.assertEqual(pon_claim["event"], "pon")
+        self.assertEqual(pon_claim["player"], 1)
+        self.assertEqual(pon_claim["tile_raw"], 0x43)
+        self.assertEqual(pon_claim["meld_type"], "pon")
+        self.assertEqual(pon_claim["meld_tiles_raw"], [0x43, 0x43, 0x43])
 
         meld_claim = proto.process_packet(make_packet(make_game(0x021F, bytes.fromhex("03010203171819011800000000"))))[0].game
         self.assertEqual(meld_claim["event"], "chi")
@@ -155,6 +163,11 @@ class StableReaderTests(unittest.TestCase):
         self.assertEqual(meld_claim["tile_context"], "stable")
         self.assertEqual(meld_claim["meld_type"], "chi")
         self.assertEqual(meld_claim["meld_tiles_raw"], [0x17, 0x18, 0x19])
+
+        substitute_meld = proto.process_packet(make_packet(make_game(0x021F, bytes.fromhex("01010003375339015300000000"))))[0].game
+        self.assertEqual(substitute_meld["event"], "chi")
+        self.assertEqual(substitute_meld["meld_tiles_raw"], [0x37, 0x53, 0x39])
+        self.assertEqual(substitute_meld["meld_note"], "contains_substitute")
 
         invalid_meld = proto.process_packet(make_packet(make_game(0x021F, bytes.fromhex("00010103131453011400000000"))))[0].game
         self.assertEqual(invalid_meld["event"], "kong")
@@ -169,6 +182,39 @@ class StableReaderTests(unittest.TestCase):
         self.assertEqual(win["tile_raw"], 0x41)
         self.assertEqual(win["tile_offset"], 13)
         self.assertEqual(win["tile_context"], "stable")
+
+    def test_optional_action_and_meld_summary_do_not_pollute_hand(self):
+        proto = MJProtocol(server_port=7777)
+        optional = proto.process_packet(make_packet(make_game(0x0016, bytes([0, 0x03, 0x43]))))[0].game
+        self.assertEqual(optional["event"], "optional_action")
+        self.assertEqual(optional["options"], ["chi", "pon", "pass"])
+        self.assertEqual(optional["option_labels"], ["吃", "碰", "过"])
+
+        body = bytes([0, 4, 5, 1, 4, 0x43, 0x43, 0x43, 3, 0x43, 0x43, 0x43, 0, 3, 0x17, 0x18, 0x19, 1, 0, 0])
+        summary = proto.process_packet(make_packet(make_game(0x0216, body)))[0].game
+        self.assertEqual(summary["event"], "meld_summary")
+        self.assertFalse(summary["trusted"])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tracker = PacketStateTracker(MappingStore(path=os.path.join(tmp, "mappings.yaml")), local_player=0, player_count=2)
+            tracker.apply(self.make_msg({
+                "event": "hand_update",
+                "player": 0,
+                "hand_raw": [0x11, 0x12, 0x13, 0x14, 0x21, 0x22, 0x23, 0x24, 0x31, 0x32, 0x33, 0x34, 0x41],
+                "hand_context": "stable",
+                "source": "trusted_hand",
+            }))
+            before = list(tracker.snapshot()["players"][0]["hand"])
+            tracker.apply(self.make_msg(summary))
+            snapshot = tracker.snapshot()
+            self.assertEqual(snapshot["players"][0]["hand"], before)
+            self.assertEqual(snapshot["hand_incomplete_reason"], "等待可信手牌包，忽略副露汇总包")
+
+    def test_llm_discard_normalization_accepts_chinese_tile_names(self):
+        output = {"recommended_discard": "建议打五万", "strategy_type": "平衡"}
+        self.assertTrue(validate_llm_output(output, ["5m", "7p"]))
+        self.assertEqual(output["recommended_discard"], "5m")
+        self.assertEqual(normalize_discard("候选方案：打7p", ["5m", "7p"]), "7p")
 
     def test_pcap_parser_extracts_tcp_payload(self):
         parser = PcapParser()
@@ -659,7 +705,8 @@ class StableReaderTests(unittest.TestCase):
             self.assertEqual(snapshot["players"][1]["discards"], [])
             self.assertEqual(snapshot["players"][0]["melds"], [])
             self.assertEqual(snapshot["events"], ["00:00:00 我方手牌更新：13 张"])
-            self.assertEqual(snapshot["baida_tile"], "")
+            self.assertEqual(snapshot["baida_tile"], "7z")
+            self.assertTrue(snapshot["baida_trusted"])
 
     def test_manual_mapping_replays_history_into_chinese_events(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -824,10 +871,10 @@ class StableReaderTests(unittest.TestCase):
             }))
             # 没有财神，没有可信回合 → 应进入 conservative
             self.assertFalse(tracker.baida_trusted)
-            self.assertEqual(tracker.analysis_mode(), "conservative")
-            self.assertTrue(tracker.should_analyze())
+            self.assertEqual(tracker.analysis_mode(), "blocked")
+            self.assertFalse(tracker.should_analyze())
             state = tracker.to_battle_state()
-            self.assertTrue(state.is_conservative)
+            self.assertFalse(state.is_conservative)
 
 
 if __name__ == "__main__":

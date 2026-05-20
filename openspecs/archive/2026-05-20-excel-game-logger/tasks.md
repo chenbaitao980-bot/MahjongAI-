@@ -63,7 +63,7 @@
 
 ### 补漏验证
 
-- [ ] `gitnexus detect-changes --scope all -r mahjong-learning` 无异常范围外变更
-- [ ] 实测：启动抓包 → 打一局 → **点右上角 X 关闭窗口** → 重启 → `data/stable_logs/牌面流水_*.xlsx` 存在且数据完整
-- [ ] 实测：启动抓包 → 写入 ≥5 行后通过任务管理器杀掉进程 → 重启后 xlsx 至少有前 5 行
-- [ ] 日志 `logs/mahjongai_*.log` 含 `ExcelGameLogger created` / `ExcelGameLogger flushed` / `ExcelGameLogger closed` INFO 行
+- [x] `gitnexus detect-changes --scope all -r mahjong-learning` 无异常范围外变更
+- [x] 实测：启动抓包 → 打一局 → **点右上角 X 关闭窗口** → 重启 → `data/stable_logs/牌面流水_*.xlsx` 存在且数据完整
+- [x] 实测：启动抓包 → 写入 ≥5 行后通过任务管理器杀掉进程 → 重启后 xlsx 至少有前 5 行
+- [x] 日志 `logs/mahjongai_*.log` 含 `ExcelGameLogger created` / `ExcelGameLogger flushed` / `ExcelGameLogger closed` INFO 行

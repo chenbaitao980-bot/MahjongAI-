@@ -365,12 +365,29 @@ class MJProtocol:
             if len(body) >= 18 and body[17] not in (0, HIDDEN_TILE):
                 result["untrusted_baida_raw_candidate"] = int(body[17])
                 result["untrusted_baida_context"] = TILE_CONTEXT_UNTRUSTED_DEAL
+        elif sub_cmd == 0x0016:
+            optional = self._extract_optional_action(body)
+            if optional:
+                result.update(optional)
         elif sub_cmd == 0x0216 and len(body) >= 3:
             player = int(body[0])
             count = int(body[2])
             if 0 < count <= 20 and len(body) >= 3 + count:
                 hand_raw = list(body[3 : 3 + count])
                 tail = list(body[3 + count :])
+                if self._looks_like_meld_summary(count, tail):
+                    result.update(
+                        {
+                            "event": "meld_summary",
+                            "player": player,
+                            "hand_count_raw": count,
+                            "hand_tail_raw": tail,
+                            "source": SOURCE_TRUSTED_ACTION,
+                            "trusted": False,
+                            "hand_incomplete_reason": "meld_summary_packet",
+                        }
+                    )
+                    return result
                 extra_raw = self._extract_hand_tail_tile(count, tail)
                 if extra_raw is not None:
                     hand_raw.append(extra_raw)
@@ -389,6 +406,9 @@ class MJProtocol:
                     result["hand_extra_raw"] = extra_raw
                 if tail:
                     result["hand_tail_raw"] = tail
+                    marked = self._extract_marked_tail_tiles(tail)
+                    if marked:
+                        result["marked_tiles_raw"] = marked
         elif sub_cmd == 0x021B and len(body) >= 2:
             result.update(
                 {
@@ -522,7 +542,78 @@ class MJProtocol:
         return raw
 
     @staticmethod
+    def _looks_like_meld_summary(count: int, tail: list[int]) -> bool:
+        if count >= 13 or len(tail) < 12:
+            return False
+        group_markers = 0
+        for idx in range(0, max(0, len(tail) - 5)):
+            if int(tail[idx]) in (0x03, 0x04) and int(tail[idx + 4]) in (0x00, 0x01, 0x02, 0x03):
+                tiles = [int(v) for v in tail[idx + 1 : idx + 4]]
+                if all(v == 0 or stable_tile_id(v) is not None for v in tiles):
+                    group_markers += 1
+        return group_markers >= 2
+
+    @staticmethod
+    def _extract_marked_tail_tiles(tail: list[int]) -> list[int]:
+        marked: list[int] = []
+        for idx in range(0, max(0, len(tail) - 3)):
+            if int(tail[idx]) != 0x09:
+                continue
+            raw_count = int(tail[idx + 2])
+            if not 1 <= raw_count <= 4:
+                continue
+            values = [int(v) for v in tail[idx + 3 : idx + 3 + raw_count]]
+            if len(values) != raw_count:
+                continue
+            marked.extend(v for v in values if stable_tile_id(v) is not None)
+        return marked
+
+    @staticmethod
+    def _extract_optional_action(body: bytes) -> dict[str, Any]:
+        if len(body) < 3 or b"\xff\xff" in body[:4]:
+            return {}
+        player = int(body[0]) if body[0] <= 3 else None
+        bit_actions = [("chi", 0x01), ("pon", 0x02), ("kong", 0x04), ("hu", 0x08), ("pass", 0x10)]
+        opcode_actions = {0x01: "chi", 0x02: "pon", 0x03: "kong", 0x04: "hu", 0x05: "pass"}
+        label_map = {"chi": "吃", "pon": "碰", "kong": "杠", "hu": "胡", "pass": "过"}
+
+        options: list[str] = []
+        mask = int(body[1]) if len(body) > 1 else 0
+        for action, bit in bit_actions:
+            if mask & bit:
+                options.append(action)
+        if not options:
+            for raw in body[1: min(len(body), 8)]:
+                action = opcode_actions.get(int(raw))
+                if action and action not in options:
+                    options.append(action)
+        if options and "pass" not in options:
+            options.append("pass")
+        if not options:
+            return {}
+
+        result: dict[str, Any] = {
+            "event": "optional_action",
+            "options": options,
+            "option_labels": [label_map.get(action, action) for action in options],
+            "source": SOURCE_TRUSTED_ACTION,
+            "trusted": True,
+        }
+        if player is not None:
+            result["player"] = player
+        tile_candidates = [int(raw) for raw in body[2:8] if stable_tile_id(int(raw)) is not None]
+        if tile_candidates:
+            result["tile_raw"] = tile_candidates[0]
+            result["tile_context"] = TILE_CONTEXT_STABLE
+        return result
+
+    @staticmethod
     def _extract_kong_tile(body: bytes) -> int | None:
+        if len(body) >= 8:
+            four_tiles = [int(body[i]) for i in (4, 5, 6, 7)]
+            stable_tiles = [stable_tile_id(raw) for raw in four_tiles if raw not in (0, HIDDEN_TILE)]
+            if stable_tiles and len(stable_tiles) == 4 and len(set(stable_tiles)) == 1:
+                return four_tiles[0]
         if len(body) >= 9:
             meld_bytes = [int(body[i]) for i in (4, 5, 6, 8)]
             claimed = meld_bytes[-1]
@@ -553,20 +644,26 @@ class MJProtocol:
     def _extract_meld_info(body: bytes) -> dict[str, Any]:
         if len(body) < 9:
             return {}
+        meld_count = int(body[3])
         exposed = [int(body[i]) for i in (4, 5, 6)]
         claimed = int(body[8])
-        if stable_tile_id(claimed) is None:
-            return {}
         if any(stable_tile_id(raw) is None for raw in exposed):
             return {}
 
-        tiles_raw = exposed + [claimed]
-        if len(set(tiles_raw)) == 1:
-            return {"meld_type": "kan_open", "meld_tiles_raw": tiles_raw}
+        if meld_count >= 4:
+            for indexes in ((4, 5, 6, 7), (4, 5, 6, 8)):
+                tiles_raw = [int(body[i]) for i in indexes]
+                if len({stable_tile_id(raw) for raw in tiles_raw}) == 1:
+                    return {"meld_type": "kan_open", "meld_tiles_raw": tiles_raw}
+            return {}
+        if stable_tile_id(claimed) is None:
+            return {}
         if len(set(exposed)) == 1:
             return {"meld_type": "pon", "meld_tiles_raw": exposed}
         if MJProtocol._is_stable_sequence(exposed):
             return {"meld_type": "chi", "meld_tiles_raw": exposed}
+        if MJProtocol._is_stable_sequence_with_substitute(exposed, claimed):
+            return {"meld_type": "chi", "meld_tiles_raw": exposed, "meld_note": "contains_substitute"}
         return {}
 
     @staticmethod
@@ -579,6 +676,18 @@ class MJProtocol:
             return False
         ranks = sorted(int(str(tile)[:-1]) for tile in tiles)
         return ranks[1] == ranks[0] + 1 and ranks[2] == ranks[1] + 1
+
+    @staticmethod
+    def _is_stable_sequence_with_substitute(raw_values: list[int], claimed: int) -> bool:
+        natural_tiles = [stable_tile_id(raw) for raw in raw_values if int(raw) != int(claimed)]
+        natural_tiles = [tile for tile in natural_tiles if tile is not None]
+        if len(natural_tiles) < 2:
+            return False
+        suits = [str(tile)[-1] for tile in natural_tiles]
+        if len(set(suits)) != 1 or suits[0] == "z":
+            return False
+        ranks = sorted(int(str(tile)[:-1]) for tile in natural_tiles)
+        return ranks[-1] - ranks[0] <= 2
 
 
 class NpcapCapture:

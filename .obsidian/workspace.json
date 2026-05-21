@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "openspecs/changes/stable-reader-optional-action-round2-fixes/design.md",
+                "file": "openspecs/changes/stable-only-capture-module/tasks.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "design"
+              "title": "tasks"
             }
           }
         ]
@@ -182,20 +182,34 @@
   },
   "active": "190002a8dd8a9386",
   "lastOpenFiles": [
-    "openspecs/changes/stable-reader-optional-action-round2-fixes/delivery.md",
-    "ui/__pycache__/region_selector.cpython-312.pyc",
-    "ui/__pycache__/collection_panels.cpython-312.pyc",
-    "ui/__pycache__/capture_panel.cpython-312.pyc",
-    "ui/__pycache__/calibration_canvas.cpython-312.pyc",
-    "ui/__pycache__/calibration.cpython-312.pyc",
-    "game/__pycache__/win.cpython-312.pyc",
-    "game/__pycache__/visible.cpython-312.pyc",
-    "game/__pycache__/ukeire.cpython-312.pyc",
-    "game/__pycache__/strategy.cpython-312.pyc",
-    "game/__pycache__/simple_state.cpython-312.pyc",
-    "openspecs/changes/stable-reader-optional-action-round2-fixes/proposal.md",
+    "tests/__pycache__/test_simulated_discard_dialog.cpython-312.pyc",
+    "tests/__pycache__/test_simulated_discard_dialog.cpython-312.pyc.2305393337696",
+    "ui/__pycache__/simulated_discard_dialog.cpython-312.pyc.2305393310288",
+    "tests/test_simulated_discard_dialog.py",
+    "data/requestdeepseek/20260521_164646_640451.json",
+    "data/requestdeepseek/20260521_164642_300428.json",
+    "data/requestdeepseek/20260521_164608_089260.json",
+    "logs/mahjongai_20260521_164559.log",
+    "ui/__pycache__/stable_battle_panel.cpython-313.pyc.1821665836560",
+    "ui/__pycache__/main_window.cpython-313.pyc.1821242417968",
+    "ui/__pycache__/stable_battle_panel.cpython-312.pyc.2271943796144",
+    "openspecs/changes/stable-only-capture-module/delivery.md",
+    "openspecs/changes/stable-capture-training-data/tasks.md",
+    "openspecs/changes/stable-reader-hard-analysis-panel/tasks.md",
+    "openspecs/changes/stable-reader-hard-analysis-panel/proposal.md",
+    "openspecs/changes/stable-reader-hard-analysis-panel/design.md",
+    "openspecs/changes/stable-only-capture-module/design.md",
+    "openspecs/changes/stable-only-capture-module/proposal.md",
+    "openspecs/changes/stable-only-capture-module/tasks.md",
+    "openspecs/changes/stable-only-capture-module/specs/stable-reader/spec.md",
+    "openspecs/changes/stable-capture-training-data/proposal.md",
+    "openspecs/changes/stable-capture-training-data/specs/stable-reader/spec.md",
+    "openspecs/changes/stable-capture-training-data/design.md",
     "openspecs/changes/stable-reader-optional-action-round2-fixes/tasks.md",
     "openspecs/changes/stable-reader-optional-action-round2-fixes/design.md",
+    "openspecs/changes/stable-reader-hard-analysis-panel/specs/stable-reader/spec.md",
+    "openspecs/changes/stable-reader-optional-action-round2-fixes/delivery.md",
+    "openspecs/changes/stable-reader-optional-action-round2-fixes/proposal.md",
     "openspecs/changes/excel-game-logger/tasks.md",
     "openspecs/changes/stable-reader-optional-action-round2-fixes/specs/stable-reader/spec.md",
     "openspecs/archive/2026-05-20-round2-bugfix-batch/specs/stable-reader/spec.md",
@@ -203,20 +217,6 @@
     "openspecs/archive/2026-05-20-round2-bugfix-batch/proposal.md",
     "openspecs/archive/2026-05-20-round2-bugfix-batch/design.md",
     "openspecs/archive/2026-05-20-stable-reader-feedback-fixes/specs/stable-reader/spec.md",
-    "openspecs/archive/2026-05-20-stable-reader-feedback-fixes/tasks.md",
-    "openspecs/archive/2026-05-20-stable-reader-feedback-fixes/proposal.md",
-    "openspecs/archive/2026-05-20-stable-reader-feedback-fixes/design.md",
-    "openspecs/archive/2026-05-20-stable-reader-feedback-fixes/delivery.md",
-    "openspecs/archive/2026-05-20-excel-game-logger/specs/excel-logger/spec.md",
-    "openspecs/archive/2026-05-20-excel-game-logger/tasks.md",
-    "openspecs/archive/2026-05-20-excel-game-logger/proposal.md",
-    "openspecs/archive/2026-05-20-excel-game-logger/design.md",
-    "openspecs/changes/round2-bugfix-batch/tasks.md",
-    "openspecs/changes/stable-reader-feedback-fixes/tasks.md",
-    "openspecs/changes/round2-bugfix-batch/specs/stable-reader/spec.md",
-    "openspecs/changes/round2-bugfix-batch/design.md",
-    "openspecs/changes/round2-bugfix-batch/proposal.md",
-    "openspecs/changes/stable-reader-feedback-fixes/delivery.md",
-    "openspecs/archive/2026-05-19-stable-reader-display-fixes/specs/stable-reader/spec.md"
+    "openspecs/archive/2026-05-20-stable-reader-feedback-fixes/tasks.md"
   ]
 }

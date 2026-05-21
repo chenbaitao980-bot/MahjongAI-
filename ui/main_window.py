@@ -6,14 +6,13 @@ import time
 import math
 import shutil
 import json
-import subprocess
 from copy import deepcopy
 from datetime import datetime
 
 from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal, QSize
 from PyQt6.QtGui import QFont, QCloseEvent, QPixmap, QImage
 from PyQt6.QtWidgets import (
-    QMainWindow, QTabWidget, QWidget, QVBoxLayout, QHBoxLayout,
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QGroupBox, QStatusBar, QMessageBox,
     QGridLayout, QScrollArea, QFileDialog, QProgressDialog,
     QDialog, QComboBox, QDialogButtonBox,
@@ -26,12 +25,14 @@ from ui.region_selector import RegionSelectorOverlay
 from ui.calibration import CalibrationWizard
 from ui.capture_panel import CapturePanel
 from ui.battle_panel import ApiConfigDialog, BattlePanel
+from ui.simulated_discard_dialog import SimulatedDiscardDialog
 from ui.stable_battle_panel import StableBattlePanel
+from ui.stable_capture_controller import StableCaptureThread, parse_stable_event_text
 from ui.collection_panels import RegionDivisionPanel, EventCollectionPanel
 from battle import BattleService
 from battle.state import BattleAdvice, BattleState
 from stable.mapping import MappingStore
-from stable.protocol import MJProtocol, NpcapCapture, PcapParser, build_tcpdump_command
+from stable.simulator import StableSimulationGame
 from stable.tracker import PacketStateTracker
 from vision.capture import ScreenCapture
 from vision.discard_tile_cropper import (
@@ -802,144 +803,6 @@ class CaptureWorkerThread(QThread):
         self._pipeline.stop()
 
 
-class StableCaptureThread(QThread):
-    message_ready = pyqtSignal(object)
-    status_changed = pyqtSignal(str)
-    failed = pyqtSignal(str)
-
-    def __init__(self, config: dict, parent=None):
-        super().__init__(parent)
-        self._config = deepcopy(config)
-        self._running = True
-        self._proc = None
-        self._npcap = None
-
-    def request_stop(self) -> None:
-        self._running = False
-        npcap = self._npcap
-        if npcap is not None:
-            try:
-                npcap.stop()
-            except Exception:
-                pass
-        proc = self._proc
-        if proc is not None:
-            try:
-                proc.terminate()
-            except Exception:
-                pass
-
-    def run(self):
-        stable_cfg = self._config.get("stable_reader", {})
-        capture_mode = stable_cfg.get("capture_mode", "npcap")
-        port = int(stable_cfg.get("server_port", 7777))
-
-        if capture_mode == "npcap":
-            self._run_npcap(stable_cfg, port)
-        else:
-            self._run_tcpdump(stable_cfg, port)
-
-    def _open_output_files(self, stable_cfg: dict):
-        out_dir = os.path.join(data_path("data"), "stable_reader")
-        os.makedirs(out_dir, exist_ok=True)
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        raw_fp = None
-        event_fp = None
-        if stable_cfg.get("save_raw_pcap", True):
-            raw_fp = open(os.path.join(out_dir, f"raw_{ts}.pcap"), "wb")
-        if stable_cfg.get("save_events_jsonl", True):
-            event_fp = open(os.path.join(out_dir, f"events_{ts}.jsonl"), "w", encoding="utf-8")
-        return raw_fp, event_fp
-
-    def _emit_messages(self, protocol: MJProtocol, pkt: dict, event_fp):
-        for msg in protocol.process_packet(pkt):
-            if event_fp is not None:
-                event_fp.write(json.dumps(msg.to_dict(), ensure_ascii=False) + "\n")
-                event_fp.flush()
-            self.message_ready.emit(msg)
-
-    def _run_npcap(self, stable_cfg: dict, port: int):
-        npcap_iface = stable_cfg.get("npcap_iface", "") or None
-        raw_fp, event_fp = self._open_output_files(stable_cfg)
-
-        protocol = MJProtocol(server_port=port, auto_detect_frames=True)
-        capture = NpcapCapture(server_port=port, iface=npcap_iface)
-        self._npcap = capture
-        self.status_changed.emit(f"starting npcap on host (auto tcp; preferred port {port})")
-        try:
-            def on_ip_packet(ip_bytes: bytes):
-                if raw_fp is not None:
-                    raw_fp.write(ip_bytes)
-                    raw_fp.flush()
-                pkt = PcapParser._parse_ip_tcp_static(ip_bytes)
-                if pkt is not None:
-                    self._emit_messages(protocol, pkt, event_fp)
-
-            self.status_changed.emit("reading packets")
-            capture.sniff(on_ip_packet, port_filter=0)
-        except Exception as exc:
-            self.failed.emit(str(exc))
-        finally:
-            self.status_changed.emit("stopped")
-            capture.stop()
-            self._npcap = None
-            if raw_fp is not None:
-                raw_fp.close()
-            if event_fp is not None:
-                event_fp.close()
-
-    def _run_tcpdump(self, stable_cfg: dict, port: int):
-        adb_path = stable_cfg.get("adb_path", "")
-        device_serial = stable_cfg.get("device_serial", "")
-        interface = stable_cfg.get("tcpdump_interface", "wlan0")
-        if not adb_path:
-            self.failed.emit("stable_reader.adb_path is empty")
-            return
-        if not device_serial:
-            self.failed.emit("stable_reader.device_serial is empty")
-            return
-
-        raw_fp, event_fp = self._open_output_files(stable_cfg)
-
-        parser = PcapParser()
-        protocol = MJProtocol(server_port=port)
-        cmd = build_tcpdump_command(adb_path, device_serial, interface, port)
-        self.status_changed.emit(f"starting tcpdump on {device_serial}:{port}")
-        try:
-            self._proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
-            )
-            if self._proc.stdout is None:
-                raise RuntimeError("tcpdump stdout is unavailable")
-            self.status_changed.emit("reading packets")
-            while self._running:
-                chunk = self._proc.stdout.read(4096)
-                if not chunk:
-                    break
-                if raw_fp is not None:
-                    raw_fp.write(chunk)
-                    raw_fp.flush()
-                packets = parser.feed(chunk)
-                for pkt in packets:
-                    self._emit_messages(protocol, pkt, event_fp)
-        except Exception as exc:
-            self.failed.emit(str(exc))
-        finally:
-            self.status_changed.emit("stopped")
-            if self._proc is not None:
-                try:
-                    self._proc.terminate()
-                except Exception:
-                    pass
-                self._proc = None
-            if raw_fp is not None:
-                raw_fp.close()
-            if event_fp is not None:
-                event_fp.close()
-
-
 class BattleAnalysisThread(QThread):
     finished_ok = pyqtSignal(object, object)
     finished_err = pyqtSignal(str)
@@ -970,42 +833,6 @@ class BattleAnalysisThread(QThread):
             self.finished_err.emit(str(exc))
 
 
-def _parse_stable_event_text(text: str) -> tuple[str, str, str]:
-    """
-    从 tracker event_log 中文条目（如 "12:34:56 我方打出三万"）解析
-    (事件类型中文, 触发方中文, 涉及牌文本)。
-    """
-    import re
-    body = re.sub(r"^\d{2}:\d{2}:\d{2}\s*", "", text).strip()
-
-    for raw_actor, disp_actor in [("我方", "我方"), ("对面", "对方"), ("旁家", "旁家")]:
-        if body.startswith(raw_actor):
-            rest = body[len(raw_actor):]
-            for kw, ev in [
-                ("摸牌", "摸牌"), ("打出", "出牌"),
-                ("明杠", "明杠"), ("暗杠", "暗杠"), ("补杠", "补杠"),
-                ("碰", "碰牌"), ("吃", "吃牌"),
-                ("手牌更新", "手牌更新"),
-            ]:
-                if rest.startswith(kw):
-                    raw_tile = rest[len(kw):]
-                    # 去掉 "：13 张" 这类计数后缀，以及残留中文冒号
-                    tile = re.sub(r"[：:\s]*\d+\s*张.*$", "", raw_tile).strip()
-                    tile = re.sub(r"^[：:\s]+", "", tile).strip()
-                    return ev, disp_actor, tile
-            return rest[:12], disp_actor, ""
-
-    if "开局发牌" in body:
-        return "开局发牌", "—", ""
-    if "开局标记" in body:
-        return "开局标记", "—", ""
-    if "财神更新" in body:
-        return "财神", "—", body.replace("财神更新：", "").strip()
-    if "胡牌" in body:
-        return "胡牌", "—", ""
-    return body[:12], "—", ""
-
-
 class MainWindow(QMainWindow):
     def __init__(self, config: dict):
         super().__init__()
@@ -1017,13 +844,22 @@ class MainWindow(QMainWindow):
         self._stable_analysis_worker: BattleAnalysisThread | None = None
         self._stable_pending_state: BattleState | None = None
         self._stable_non_game_messages = 0
+        self._stable_simulator: StableSimulationGame | None = None
+        self._stable_simulation_active = False
+        self._stable_prompt_open = False
         self._stable_excel_logger = None   # ExcelGameLogger，启动抓包时懒创建
         self._battle_analysis_started_at: float | None = None
         self._hog_train_thread: HOGTrainerThread | None = None
 
         self.setWindowTitle("台州麻将AI — 视觉识别层 v1.0")
-        self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint)
-        self.resize(860, 560)
+        self.setWindowFlags(
+            Qt.WindowType.Window
+            | Qt.WindowType.WindowMinimizeButtonHint
+            | Qt.WindowType.WindowMaximizeButtonHint
+            | Qt.WindowType.WindowCloseButtonHint
+        )
+        self.setMinimumSize(980, 640)
+        self.resize(1180, 760)
         self.setStyleSheet(_MAHJONG_QSS)
 
         # 初始化各模块
@@ -1104,19 +940,11 @@ class MainWindow(QMainWindow):
         central = QWidget()
         self.setCentralWidget(central)
         root = QVBoxLayout(central)
-
-        tabs = QTabWidget()
-        tabs.addTab(self._build_setup_tab(), "① 游戏窗口")
-        tabs.addTab(self._build_calibration_tab(), "② 牌面收集")
-        tabs.addTab(self._build_region_tab(), "③ 区域划分")
-        tabs.addTab(self._build_event_tab(), "④ 事件收集")
-        tabs.addTab(self._build_capture_tab(), "⑤ 识别运行")
-        tabs.addTab(self._build_battle_tab(), "⑥ 正式战斗")
-        tabs.addTab(self._build_stable_tab(), "⑦ 稳定版")
-        root.addWidget(tabs)
+        root.addWidget(self._build_stable_tab())
 
         self.setStatusBar(QStatusBar())
-        self.statusBar().showMessage("就绪")
+        self.statusBar().setSizeGripEnabled(True)
+        self.statusBar().showMessage("稳定版就绪")
 
     def _build_setup_tab(self) -> QWidget:
         w = QWidget()
@@ -1502,6 +1330,7 @@ class MainWindow(QMainWindow):
         self._stable_panel = StableBattlePanel(self._config)
         self._stable_panel.start_requested.connect(self._on_stable_start_requested)
         self._stable_panel.stop_requested.connect(self._on_stable_stop_requested)
+        self._stable_panel.simulation_requested.connect(self._on_stable_simulation_requested)
         self._stable_panel.config_requested.connect(self._open_api_config_dialog)
         self._stable_panel.mapping_save_requested.connect(self._on_stable_mapping_save)
         layout.addWidget(self._stable_panel)
@@ -1549,6 +1378,8 @@ class MainWindow(QMainWindow):
         )
 
     def _update_region_status(self):
+        if not hasattr(self, "_region_status"):
+            return
         gw = self._config.get("game_window", {})
         w, h = gw.get("width", 0), gw.get("height", 0)
         if w and h:
@@ -2272,8 +2103,14 @@ class MainWindow(QMainWindow):
 
     def _on_stable_start_requested(self):
         self._on_stable_stop_requested()
+        self._stable_simulator = None
+        self._stable_simulation_active = False
         ui_opts = self._stable_panel.analysis_options()
-        self._config.setdefault("stable_reader", {})["capture_mode"] = ui_opts.get("capture_mode", "npcap")
+        stable_cfg = self._config.setdefault("stable_reader", {})
+        stable_cfg["capture_mode"] = ui_opts.get("capture_mode", "npcap")
+        stable_cfg["training_record_enabled"] = bool(ui_opts.get("training_record_enabled", True))
+        stable_cfg["training_enabled"] = bool(ui_opts.get("training_enabled", False))
+        stable_cfg["training_session_mode"] = str(ui_opts.get("training_session_mode") or "record_only")
         self._stable_mapping_store.load()
         self._stable_tracker = PacketStateTracker(
             self._stable_mapping_store,
@@ -2292,6 +2129,14 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("稳定版：抓包读取已启动")
 
     def _on_stable_stop_requested(self):
+        if self._stable_simulation_active:
+            self._stable_simulation_active = False
+            self._stable_simulator = None
+            self._stable_prompt_open = False
+            if hasattr(self, "_stable_panel"):
+                self._stable_panel.set_running(False)
+                self._stable_panel.set_capture_status("idle")
+            self.statusBar().showMessage("稳定版：模拟对战已停止")
         if self._stable_capture_worker and self._stable_capture_worker.isRunning():
             self._stable_capture_worker.request_stop()
             self._stable_capture_worker.wait(5000)
@@ -2300,6 +2145,66 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_stable_panel"):
             self._stable_panel.set_running(False)
             self._stable_panel.set_capture_status("idle")
+
+    def _on_stable_simulation_requested(self):
+        self._on_stable_stop_requested()
+        self._stable_simulator = StableSimulationGame()
+        self._stable_simulation_active = True
+        self._stable_prompt_open = False
+        self._stable_panel.set_running(True)
+        self._stable_panel.set_capture_status("模拟对战中")
+        self._refresh_stable_simulation_snapshot()
+        self._maybe_start_stable_simulation_analysis()
+        QTimer.singleShot(0, self._prompt_simulated_discard)
+        self.statusBar().showMessage("稳定版：模拟对战已开始")
+
+    def _refresh_stable_simulation_snapshot(self):
+        if self._stable_simulator is not None and hasattr(self, "_stable_panel"):
+            self._stable_panel.set_snapshot(self._stable_simulator.snapshot())
+
+    def _maybe_start_stable_simulation_analysis(self):
+        sim = self._stable_simulator
+        if sim is None or not self._stable_simulation_active or not sim.should_analyze():
+            return
+        state = sim.to_battle_state()
+        options = self._stable_panel.analysis_options()
+        state.deepseek_enabled = bool(options.get("deepseek_enabled", True))
+        state.ai_provider = str(options.get("ai_provider") or "deepseek")
+        state.ai_model = str(options.get("ai_model") or "")
+        state.ai_recognition_enabled = False
+        self._start_stable_analysis(state)
+
+    def _prompt_simulated_discard(self):
+        sim = self._stable_simulator
+        if (
+            sim is None
+            or not self._stable_simulation_active
+            or self._stable_prompt_open
+            or sim.current_turn != "self"
+            or sim.phase != "playing"
+        ):
+            return
+        hand = sim.snapshot()["players"][sim.local_player]["hand"]
+        if not hand:
+            return
+        self._stable_prompt_open = True
+        dialog = SimulatedDiscardDialog(hand, sim.recommended_discard(), self)
+        accepted = dialog.exec() == QDialog.DialogCode.Accepted
+        tile = dialog.selected_tile() if accepted else ""
+        self._stable_prompt_open = False
+        if not accepted:
+            self.statusBar().showMessage("稳定版：模拟出牌已暂停")
+            return
+        try:
+            sim.discard_self(tile)
+            self._refresh_stable_simulation_snapshot()
+            sim.advance_opponent()
+            self._refresh_stable_simulation_snapshot()
+            self._maybe_start_stable_simulation_analysis()
+            QTimer.singleShot(0, self._prompt_simulated_discard)
+        except Exception as exc:
+            self._stable_panel.set_error(str(exc))
+            self.statusBar().showMessage(f"稳定版：模拟出牌失败 - {exc}")
 
     def _on_stable_capture_failed(self, err: str):
         if hasattr(self, "_stable_panel"):
@@ -2342,7 +2247,7 @@ class MainWindow(QMainWindow):
             self_p    = players.get(local_pid, {})
             opp_p     = players.get(opp_pid, {})
 
-            event_type, actor, tile = _parse_stable_event_text(event_text)
+            event_type, actor, tile = parse_stable_event_text(event_text)
 
             # message.ts 格式类似 "2026-05-18T12:34:56.789000"
             raw_ts = getattr(message, "ts", "") or ""
@@ -2399,7 +2304,10 @@ class MainWindow(QMainWindow):
             return
         mode = "state_with_ai" if state.deepseek_enabled else "state_only"
         self._stable_panel.set_busy(True, "稳定版：正在分析策略...")
-        self._stable_tracker.mark_analyzed()
+        if self._stable_simulation_active and self._stable_simulator is not None:
+            self._stable_simulator.mark_analyzed()
+        else:
+            self._stable_tracker.mark_analyzed()
         self._stable_analysis_worker = BattleAnalysisThread(
             self._battle_service,
             state,
@@ -2434,6 +2342,8 @@ class MainWindow(QMainWindow):
         self._stable_pending_state = None
         if pending is not None:
             self._start_stable_analysis(pending)
+        elif self._stable_simulation_active:
+            QTimer.singleShot(0, self._prompt_simulated_discard)
 
     def _on_stable_mapping_save(self, raw_key: str, tile_id: str):
         try:
@@ -2522,7 +2432,8 @@ class MainWindow(QMainWindow):
             return
         self._config = _ensure_battle_config_defaults(dlg.updated_config())
         self._battle_service._config = self._config
-        self._battle_panel.apply_config(self._config)
+        if hasattr(self, "_battle_panel"):
+            self._battle_panel.apply_config(self._config)
         if hasattr(self, "_stable_panel"):
             self._stable_panel.apply_config(self._config)
         self._save_config()

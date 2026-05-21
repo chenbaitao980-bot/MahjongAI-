@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import html
 from copy import deepcopy
 
 from PyQt6.QtCore import pyqtSignal
@@ -15,14 +14,16 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
+    QSizePolicy,
     QTextEdit,
     QVBoxLayout,
     QWidget,
 )
 
 from battle.state import BattleAdvice
+from game.stable_hard_analysis import StableHardAnalysis, analyze_snapshot
 from game.state import ALL_TILE_IDS
-from ui.battle_panel import AnalysisPanel, TILE_NAME_MAP
+from ui.battle_panel import TILE_NAME_MAP
 
 
 def _is_near_bottom(view: QTextEdit, threshold_px: int = 60) -> bool:
@@ -92,12 +93,14 @@ class UnknownTileDialog(QDialog):
 class StableBattlePanel(QWidget):
     start_requested = pyqtSignal()
     stop_requested = pyqtSignal()
+    simulation_requested = pyqtSignal()
     config_requested = pyqtSignal()
     mapping_save_requested = pyqtSignal(str, str)
 
     def __init__(self, config: dict, parent=None):
         super().__init__(parent)
         self._config = deepcopy(config)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._snapshot: dict = {}
         self._notified_unknowns: set[str] = set()
         self._has_advice_rendered = False
@@ -116,6 +119,9 @@ class StableBattlePanel(QWidget):
         self._stop_btn = QPushButton("停止")
         self._stop_btn.clicked.connect(self.stop_requested.emit)
         top.addWidget(self._stop_btn)
+        self._simulate_btn = QPushButton("模拟出牌")
+        self._simulate_btn.clicked.connect(self.simulation_requested.emit)
+        top.addWidget(self._simulate_btn)
         self._config_btn = QPushButton("API 设置")
         self._config_btn.clicked.connect(self.config_requested.emit)
         top.addWidget(self._config_btn)
@@ -138,6 +144,14 @@ class StableBattlePanel(QWidget):
         self._capture_mode_combo.addItem("tcpdump (模拟器)", "tcpdump")
         self._capture_mode_combo.setFixedWidth(140)
         top.addWidget(self._capture_mode_combo)
+
+        self._record_training_checkbox = QCheckBox("记录本局")
+        self._record_training_checkbox.setChecked(True)
+        self._record_training_checkbox.toggled.connect(self._sync_training_controls)
+        top.addWidget(self._record_training_checkbox)
+        self._train_enabled_checkbox = QCheckBox("加入训练")
+        self._train_enabled_checkbox.setChecked(False)
+        top.addWidget(self._train_enabled_checkbox)
 
         top.addStretch()
         root.addLayout(top)
@@ -176,7 +190,7 @@ class StableBattlePanel(QWidget):
         self._event_view.setMinimumHeight(160)
         event_layout.addWidget(self._event_view)
         left.addWidget(event_box, 1)
-        body.addLayout(left, 3)
+        body.addLayout(left, 2)
 
         right = QVBoxLayout()
         advice_box = QGroupBox("策略建议")
@@ -189,12 +203,15 @@ class StableBattlePanel(QWidget):
         advice_layout.addWidget(self._strategy_label)
         self._summary_edit = QTextEdit()
         self._summary_edit.setReadOnly(True)
-        self._summary_edit.setMinimumHeight(110)
-        advice_layout.addWidget(self._summary_edit)
-        self._analysis_panel = AnalysisPanel()
-        advice_layout.addWidget(self._analysis_panel)
+        self._summary_edit.setMinimumHeight(64)
+        self._summary_edit.setMaximumHeight(96)
+        advice_layout.addWidget(self._summary_edit, 0)
+        self._hard_calc_edit = QTextEdit()
+        self._hard_calc_edit.setReadOnly(True)
+        self._hard_calc_edit.setMinimumHeight(420)
+        advice_layout.addWidget(self._hard_calc_edit, 1)
         right.addWidget(advice_box, 1)
-        body.addLayout(right, 2)
+        body.addLayout(right, 3)
 
     def apply_config(self, config: dict) -> None:
         self._config = deepcopy(config)
@@ -207,6 +224,9 @@ class StableBattlePanel(QWidget):
         self._sync_model_placeholder()
         cap_idx = self._capture_mode_combo.findData(stable.get("capture_mode", "npcap"))
         self._capture_mode_combo.setCurrentIndex(max(0, cap_idx))
+        self._record_training_checkbox.setChecked(bool(stable.get("training_record_enabled", True)))
+        self._train_enabled_checkbox.setChecked(bool(stable.get("training_enabled", False)))
+        self._sync_training_controls()
 
     def _default_model(self) -> str:
         provider = str(self._ai_provider_combo.currentData() or "deepseek")
@@ -217,6 +237,12 @@ class StableBattlePanel(QWidget):
         self._ai_model_edit.setPlaceholderText(self._default_model())
         if not self._ai_model_edit.text().strip():
             self._ai_model_edit.setText(self._default_model())
+
+    def _sync_training_controls(self) -> None:
+        record_enabled = self._record_training_checkbox.isChecked()
+        self._train_enabled_checkbox.setEnabled(record_enabled)
+        if not record_enabled:
+            self._train_enabled_checkbox.setChecked(False)
 
     def set_running(self, running: bool) -> None:
         self._start_btn.setEnabled(not running)
@@ -250,6 +276,13 @@ class StableBattlePanel(QWidget):
             "ai_provider": provider,
             "ai_model": model,
             "capture_mode": str(self._capture_mode_combo.currentData() or "npcap"),
+            "training_record_enabled": self._record_training_checkbox.isChecked(),
+            "training_enabled": self._train_enabled_checkbox.isChecked(),
+            "training_session_mode": (
+                "train_enabled"
+                if self._record_training_checkbox.isChecked() and self._train_enabled_checkbox.isChecked()
+                else ("record_only" if self._record_training_checkbox.isChecked() else "paused")
+            ),
         }
 
     def set_snapshot(self, snapshot: dict) -> None:
@@ -296,7 +329,7 @@ class StableBattlePanel(QWidget):
         unknowns = snapshot.get("unknowns", [])
         self._set_unknowns(unknowns)
         self._notify_unknowns(unknowns)
-        self._refresh_advice_placeholder(snapshot)
+        self._render_hard_analysis(snapshot)
 
     def _refresh_advice_placeholder(self, snapshot: dict) -> None:
         mode = str(snapshot.get("analysis_mode") or "")
@@ -321,7 +354,6 @@ class StableBattlePanel(QWidget):
             self._recommended_label.setText(f"等待中：{text}")
             self._strategy_label.setText("策略类型：等待门槛")
             self._summary_edit.setPlainText(text)
-            self._analysis_panel.refresh({"shanten": "--", "strategy_mode": "等待", "candidates": []}, "")
         elif mode == "conservative":
             text = reason or "财神或回合信息不全"
             self._recommended_label.setText(f"等待中：{text}")
@@ -373,37 +405,110 @@ class StableBattlePanel(QWidget):
             self._has_advice_rendered = False
 
     def clear_stream_buffer(self) -> None:
-        self._summary_edit.clear()
-        self._recommended_label.setText("当前推荐出牌：AI 生成中...")
-        self._has_advice_rendered = False
+        return
 
     def append_stream_chunk(self, chunk: str) -> None:
-        self._summary_edit.setPlainText(self._summary_edit.toPlainText() + chunk)
+        return
 
     def set_advice(self, state, advice: BattleAdvice) -> None:
-        discard_id = advice.recommended_discard or ""
-        discard = TILE_NAME_MAP.get(discard_id, discard_id) if discard_id else "--"
-        is_conservative = bool(getattr(state, "is_conservative", False))
-        prefix = "[保守] " if is_conservative else ""
-        self._recommended_label.setText(f"当前推荐出牌：{discard}")
-        self._strategy_label.setText(f"策略类型：{prefix}{advice.strategy_type or '--'}")
-        parts = []
-        if is_conservative:
-            parts.append(
-                "<p style='color:#d29922'>"
-                "[保守模式] 财神或回合信息不全，建议基于已知手牌的安全弃牌。"
-                "</p>"
-            )
-        if advice.reasoning_summary:
-            parts.append(f"<p>{html.escape(advice.reasoning_summary)}</p>")
-        if advice.risk_notes:
-            parts.append(f"<p style='color:#d29922'>{html.escape(advice.risk_notes)}</p>")
-        if advice.forbidden_discards:
-            parts.append(f"<p style='color:#f85149'>禁止出牌：{html.escape(' '.join(advice.forbidden_discards))}</p>")
-        self._summary_edit.setHtml("".join(parts))
-        self._analysis_panel.refresh(state.last_analysis, advice.recommended_discard)
+        self._render_state_hard_analysis(state)
         self._note_status.setText(self._build_note_from_state(state))
         self._has_advice_rendered = True
+
+    def _render_hard_analysis(self, snapshot: dict) -> None:
+        analysis = analyze_snapshot(snapshot)
+        self._apply_hard_analysis(analysis)
+
+    def _render_state_hard_analysis(self, state) -> None:
+        if self._snapshot:
+            self._render_hard_analysis(self._snapshot)
+
+    def _apply_hard_analysis(self, analysis: StableHardAnalysis) -> None:
+        self._recommended_label.setText(f"当前建议：{analysis.current_advice}")
+        self._strategy_label.setText(f"当前状态：{analysis.current_status}；财神：{analysis.caishen_text}")
+        self._summary_edit.setPlainText(analysis.advice_reason)
+        self._hard_calc_edit.setPlainText(self._format_strategy_analysis(analysis))
+
+    def _format_strategy_analysis(self, analysis: StableHardAnalysis) -> str:
+        shanten = "--" if analysis.current_shanten is None else str(analysis.current_shanten)
+        return "\n".join(
+            [
+                f"当前状态：{analysis.current_status}",
+                f"财神：{analysis.caishen_text}",
+                f"当前向听：{shanten}",
+                f"是否听牌：{'是' if analysis.is_ting else '否'}",
+                f"听牌列表：{self._fmt_waits(analysis.ting_tiles)}",
+                f"最佳进听打法：{self._fmt_best_ting_discards(analysis.best_ting_discards)}",
+                f"有效进张：{analysis.effective_count} 张（{_fmt_tiles(analysis.effective_tiles)}）",
+                f"对方手牌可能性预测：{analysis.opponent_hand_prediction}",
+                f"对方进度预测：{analysis.opponent_progress_prediction}",
+                f"当前建议：{analysis.current_advice}",
+                f"建议原因：{analysis.advice_reason}",
+                f"强提醒：{'；'.join(analysis.strong_reminders)}",
+                f"财神风险：{analysis.caishen_risk}",
+                f"模型状态：{analysis.model_status}",
+                f"推荐来源：{analysis.recommendation_source or '无'}",
+                "候选重排：",
+                self._fmt_model_candidates(analysis.candidates),
+                f"数据可信度：{analysis.data_confidence}",
+            ]
+        )
+
+    def _format_hard_analysis(self, analysis: StableHardAnalysis) -> str:
+        shanten = "--" if analysis.current_shanten is None else str(analysis.current_shanten)
+        return "\n".join(
+            [
+                f"当前状态：{analysis.current_status}",
+                f"财神：{analysis.caishen_text}",
+                f"当前向听：{shanten}",
+                f"是否听牌：{'是' if analysis.is_ting else '否'}",
+                f"听牌列表：{self._fmt_waits(analysis.ting_tiles)}",
+                f"最佳进听打法：{self._fmt_best_ting_discards(analysis.best_ting_discards)}",
+                f"有效进张：{analysis.effective_count} 张（{_fmt_tiles(analysis.effective_tiles)}）",
+                f"对方手牌可能性预测：{analysis.opponent_hand_prediction}",
+                f"对方进度预测：{analysis.opponent_progress_prediction}",
+                f"当前建议：{analysis.current_advice}",
+                f"建议原因：{analysis.advice_reason}",
+                f"强提醒：{'；'.join(analysis.strong_reminders)}",
+                f"财神风险：{analysis.caishen_risk}",
+                f"数据可信度：{analysis.data_confidence}",
+            ]
+        )
+
+    @staticmethod
+    def _fmt_waits(waits: list[dict]) -> str:
+        if not waits:
+            return "（空）"
+        parts = []
+        for wait in waits:
+            tile = str(wait.get("tile") or "")
+            remaining = int(wait.get("remaining") or 0)
+            parts.append(f"{TILE_NAME_MAP.get(tile, tile)}x{remaining}")
+        return " / ".join(parts)
+
+    def _fmt_best_ting_discards(self, candidates: list) -> str:
+        if not candidates:
+            return "暂无"
+        parts = []
+        for candidate in candidates[:4]:
+            discard = TILE_NAME_MAP.get(candidate.discard, candidate.discard)
+            waits = self._fmt_waits(candidate.ting_tiles)
+            parts.append(f"打 {discard} -> {waits}")
+        return "；".join(parts)
+
+    @staticmethod
+    def _fmt_model_candidates(candidates: list) -> str:
+        if not candidates:
+            return "  暂无：等待完整可信抓包数据"
+        lines = []
+        for idx, candidate in enumerate(candidates[:6], start=1):
+            discard = TILE_NAME_MAP.get(candidate.discard, candidate.discard)
+            reason = " / ".join(candidate.model_reasons[:4]) if candidate.model_reasons else "硬算候选"
+            lines.append(
+                f"  {idx}. 打 {discard} | 分 {candidate.model_score:.1f} | "
+                f"向听 {candidate.shanten_after} | 进张 {candidate.ukeire_count} | {reason}"
+            )
+        return "\n".join(lines)
 
     def _build_note_from_state(self, state) -> str:
         analysis = getattr(state, "last_analysis", {}) or {}

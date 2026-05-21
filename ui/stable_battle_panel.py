@@ -156,6 +156,10 @@ class StableBattlePanel(QWidget):
         top.addStretch()
         root.addLayout(top)
 
+        body = QHBoxLayout()
+        root.addLayout(body, 1)
+
+        left = QVBoxLayout()
         status_box = QGroupBox("稳定版状态")
         status_form = QFormLayout(status_box)
         self._capture_status = QLabel("idle")
@@ -169,17 +173,13 @@ class StableBattlePanel(QWidget):
         status_form.addRow("回合", self._turn_status)
         status_form.addRow("财神", self._baida_status)
         status_form.addRow("备注", self._note_status)
-        root.addWidget(status_box)
+        left.addWidget(status_box, 0)
 
-        body = QHBoxLayout()
-        root.addLayout(body, 1)
-
-        left = QVBoxLayout()
         data_box = QGroupBox("实时数据")
         data_layout = QVBoxLayout(data_box)
         self._data_view = QTextEdit()
         self._data_view.setReadOnly(True)
-        self._data_view.setMinimumHeight(220)
+        self._data_view.setMinimumHeight(180)
         data_layout.addWidget(self._data_view)
         left.addWidget(data_box, 2)
 
@@ -187,7 +187,7 @@ class StableBattlePanel(QWidget):
         event_layout = QVBoxLayout(event_box)
         self._event_view = QTextEdit()
         self._event_view.setReadOnly(True)
-        self._event_view.setMinimumHeight(160)
+        self._event_view.setMinimumHeight(120)
         event_layout.addWidget(self._event_view)
         left.addWidget(event_box, 1)
         body.addLayout(left, 2)
@@ -203,12 +203,12 @@ class StableBattlePanel(QWidget):
         advice_layout.addWidget(self._strategy_label)
         self._summary_edit = QTextEdit()
         self._summary_edit.setReadOnly(True)
-        self._summary_edit.setMinimumHeight(64)
-        self._summary_edit.setMaximumHeight(96)
+        self._summary_edit.setMinimumHeight(48)
+        self._summary_edit.setMaximumHeight(80)
         advice_layout.addWidget(self._summary_edit, 0)
         self._hard_calc_edit = QTextEdit()
         self._hard_calc_edit.setReadOnly(True)
-        self._hard_calc_edit.setMinimumHeight(420)
+        self._hard_calc_edit.setMinimumHeight(400)
         advice_layout.addWidget(self._hard_calc_edit, 1)
         right.addWidget(advice_box, 1)
         body.addLayout(right, 3)
@@ -427,7 +427,7 @@ class StableBattlePanel(QWidget):
         self._recommended_label.setText(f"当前建议：{analysis.current_advice}")
         self._strategy_label.setText(f"当前状态：{analysis.current_status}；财神：{analysis.caishen_text}")
         self._summary_edit.setPlainText(analysis.advice_reason)
-        self._hard_calc_edit.setPlainText(self._format_strategy_analysis(analysis))
+        self._hard_calc_edit.setHtml(self._format_strategy_analysis_html(analysis))
 
     def _format_strategy_analysis(self, analysis: StableHardAnalysis) -> str:
         shanten = "--" if analysis.current_shanten is None else str(analysis.current_shanten)
@@ -453,6 +453,42 @@ class StableBattlePanel(QWidget):
                 f"数据可信度：{analysis.data_confidence}",
             ]
         )
+
+    def _format_strategy_analysis_html(self, analysis: StableHardAnalysis) -> str:
+        shanten = "--" if analysis.current_shanten is None else str(analysis.current_shanten)
+
+        def _c(text: str, color: str) -> str:
+            return f'<span style="color:{color}">{text}</span>'
+
+        lines: list[str] = []
+        lines.append(_c(f"当前状态：{analysis.current_status}", "#4a90d9"))
+        lines.append(_c(f"财神：{analysis.caishen_text}", "#d4a017"))
+        lines.append(_c(f"当前向听：{shanten}", "#4a90d9"))
+        lines.append(_c(f"是否听牌：{'是' if analysis.is_ting else '否'}", "#4a90d9"))
+        lines.append(_c(f"听牌列表：{self._fmt_waits(analysis.ting_tiles)}", "#4a90d9"))
+        lines.append(_c(f"最佳进听打法：{self._fmt_best_ting_discards(analysis.best_ting_discards)}", "#4a90d9"))
+        lines.append(_c(f"有效进张：{analysis.effective_count} 张（{_fmt_tiles(analysis.effective_tiles)}）", "#4a90d9"))
+        lines.append(_c(f"对方手牌可能性预测：{analysis.opponent_hand_prediction}", "#8e8e93"))
+        lines.append(_c(f"对方进度预测：{analysis.opponent_progress_prediction}", "#8e8e93"))
+        lines.append(_c(f"当前建议：{analysis.current_advice}", "#2ecc71"))
+        lines.append(_c(f"建议原因：{analysis.advice_reason}", "#2ecc71"))
+
+        reminders = "；".join(analysis.strong_reminders)
+        reminder_color = "#e74c3c" if reminders != "无硬错误" else "#2ecc71"
+        lines.append(_c(f"强提醒：{reminders}", reminder_color))
+
+        caishen_risk_color = "#e74c3c" if "高" in analysis.caishen_risk else ("#f39c12" if "中" in analysis.caishen_risk else "#2ecc71")
+        lines.append(_c(f"财神风险：{analysis.caishen_risk}", caishen_risk_color))
+
+        lines.append(_c(f"模型状态：{analysis.model_status}", "#9b59b6"))
+        lines.append(_c(f"推荐来源：{analysis.recommendation_source or '无'}", "#9b59b6"))
+        lines.append(_c("候选重排：", "#9b59b6"))
+        lines.append(self._fmt_model_candidates_html(analysis.candidates))
+
+        conf_color = "#e74c3c" if "不足" in analysis.data_confidence or "等待" in analysis.data_confidence or "未知" in analysis.data_confidence else "#8e8e93"
+        lines.append(_c(f"数据可信度：{analysis.data_confidence}", conf_color))
+
+        return "<br>".join(lines)
 
     def _format_hard_analysis(self, analysis: StableHardAnalysis) -> str:
         shanten = "--" if analysis.current_shanten is None else str(analysis.current_shanten)
@@ -509,6 +545,24 @@ class StableBattlePanel(QWidget):
                 f"向听 {candidate.shanten_after} | 进张 {candidate.ukeire_count} | {reason}"
             )
         return "\n".join(lines)
+
+    @staticmethod
+    def _fmt_model_candidates_html(candidates: list) -> str:
+        if not candidates:
+            return '<span style="color:#8e8e93">  暂无：等待完整可信抓包数据</span>'
+        lines = []
+        for idx, candidate in enumerate(candidates[:6], start=1):
+            discard = TILE_NAME_MAP.get(candidate.discard, candidate.discard)
+            reason = " / ".join(candidate.model_reasons[:4]) if candidate.model_reasons else "硬算候选"
+            score_color = "#2ecc71" if candidate.model_score >= 80 else ("#f39c12" if candidate.model_score >= 50 else "#e74c3c")
+            lines.append(
+                f'<span style="color:#4a90d9">  {idx}. 打 {discard}</span> | '
+                f'<span style="color:{score_color}">分 {candidate.model_score:.1f}</span> | '
+                f'<span style="color:#4a90d9">向听 {candidate.shanten_after}</span> | '
+                f'<span style="color:#4a90d9">进张 {candidate.ukeire_count}</span> | '
+                f'<span style="color:#8e8e93">{reason}</span>'
+            )
+        return "<br>".join(lines)
 
     def _build_note_from_state(self, state) -> str:
         analysis = getattr(state, "last_analysis", {}) or {}

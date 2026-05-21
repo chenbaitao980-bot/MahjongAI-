@@ -25,6 +25,7 @@ from ui.region_selector import RegionSelectorOverlay
 from ui.calibration import CalibrationWizard
 from ui.capture_panel import CapturePanel
 from ui.battle_panel import ApiConfigDialog, BattlePanel
+from ui.simulated_action_dialog import SimulatedActionDialog
 from ui.simulated_discard_dialog import SimulatedDiscardDialog
 from ui.stable_battle_panel import StableBattlePanel
 from ui.stable_capture_controller import StableCaptureThread, parse_stable_event_text
@@ -2184,6 +2185,11 @@ class MainWindow(QMainWindow):
             or sim.phase != "playing"
         ):
             return
+        if self._handle_simulated_self_actions():
+            if sim.phase == "playing":
+                self._maybe_start_stable_simulation_analysis()
+                QTimer.singleShot(0, self._prompt_simulated_discard)
+            return
         hand = sim.snapshot()["players"][sim.local_player]["hand"]
         if not hand:
             return
@@ -2201,10 +2207,73 @@ class MainWindow(QMainWindow):
             sim.advance_opponent()
             self._refresh_stable_simulation_snapshot()
             self._maybe_start_stable_simulation_analysis()
-            QTimer.singleShot(0, self._prompt_simulated_discard)
+            QTimer.singleShot(0, self._handle_simulation_after_opponent)
         except Exception as exc:
             self._stable_panel.set_error(str(exc))
             self.statusBar().showMessage(f"稳定版：模拟出牌失败 - {exc}")
+
+    def _handle_simulation_after_opponent(self):
+        sim = self._stable_simulator
+        if sim is None or not self._stable_simulation_active:
+            return
+        if sim.phase != "playing":
+            self.statusBar().showMessage("稳定版：模拟局结束")
+            return
+        if self._prompt_simulated_response_actions():
+            return
+        self._maybe_start_stable_simulation_analysis()
+        QTimer.singleShot(0, self._prompt_simulated_discard)
+
+    def _prompt_simulated_response_actions(self) -> bool:
+        sim = self._stable_simulator
+        if sim is None or not sim.pending_response:
+            return False
+        if sim.pending_response.get("responder") != sim.local_player:
+            return False
+        actions = list(sim.pending_response.get("actions") or [])
+        if not actions:
+            return False
+        non_pass_actions = [a for a in actions if str(a.get("type")) != "pass"]
+        if not non_pass_actions:
+            sim.apply_response_action({"type": "pass", "label": "过"})
+            self._refresh_stable_simulation_snapshot()
+            if sim.phase != "playing":
+                self.statusBar().showMessage("稳定版：模拟局结束")
+                return True
+            self._maybe_start_stable_simulation_analysis()
+            QTimer.singleShot(0, self._prompt_simulated_discard)
+            return True
+        self._stable_prompt_open = True
+        dialog = SimulatedActionDialog(actions, self)
+        accepted = dialog.exec() == QDialog.DialogCode.Accepted
+        action = dialog.selected_action() if accepted else {"type": "pass", "label": "过"}
+        self._stable_prompt_open = False
+        sim.apply_response_action(action)
+        self._refresh_stable_simulation_snapshot()
+        if sim.phase != "playing":
+            self.statusBar().showMessage("稳定版：模拟局结束")
+            return True
+        self._maybe_start_stable_simulation_analysis()
+        QTimer.singleShot(0, self._prompt_simulated_discard)
+        return True
+
+    def _handle_simulated_self_actions(self) -> bool:
+        sim = self._stable_simulator
+        if sim is None:
+            return False
+        actions = sim.available_self_actions()
+        if not actions:
+            return False
+        self._stable_prompt_open = True
+        dialog = SimulatedActionDialog(actions + [{"type": "pass", "label": "过"}], self)
+        accepted = dialog.exec() == QDialog.DialogCode.Accepted
+        action = dialog.selected_action() if accepted else {"type": "pass", "label": "过"}
+        self._stable_prompt_open = False
+        if action.get("type") == "pass":
+            return False
+        sim.apply_self_action(action)
+        self._refresh_stable_simulation_snapshot()
+        return True
 
     def _on_stable_capture_failed(self, err: str):
         if hasattr(self, "_stable_panel"):

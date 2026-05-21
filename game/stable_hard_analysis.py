@@ -7,6 +7,7 @@ from game.shanten import calc_shanten
 from game.stable_strategy_model import StrategyModelContext, rank_discard_candidates
 from game.tiles import ALL_TILES, build_visible_tiles, hand_to_counts, tile_display_name
 from game.ukeire import calc_ukeire
+from game.win import is_win
 
 
 @dataclass
@@ -64,13 +65,20 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> StableHardAnalysis:
     baida_trusted = bool(snapshot.get("baida_trusted"))
     effective_count = len(hand) + len(self_meld_tiles)
     remaining_tiles = int(snapshot.get("remaining_tiles") or 0)
+    phase = str(snapshot.get("phase") or "")
 
     current_status = infer_current_status(snapshot, effective_count)
     caishen_text = tile_display_name(baida) if baida and baida_trusted else "等待财神"
     visible = build_visible_tiles(hand, self_discards, self_meld_tiles, enemy_discards, enemy_meld_tiles)
 
     confidence_parts = _data_confidence(snapshot, hand, effective_count)
-    can_recommend = _can_recommend(snapshot, hand, baida_trusted, effective_count)
+    response_actions = _response_actions(snapshot, hand, enemy_discards, baida if baida_trusted else None, meld_count)
+    is_finished = phase == "hupai" or bool(snapshot.get("last_event") == "win")
+    can_recommend = (
+        _can_recommend(snapshot, hand, baida_trusted, effective_count)
+        and not response_actions
+        and not is_finished
+    )
 
     current_shanten: int | None = None
     if hand and baida and baida_trusted:
@@ -134,6 +142,31 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> StableHardAnalysis:
         if recommended_discard and can_recommend
         else _blocked_reason(snapshot, effective_count)
     )
+    response_advice, response_reason = _response_advice(
+        response_actions,
+        snapshot=snapshot,
+        hand=hand,
+        enemy_discards=enemy_discards,
+        baida=baida if baida_trusted else None,
+        meld_count=meld_count,
+        visible=visible,
+    )
+    if is_finished:
+        current_advice = "胡牌结算"
+        advice_reason = "当前牌局已进入胡牌/结算状态，不再给出牌建议"
+        recommended_discard = ""
+        effective_tiles = []
+        effective_count_after = 0
+        candidates = []
+        model_status = "finished"
+    elif response_advice:
+        current_advice = response_advice
+        advice_reason = response_reason
+        recommended_discard = ""
+        effective_tiles = []
+        effective_count_after = 0
+        candidates = []
+        model_status = "response_action"
 
     return StableHardAnalysis(
         current_status=current_status,
@@ -237,6 +270,181 @@ def _choose_recommendation(candidates: list[HardDiscardCandidate]) -> HardDiscar
     if not candidates:
         return None
     return candidates[0]
+
+
+def _normalize_actions(values: Any) -> list[str]:
+    if not isinstance(values, list):
+        return []
+    aliases = {
+        "吃": "chi",
+        "碰": "pon",
+        "杠": "kong",
+        "明杠": "kong",
+        "暗杠": "kong",
+        "补杠": "kong",
+        "胡": "hu",
+        "胡牌": "hu",
+        "过": "pass",
+        "chi": "chi",
+        "pon": "pon",
+        "peng": "pon",
+        "kong": "kong",
+        "gang": "kong",
+        "hu": "hu",
+        "pass": "pass",
+    }
+    result: list[str] = []
+    for value in values:
+        action = aliases.get(str(value).strip())
+        if action and action not in result:
+            result.append(action)
+    return result
+
+
+def _last_opponent_discard(snapshot: dict[str, Any], enemy_discards: list[str]) -> str:
+    action_tile = str(snapshot.get("action_tile") or "")
+    if action_tile in ALL_TILES:
+        return action_tile
+    return enemy_discards[-1] if enemy_discards else ""
+
+
+def _response_actions(
+    snapshot: dict[str, Any],
+    hand: list[str],
+    enemy_discards: list[str],
+    baida: str | None,
+    meld_count: int,
+) -> list[str]:
+    explicit = _normalize_actions(snapshot.get("optional_actions"))
+    if explicit:
+        return explicit
+    if not hand or len(hand) % 3 != 1:
+        return []
+    if str(snapshot.get("current_turn") or "") not in ("none", "response"):
+        return []
+    tile = _last_opponent_discard(snapshot, enemy_discards)
+    if tile not in ALL_TILES:
+        return []
+    actions: list[str] = []
+    if baida:
+        counts, baida_count = hand_to_counts(hand + [tile], baida)
+        if is_win(counts, meld_count, baida_count):
+            actions.append("hu")
+    same_count = sum(1 for t in hand if t == tile)
+    if same_count >= 3:
+        actions.append("kong")
+    if same_count >= 2:
+        actions.append("pon")
+    if _can_chi(hand, tile):
+        actions.append("chi")
+    if actions:
+        actions.append("pass")
+    return actions
+
+
+def _can_chi(hand: list[str], tile: str) -> bool:
+    if tile not in ALL_TILES or tile.endswith("z"):
+        return False
+    suit = tile[-1]
+    rank = int(tile[:-1])
+    ranks = {int(t[:-1]) for t in hand if t.endswith(suit) and not t.endswith("z")}
+    for a, b in ((rank - 2, rank - 1), (rank - 1, rank + 1), (rank + 1, rank + 2)):
+        if 1 <= a <= 9 and 1 <= b <= 9 and a in ranks and b in ranks:
+            return True
+    return False
+
+
+def _find_chi_tiles(hand: list[str], tile: str) -> list[str]:
+    if tile not in ALL_TILES or tile.endswith("z"):
+        return []
+    suit = tile[-1]
+    rank = int(tile[:-1])
+    available = set(hand)
+    for a, b in ((rank - 1, rank + 1), (rank - 2, rank - 1), (rank + 1, rank + 2)):
+        ta = f"{a}{suit}"
+        tb = f"{b}{suit}"
+        if 1 <= a <= 9 and 1 <= b <= 9 and ta in available and tb in available:
+            return [ta, tb]
+    return []
+
+
+def _simulate_response_shanten(
+    hand: list[str],
+    action: str,
+    tile: str,
+    baida: str | None,
+    meld_count: int,
+    visible: dict[str, int],
+) -> tuple[int | None, int]:
+    if not baida or tile not in ALL_TILES:
+        return None, 0
+    simulated = list(hand)
+    next_meld_count = meld_count
+    if action == "pon":
+        remove_count = 2
+    elif action == "kong":
+        remove_count = 3
+    elif action == "chi":
+        meld = _find_chi_tiles(simulated, tile)
+        if not meld:
+            return None, 0
+        for value in meld:
+            simulated.remove(value)
+        next_meld_count += 1
+        counts, baida_count = hand_to_counts(simulated, baida)
+        ukeire = calc_ukeire(simulated, next_meld_count, baida, visible)
+        return calc_shanten(counts, next_meld_count, baida_count), int(ukeire.get("count", 0))
+    else:
+        return None, 0
+    removed = 0
+    kept: list[str] = []
+    for value in simulated:
+        if value == tile and removed < remove_count:
+            removed += 1
+        else:
+            kept.append(value)
+    if removed < remove_count:
+        return None, 0
+    next_meld_count += 1
+    counts, baida_count = hand_to_counts(kept, baida)
+    ukeire = calc_ukeire(kept, next_meld_count, baida, visible)
+    return calc_shanten(counts, next_meld_count, baida_count), int(ukeire.get("count", 0))
+
+
+def _response_advice(
+    actions: list[str],
+    *,
+    snapshot: dict[str, Any],
+    hand: list[str],
+    enemy_discards: list[str],
+    baida: str | None,
+    meld_count: int,
+    visible: dict[str, int],
+) -> tuple[str, str]:
+    if not actions:
+        return "", ""
+    tile = _last_opponent_discard(snapshot, enemy_discards)
+    tile_text = tile_display_name(tile) if tile else "当前牌"
+    if "hu" in actions:
+        return "建议胡", f"当前可胡 {tile_text}，胡牌优先级高于杠、碰、吃和过"
+    scored: list[tuple[int, int, str, str]] = []
+    priority = {"kong": 0, "pon": 1, "chi": 2}
+    label = {"kong": "杠", "pon": "碰", "chi": "吃"}
+    for action in ("kong", "pon", "chi"):
+        if action not in actions:
+            continue
+        shanten_after, ukeire_count = _simulate_response_shanten(hand, action, tile, baida, meld_count, visible)
+        if shanten_after is None:
+            scored.append((99, 0, action, "数据不足，无法可靠评估响应后牌型"))
+        else:
+            scored.append((shanten_after, -ukeire_count, action, f"{label[action]}后向听 {shanten_after}，有效进张 {ukeire_count} 张"))
+    if not scored:
+        return "建议过", "当前只有过或缺少可验证响应动作，保守过"
+    scored.sort(key=lambda item: (item[0], item[1], priority.get(item[2], 9)))
+    best_shanten, _neg_ukeire, best_action, reason = scored[0]
+    if best_shanten > 1:
+        return "建议过", f"{reason}，收益不明确，保守过"
+    return f"建议{label[best_action]}", reason + "；过为备选"
 
 
 def _current_ting_tiles(

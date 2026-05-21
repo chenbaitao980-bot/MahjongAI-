@@ -33,3 +33,14 @@
 - [x] `python -m compileall game ui tests`
 - [x] `python -m unittest tests.test_stable_hard_analysis`
 - [x] `gitnexus detect-changes --scope all -r mahjong-learning`
+
+## 追加实施：策略区域布局与分类着色
+
+- [x] 12. 调整 `ui/stable_battle_panel.py` 右侧布局权重/高度，让“策略建议”区域向上扩张并显示完整硬算明细。
+- [x] 13. 将右侧硬算明细按轻重缓急/数据种类渲染为不同颜色，保留现有硬算数据来源。
+- [x] 14. 确认左侧实时数据、事件流、AI 流式文本入口不被本次 UI 调整改变。
+
+## 追加验证
+
+- [x] `python -m compileall ui`
+- [x] `gitnexus detect-changes --scope all -r mahjong-learning`

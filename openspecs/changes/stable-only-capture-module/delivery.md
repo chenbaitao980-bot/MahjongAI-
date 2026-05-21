@@ -72,3 +72,18 @@
 - `python -m unittest tests.test_simulated_discard_dialog tests.test_stable_simulator tests.test_stable_hard_analysis`：通过，9 个测试 OK。
 - Offscreen 弹框检查：存在手牌按钮和“出牌/暂停”按钮，“出牌”初始不可用。
 - `gitnexus detect-changes --scope all -r mahjong-learning`：通过，风险级别 high；主要包含前序稳定版抽离影响流。
+
+## 追加交付：模拟吃碰杠胡事件
+
+- `stable/simulator.py` 新增基础胡牌检测：自摸/点炮胡会记录事件并结束模拟局。
+- 新增碰、吃、明杠、暗杠合法动作判断和副露写入。
+- 电脑回合支持基础自动动作，优先级为胡、杠、碰、吃、过。
+- 新增 `ui/simulated_action_dialog.py`，用于我方可选动作：胡/吃/碰/杠/过。
+- `MainWindow` 模拟流程接入动作弹框；我方选择吃碰杠后副露区刷新，并继续轮到我方出牌。
+
+## 追加验证：模拟吃碰杠胡事件
+
+- `python -m compileall ui stable game tests`：通过。
+- `python -m unittest tests.test_stable_simulator tests.test_simulated_discard_dialog tests.test_stable_hard_analysis`：通过，13 个测试 OK。
+- Offscreen 动作弹框实例化：可创建动作按钮。
+- `gitnexus detect-changes --scope all -r mahjong-learning`：通过，风险级别 high；主要因为模拟器动作流和 MainWindow 模拟推进流变更。

@@ -36,11 +36,24 @@ def calc_shanten(counts: list[int], meld_count: int, baida_count: int) -> int:
                 if shanten < best:
                     best = shanten
 
-    # 情况2：无将牌候选（用剩余牌中的对子/搭子凑将）
+    # 情况2：无将牌候选（用剩余牌中的对子凑将）
     for groups, rem_counts, rem_jokers in _remove_all_groups(counts, baida_count):
         taatsus, pairs = _count_taatsus_and_pairs(rem_counts, rem_jokers)
-        # 如果没有将牌，需要额外1步来凑将牌
-        shanten = need * 2 - (groups * 2 + min(taatsus + pairs, need))
+        # 没有将牌时，必须先用1个对子凑将牌，剩余对子/搭子才能凑面子
+        # pairs: 可作将牌的对子候选（含joker补的对子）
+        # taatsus: 只能凑面子的搭子（两面、坎张），不能替代将牌
+        if pairs > 0:
+            # 有对子候选：1个对子作将牌，剩余 (pairs-1) 个对子可当搭子用
+            shanten = need * 2 - (groups * 2 + min(taatsus + (pairs - 1), need) + 1)
+        else:
+            # 无对子候选：taatsus 只能凑面子，不能替代将牌
+            # 需要额外1步来凑将牌（摸对子或2joker）
+            shanten = need * 2 - (groups * 2 + min(taatsus, need))
+            # 没有将牌时，向听数不能低于1（至少需要1步凑将牌）
+            # 但如果 groups < need，taatsus 可以帮助凑面子，可能向听数 > 1
+            # 如果 groups == need，taatsus 存在但无将牌，向听数至少为1
+            if shanten < 1:
+                shanten = 1
         if shanten < best:
             best = shanten
 

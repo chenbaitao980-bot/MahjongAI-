@@ -73,6 +73,8 @@ class PacketStateTracker:
         self.last_error = ""
         self._last_discard_echo: tuple[int, str] | None = None
         self.optional_actions: list[str] = []
+        self.action_tile = ""
+        self.last_event = ""
         self.action_note = ""
         self.hand_incomplete_reason = ""
         self.marked_tiles: list[str] = []
@@ -122,6 +124,8 @@ class PacketStateTracker:
             return False
         if changed and not bool(game.get("suppress_event_log")):
             self._append_event(message, game)
+        if changed and event:
+            self.last_event = str(event)
         return changed
 
 

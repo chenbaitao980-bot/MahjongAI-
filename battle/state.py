@@ -64,6 +64,7 @@ class BattleState:
     enemy_melds: list[MeldGroup] = field(default_factory=list)
     kan_closed_count: int = 0   # 暗杠次数（影响基础牌点计算）
     current_turn: str = "none"  # "self" | "enemy" | "none"
+    drawn_tile: str = ""        # 当前回合可信新摸牌；锁手/报听后只允许打这张
     last_trigger_reason: str = ""
     last_analysis_at: str = ""
     last_analysis_duration_ms: int = 0
@@ -194,6 +195,12 @@ class BattleState:
                     mc_top_k=2,         # 仅前 2 个候选做 MC
                 )
                 candidates = eval_result.get("candidates", [])
+                if self.drawn_tile:
+                    current_shanten = calc_shanten(counts, meld_count, baida_count)
+                    if current_shanten == 0:
+                        candidates = [c for c in candidates if c.get("discard") == self.drawn_tile]
+                        eval_result["candidates"] = candidates
+                        eval_result["top_recommendation"] = candidates[0]["discard"] if candidates else None
                 mode = eval_result.get("strategy_mode", "balance")
                 top = candidates[0]["discard"] if candidates else None
                 top_score = candidates[0].get("score") if candidates else None
@@ -255,6 +262,7 @@ class BattleState:
         self.enemy_discards.clear()
         self.enemy_melds.clear()
         self.kan_closed_count = 0
+        self.drawn_tile = ""
         self.last_trigger_reason = ""
         self.last_analysis_at = ""
         self.last_analysis_duration_ms = 0

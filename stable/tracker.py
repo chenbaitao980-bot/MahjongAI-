@@ -72,6 +72,7 @@ class PacketStateTracker:
         self.event_log: list[str] = []
         self.last_error = ""
         self._last_discard_echo: tuple[int, str] | None = None
+        self.last_draw_tile = ""
         self.optional_actions: list[str] = []
         self.action_tile = ""
         self.last_event = ""
@@ -196,9 +197,11 @@ class PacketStateTracker:
             if player_id == self.local_player and self._effective_self_count() == 14:
                 self.current_turn = "self"
                 self.turn_trusted = source == SOURCE_TRUSTED_HAND
+                self.last_draw_tile = ""
             elif player_id == self.local_player:
                 self.current_turn = "none"
                 self.turn_trusted = False
+                self.last_draw_tile = ""
             return True
 
         if event == "draw":
@@ -221,6 +224,7 @@ class PacketStateTracker:
                 self.players[player_id].hand_count += 1
                 if tile and player_id == self.local_player:
                     self.players[player_id].hand.append(tile)
+                    self.last_draw_tile = tile
                 if player_id == self.local_player:
                     self.current_turn = "self"
                     self.turn_trusted = source == SOURCE_TRUSTED_ACTION
@@ -244,6 +248,7 @@ class PacketStateTracker:
                     self.turn_trusted = source == SOURCE_TRUSTED_ACTION
                     self.optional_actions = []
                     self.action_note = self._marked_note()
+                    self.last_draw_tile = ""
                 elif player_id == self.opponent_player:
                     self.current_turn = "none"
                     self.turn_trusted = source == SOURCE_TRUSTED_ACTION
@@ -298,6 +303,7 @@ class PacketStateTracker:
                     self.turn_trusted = source == SOURCE_TRUSTED_ACTION
                     self.optional_actions = []
                     self.action_note = self._marked_note()
+                    self.last_draw_tile = ""
                 elif player_id == self.opponent_player:
                     self.current_turn = "enemy"
                     self.turn_trusted = source == SOURCE_TRUSTED_ACTION
@@ -405,7 +411,11 @@ class PacketStateTracker:
             return False
         discard_player, discard_tile = self._last_discard_echo
         self._last_discard_echo = None
-        return discard_player != player_id and discard_tile == tile
+        # Do not consume a real draw by the other player solely because it has
+        # the same tile value as the latest discard. That pattern happened in
+        # the 2026-05-22 12:44:18 capture: opponent discarded South, then local
+        # genuinely drew South.
+        return discard_player == player_id and discard_tile == tile
 
 
     def _remove_claimed_discard(self, tile: str, claimant: int) -> None:
@@ -519,6 +529,7 @@ class PacketStateTracker:
             "turn_trusted": self.turn_trusted,
             "optional_actions": list(self.optional_actions),
             "action_tile": self.action_tile,
+            "drawn_tile": self.last_draw_tile,
             "last_event": self.last_event,
             "action_note": self.action_note or self._marked_note() or self.hand_incomplete_reason,
             "hand_incomplete_reason": self.hand_incomplete_reason,
@@ -555,6 +566,7 @@ class PacketStateTracker:
         state.baida_tile = self.baida_tile
         state.remaining_tiles = self.remaining_tiles
         state.current_turn = self.current_turn
+        state.drawn_tile = self.last_draw_tile
         state.recognition_source = "packet"
         state.is_conservative = self.analysis_mode() == "conservative"
         state.self_hand = [tile_from_id(t) for t in self_player.hand]

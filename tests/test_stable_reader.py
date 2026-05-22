@@ -74,6 +74,30 @@ def make_legacy_packet(payload: bytes, src_port: int = 7777, dst_port: int = 500
 
 
 class StableReaderTests(unittest.TestCase):
+    def test_stable_reader_ai_defaults_off_but_explicit_enable_still_works(self):
+        from ui.main_window import _ensure_battle_config_defaults
+
+        cfg = _ensure_battle_config_defaults({})
+        self.assertFalse(cfg["stable_reader"]["deepseek_enabled"])
+
+        explicit = _ensure_battle_config_defaults({"stable_reader": {"deepseek_enabled": True}})
+        self.assertTrue(explicit["stable_reader"]["deepseek_enabled"])
+
+    def test_stable_panel_default_ai_checkbox_off(self):
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        from PyQt6.QtWidgets import QApplication
+        from ui.stable_battle_panel import StableBattlePanel
+
+        app = QApplication.instance() or QApplication([])
+        self.addCleanup(lambda: app.processEvents())
+
+        panel = StableBattlePanel({})
+        self.addCleanup(panel.deleteLater)
+        self.assertFalse(panel.analysis_options()["deepseek_enabled"])
+
+        panel.apply_config({"stable_reader": {"deepseek_enabled": True}})
+        self.assertTrue(panel.analysis_options()["deepseek_enabled"])
+
     def make_msg(self, game: dict) -> ProtocolMessage:
         return ProtocolMessage(
             ts="2026-01-01T00:00:00.000",
@@ -601,7 +625,7 @@ class StableReaderTests(unittest.TestCase):
             self.assertEqual(snapshot["players"][2]["melds"], [{"type": "chi", "tiles": ["7m", "8m", "9m"]}])
             self.assertEqual(snapshot["remaining_tiles"], 108)
 
-    def test_two_player_discard_echo_draw_does_not_add_self_tile(self):
+    def test_two_player_same_tile_draw_after_opponent_discard_adds_self_tile(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = MappingStore(path=os.path.join(tmp, "mappings.yaml"))
             tracker = PacketStateTracker(store, local_player=0, player_count=2)
@@ -631,12 +655,13 @@ class StableReaderTests(unittest.TestCase):
 
             snapshot = tracker.snapshot()
             self.assertEqual(snapshot["players"][1]["discards"], ["2z"])
-            self.assertEqual(snapshot["players"][0]["hand"], [])
-            self.assertEqual(snapshot["remaining_tiles"], 108)
+            self.assertEqual(snapshot["players"][0]["hand"], ["2z"])
+            self.assertEqual(snapshot["drawn_tile"], "2z")
+            self.assertEqual(snapshot["remaining_tiles"], 107)
             self.assertEqual(snapshot["current_turn"], "self")
             events = "\n".join(snapshot["events"])
             self.assertIn("对面打出南", events)
-            self.assertNotIn("我方摸牌南", events)
+            self.assertIn("我方摸牌南", events)
 
     def test_two_player_opponent_chi_shows_in_opponent_melds(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -707,6 +732,7 @@ class StableReaderTests(unittest.TestCase):
             self.assertEqual(snapshot["events"], ["00:00:00 我方手牌更新：13 张"])
             self.assertEqual(snapshot["baida_tile"], "7z")
             self.assertTrue(snapshot["baida_trusted"])
+            self.assertEqual(snapshot["drawn_tile"], "")
 
     def test_manual_mapping_replays_history_into_chinese_events(self):
         with tempfile.TemporaryDirectory() as tmp:

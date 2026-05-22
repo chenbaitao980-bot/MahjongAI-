@@ -88,6 +88,21 @@ class StableHardAnalysisTest(unittest.TestCase):
         self.assertGreater(result.effective_count, 0)
         self.assertTrue(any(wait["tile"] == "8m" for wait in result.ting_tiles))
 
+    def test_ting_drawn_tile_limits_locked_hand_candidates(self):
+        result = analyze_snapshot(
+            _snapshot(
+                [
+                    "1m", "1m", "2m", "3m", "4m", "3m", "4m",
+                    "5m", "4m", "5m", "6m", "6m", "7m", "9p",
+                ],
+                drawn_tile="1m",
+            )
+        )
+
+        self.assertEqual(result.current_shanten, 0)
+        self.assertEqual(result.recommended_discard, "1m")
+        self.assertEqual([candidate.discard for candidate in result.candidates], ["1m"])
+
 
     def test_enemy_turn_does_not_emit_discard_candidates(self):
         result = analyze_snapshot(_snapshot(["1m"] * 14, current_turn="enemy"))
@@ -178,10 +193,66 @@ class StableHardAnalysisTest(unittest.TestCase):
         )
 
         self.assertEqual(result.candidates, [])
-        self.assertIn("估计", result.opponent_hand_prediction)
-        self.assertIn("可能", result.opponent_hand_prediction)
-        self.assertIn("估计进度", result.opponent_progress_prediction)
-        self.assertIn("副露", result.opponent_progress_prediction)
+        self.assertIsNotNone(result.opponent_prediction)
+        self.assertTrue(result.opponent_prediction.enabled)
+        self.assertIn("confidence=", result.opponent_hand_prediction)
+        self.assertIn("tenpai=", result.opponent_progress_prediction)
+        self.assertGreater(result.opponent_prediction.sampled_count, 0)
+
+    def test_opponent_prediction_ignores_hidden_simulation_hand(self):
+        public_players = {
+            0: {
+                "hand": ["1m", "1m", "2m", "3m", "4m", "3m", "4m", "5m", "4m", "5m", "6m", "6m", "7m", "9p"],
+                "hand_count": 14,
+                "discards": ["9s", "1p"],
+                "melds": [],
+            },
+            1: {
+                "hand": [],
+                "hand_count": 7,
+                "discards": ["1m", "9m", "2p", "8p"],
+                "melds": [{"type": "pon", "tiles": ["3s", "3s", "3s"]}],
+            },
+        }
+        hidden_players = {
+            **public_players,
+            1: {
+                **public_players[1],
+                "hand": ["1z", "1z", "2z", "3z", "4z", "5z", "6z"],
+            },
+        }
+        config = {"opponent_prediction": {"enabled": True, "particle_count": 300, "monte_carlo_runs": 100, "bayes_enabled": True}}
+        public_result = analyze_snapshot(_snapshot(public_players[0]["hand"], players=public_players), config)
+        hidden_result = analyze_snapshot(_snapshot(public_players[0]["hand"], players=hidden_players), config)
+
+        self.assertIsNotNone(public_result.opponent_prediction)
+        self.assertEqual(
+            public_result.opponent_prediction.tile_probabilities,
+            hidden_result.opponent_prediction.tile_probabilities,
+        )
+        self.assertEqual(public_result.opponent_hand_prediction, hidden_result.opponent_hand_prediction)
+
+    def test_opponent_prediction_respects_config_switches(self):
+        disabled = analyze_snapshot(
+            _snapshot(["1m"] * 14),
+            {"opponent_prediction": {"enabled": False, "particle_count": 300, "monte_carlo_runs": 100}},
+        )
+        enabled = analyze_snapshot(
+            _snapshot(
+                ["1m"] * 14,
+                players={
+                    0: {"hand": ["1m"] * 14, "hand_count": 14, "discards": [], "melds": []},
+                    1: {"hand": [], "hand_count": 7, "discards": ["2m", "3m"], "melds": []},
+                },
+            ),
+            {"opponent_prediction": {"enabled": True, "particle_count": 300, "monte_carlo_runs": 100, "bayes_enabled": False}},
+        )
+
+        self.assertFalse(disabled.opponent_prediction.enabled)
+        self.assertTrue(enabled.opponent_prediction.enabled)
+        self.assertEqual(enabled.opponent_prediction.particle_count, 300)
+        self.assertEqual(enabled.opponent_prediction.monte_carlo_runs, 100)
+        self.assertFalse(enabled.opponent_prediction.bayes_enabled)
 
     def test_fourteen_tile_zero_shanten_without_waits_is_not_displayed_as_ting(self):
         result = analyze_snapshot(

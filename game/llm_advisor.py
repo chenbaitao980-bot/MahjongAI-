@@ -233,6 +233,12 @@ def get_final_advice(
             advice["reason"] += f" [LLM 调用失败: {err_msg}]"
         return advice
 
+    if not str(raw_text or "").strip():
+        advice = fallback_advice(analysis)
+        advice["reason"] += " [LLM 返回空内容，已降级到程序推荐]"
+        advice["raw_response"] = "[empty-response-fallback]"
+        return advice
+
     # 解析输出
     try:
         llm_output = _extract_json_object(raw_text)

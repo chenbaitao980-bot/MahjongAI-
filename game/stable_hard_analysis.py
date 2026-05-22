@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from game.opponent_inference import OpponentPrediction, infer_opponent_hand
 from game.shanten import calc_shanten
 from game.stable_strategy_model import StrategyModelContext, rank_discard_candidates
 from game.tiles import ALL_TILES, build_visible_tiles, hand_to_counts, tile_display_name
@@ -48,9 +49,10 @@ class StableHardAnalysis:
     candidates: list[HardDiscardCandidate] = field(default_factory=list)
     model_status: str = "waiting"
     recommendation_source: str = ""
+    opponent_prediction: OpponentPrediction | None = None
 
 
-def analyze_snapshot(snapshot: dict[str, Any]) -> StableHardAnalysis:
+def analyze_snapshot(snapshot: dict[str, Any], analysis_config: dict[str, Any] | None = None) -> StableHardAnalysis:
     local = snapshot.get("local_player")
     opponent = snapshot.get("opponent_player")
     players = snapshot.get("players", {}) if isinstance(snapshot.get("players"), dict) else {}
@@ -89,7 +91,16 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> StableHardAnalysis:
 
     candidates: list[HardDiscardCandidate] = []
     if can_recommend and baida:
-        candidates = _discard_candidates(hand, meld_count, baida, visible, current_shanten, effective_count)
+        legal_discards = _legal_discards(snapshot, hand, current_shanten)
+        candidates = _discard_candidates(
+            hand,
+            meld_count,
+            baida,
+            visible,
+            current_shanten,
+            effective_count,
+            legal_discards=legal_discards,
+        )
         candidates = rank_discard_candidates(
             candidates,
             StrategyModelContext(
@@ -124,6 +135,12 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> StableHardAnalysis:
         is_ting=is_ting,
     )
     caishen_risk = _caishen_risk(baida, recommended, candidates)
+    opponent_config = {}
+    if isinstance(analysis_config, dict):
+        raw_opponent_config = analysis_config.get("opponent_prediction", {})
+        if isinstance(raw_opponent_config, dict):
+            opponent_config = raw_opponent_config
+    opponent_prediction = infer_opponent_hand(snapshot, opponent_config)
     opponent_hand_prediction, opponent_progress_prediction = _opponent_predictions(
         enemy_discards=enemy_discards,
         enemy_meld_tiles=enemy_meld_tiles,
@@ -133,6 +150,9 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> StableHardAnalysis:
         current_turn=str(snapshot.get("current_turn") or "none"),
         visible=visible,
     )
+    if opponent_prediction.enabled:
+        opponent_hand_prediction = opponent_prediction.summary
+        opponent_progress_prediction = opponent_prediction.progress_summary
     current_advice = (
         f"建议打 {tile_display_name(recommended_discard)}"
         if recommended_discard and can_recommend
@@ -190,6 +210,7 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> StableHardAnalysis:
         candidates=candidates,
         model_status=model_status,
         recommendation_source=(recommended.model_source if recommended else ""),
+        opponent_prediction=opponent_prediction,
     )
 
 
@@ -242,9 +263,14 @@ def _discard_candidates(
     visible: dict[str, int],
     current_shanten: int | None,
     effective_count: int,
+    legal_discards: list[str] | None = None,
 ) -> list[HardDiscardCandidate]:
     result: list[HardDiscardCandidate] = []
-    for discard in sorted(set(hand)):
+    discard_pool = sorted(set(hand))
+    if legal_discards is not None:
+        legal_set = {tile for tile in legal_discards if tile in hand}
+        discard_pool = [tile for tile in discard_pool if tile in legal_set]
+    for discard in discard_pool:
         after = list(hand)
         after.remove(discard)
         ukeire = calc_ukeire(after, meld_count, baida, visible)
@@ -272,6 +298,16 @@ def _discard_candidates(
             candidate.shanten_delta = candidate.shanten_after - baseline
     result.sort(key=lambda c: (c.is_caishen, c.shanten_after, -c.ukeire_count, c.discard))
     return result
+
+
+def _legal_discards(snapshot: dict[str, Any], hand: list[str], current_shanten: int | None) -> list[str] | None:
+    explicit = _valid_tiles(snapshot.get("legal_discards", []))
+    if explicit:
+        return explicit
+    drawn_tile = str(snapshot.get("drawn_tile") or "")
+    if current_shanten == 0 and drawn_tile in hand:
+        return [drawn_tile]
+    return None
 
 
 def _discard_shape_value(hand: list[str], discard: str) -> int:

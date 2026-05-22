@@ -443,9 +443,17 @@ def _ensure_battle_config_defaults(config: dict) -> dict:
     stable_cfg.setdefault("save_events_jsonl", True)
     stable_cfg.setdefault("player_count", 2)
     stable_cfg.setdefault("local_player", 0)
-    stable_cfg.setdefault("deepseek_enabled", True)
+    stable_cfg.setdefault("deepseek_enabled", False)
     stable_cfg.setdefault("ai_provider", "deepseek")
     stable_cfg.setdefault("ai_model", "")
+    opponent_prediction_cfg = stable_cfg.setdefault("opponent_prediction", {})
+    opponent_prediction_cfg.setdefault("enabled", True)
+    opponent_prediction_cfg.setdefault("dynamic_enabled", True)
+    opponent_prediction_cfg.setdefault("particle_count", 5000)
+    opponent_prediction_cfg.setdefault("monte_carlo_runs", 2000)
+    opponent_prediction_cfg.setdefault("bayes_enabled", True)
+    opponent_prediction_cfg.setdefault("top_tile_count", 8)
+    opponent_prediction_cfg.setdefault("representative_hand_count", 3)
     return config
 
 
@@ -2112,6 +2120,7 @@ class MainWindow(QMainWindow):
         stable_cfg["training_record_enabled"] = bool(ui_opts.get("training_record_enabled", True))
         stable_cfg["training_enabled"] = bool(ui_opts.get("training_enabled", False))
         stable_cfg["training_session_mode"] = str(ui_opts.get("training_session_mode") or "record_only")
+        stable_cfg["opponent_prediction"] = dict(ui_opts.get("opponent_prediction") or {})
         self._stable_mapping_store.load()
         self._stable_tracker = PacketStateTracker(
             self._stable_mapping_store,
@@ -2169,7 +2178,7 @@ class MainWindow(QMainWindow):
             return
         state = sim.to_battle_state()
         options = self._stable_panel.analysis_options()
-        state.deepseek_enabled = bool(options.get("deepseek_enabled", True))
+        state.deepseek_enabled = bool(options.get("deepseek_enabled", False))
         state.ai_provider = str(options.get("ai_provider") or "deepseek")
         state.ai_model = str(options.get("ai_model") or "")
         state.ai_recognition_enabled = False
@@ -2361,7 +2370,7 @@ class MainWindow(QMainWindow):
         if self._stable_tracker.should_analyze():
             state = self._stable_tracker.to_battle_state()
             options = self._stable_panel.analysis_options()
-            state.deepseek_enabled = bool(options.get("deepseek_enabled", True))
+            state.deepseek_enabled = bool(options.get("deepseek_enabled", False))
             state.ai_provider = str(options.get("ai_provider") or "deepseek")
             state.ai_model = str(options.get("ai_model") or "")
             state.ai_recognition_enabled = False
@@ -2422,7 +2431,7 @@ class MainWindow(QMainWindow):
             if self._stable_tracker.should_analyze():
                 state = self._stable_tracker.to_battle_state()
                 options = self._stable_panel.analysis_options()
-                state.deepseek_enabled = bool(options.get("deepseek_enabled", True))
+                state.deepseek_enabled = bool(options.get("deepseek_enabled", False))
                 state.ai_provider = str(options.get("ai_provider") or "deepseek")
                 state.ai_model = str(options.get("ai_model") or "")
                 state.ai_recognition_enabled = False

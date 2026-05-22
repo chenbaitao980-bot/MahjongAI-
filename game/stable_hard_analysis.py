@@ -89,6 +89,13 @@ def analyze_snapshot(snapshot: dict[str, Any], analysis_config: dict[str, Any] |
         counts, baida_count = hand_to_counts(hand, baida)
         current_shanten = calc_shanten(counts, meld_count, baida_count)
 
+    opponent_config = {}
+    if isinstance(analysis_config, dict):
+        raw_opponent_config = analysis_config.get("opponent_prediction", {})
+        if isinstance(raw_opponent_config, dict):
+            opponent_config = raw_opponent_config
+    opponent_prediction = infer_opponent_hand(snapshot, opponent_config)
+
     candidates: list[HardDiscardCandidate] = []
     if can_recommend and baida:
         legal_discards = _legal_discards(snapshot, hand, current_shanten)
@@ -111,6 +118,7 @@ def analyze_snapshot(snapshot: dict[str, Any], analysis_config: dict[str, Any] |
                 self_discards=self_discards,
                 enemy_meld_tiles=enemy_meld_tiles,
                 self_meld_tiles=self_meld_tiles,
+                opponent_prediction=opponent_prediction,
             ),
         )
 
@@ -135,12 +143,6 @@ def analyze_snapshot(snapshot: dict[str, Any], analysis_config: dict[str, Any] |
         is_ting=is_ting,
     )
     caishen_risk = _caishen_risk(baida, recommended, candidates)
-    opponent_config = {}
-    if isinstance(analysis_config, dict):
-        raw_opponent_config = analysis_config.get("opponent_prediction", {})
-        if isinstance(raw_opponent_config, dict):
-            opponent_config = raw_opponent_config
-    opponent_prediction = infer_opponent_hand(snapshot, opponent_config)
     opponent_hand_prediction, opponent_progress_prediction = _opponent_predictions(
         enemy_discards=enemy_discards,
         enemy_meld_tiles=enemy_meld_tiles,

@@ -15,6 +15,7 @@ class StrategyModelContext:
     self_discards: list[str] = field(default_factory=list)
     enemy_meld_tiles: list[str] = field(default_factory=list)
     self_meld_tiles: list[str] = field(default_factory=list)
+    opponent_prediction: Any = None
 
 
 @dataclass(frozen=True)
@@ -42,6 +43,37 @@ def score_discard_candidate(candidate: Any, ctx: StrategyModelContext) -> Strate
     is_raw = _is_raw_tile(discard, ctx)
     suit_focus = _suit_focus_after_discard(candidate)
 
+    # 对手预测相关计算
+    opponent_danger_bonus = 0.0
+    tenpai_danger_multiplier = 1.0
+    opponent_danger_level = ""
+    op = ctx.opponent_prediction
+    if op and getattr(op, "enabled", False):
+        tenpai = float(getattr(op, "tenpai_probability", 0.0))
+        tenpai_danger_multiplier = 1.0 + tenpai * 0.8
+        # 危险牌直接惩罚
+        for dt in getattr(op, "danger_tiles", []):
+            if getattr(dt, "tile", "") == discard:
+                level = getattr(dt, "level", "")
+                if level == "high":
+                    opponent_danger_bonus += 80.0
+                    opponent_danger_level = "高"
+                elif level == "medium":
+                    opponent_danger_bonus += 35.0
+                    if not opponent_danger_level:
+                        opponent_danger_level = "中"
+                else:
+                    opponent_danger_bonus += 12.0
+                    if not opponent_danger_level:
+                        opponent_danger_level = "低"
+        # 等待牌惩罚
+        for wp in getattr(op, "wait_probabilities", []):
+            if getattr(wp, "tile", "") == discard:
+                prob = float(getattr(wp, "probability", 0.0))
+                opponent_danger_bonus += prob * 60.0
+                if not opponent_danger_level:
+                    opponent_danger_level = "中"
+
     features = {
         "shanten_after": float(shanten_after),
         "ukeire_count": float(ukeire_count),
@@ -51,6 +83,8 @@ def score_discard_candidate(candidate: Any, ctx: StrategyModelContext) -> Strate
         "danger": float(danger),
         "is_raw": 1.0 if is_raw else 0.0,
         "suit_focus": suit_focus,
+        "opponent_danger_bonus": opponent_danger_bonus,
+        "tenpai_multiplier": tenpai_danger_multiplier,
     }
 
     score = 0.0
@@ -60,7 +94,8 @@ def score_discard_candidate(candidate: Any, ctx: StrategyModelContext) -> Strate
     score += ukeire_count * 9.0
     score += shape_value * 4.0
     score += suit_focus * 30.0
-    score -= danger * _danger_weight(ctx.remaining_tiles)
+    score -= danger * _danger_weight(ctx.remaining_tiles) * tenpai_danger_multiplier
+    score -= opponent_danger_bonus
     if is_caishen:
         score -= 800.0
     if is_raw and ctx.remaining_tiles <= 30:
@@ -75,6 +110,7 @@ def score_discard_candidate(candidate: Any, ctx: StrategyModelContext) -> Strate
         danger=danger,
         is_raw=is_raw,
         remaining_tiles=ctx.remaining_tiles,
+        opponent_danger_level=opponent_danger_level,
     )
     return StrategyModelScore(
         discard=discard,
@@ -185,6 +221,7 @@ def _reasons(
     danger: int,
     is_raw: bool,
     remaining_tiles: int,
+    opponent_danger_level: str = "",
 ) -> list[str]:
     reasons: list[str] = []
     if shanten_delta < 0:
@@ -211,4 +248,6 @@ def _reasons(
         reasons.append("相对安全")
     if is_raw and remaining_tiles <= 30:
         reasons.append("生牌阶段谨慎")
+    if opponent_danger_level:
+        reasons.append(f"[预测]对手预测{opponent_danger_level}危险")
     return reasons

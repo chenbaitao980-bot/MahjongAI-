@@ -262,7 +262,7 @@ class StableBattlePanel(QWidget):
         advice_layout.addWidget(self._summary_edit, 0)
         self._opponent_prediction_edit = QTextEdit()
         self._opponent_prediction_edit.setReadOnly(True)
-        self._opponent_prediction_edit.setFixedHeight(160)
+        self._opponent_prediction_edit.setFixedHeight(240)
         advice_layout.addWidget(self._opponent_prediction_edit, 0)
         self._hand_structure_edit = QTextEdit()
         self._hand_structure_edit.setReadOnly(True)
@@ -968,7 +968,23 @@ class StableBattlePanel(QWidget):
         # 右列：分析建议类
         right_lines: list[str] = []
         right_lines.append(_c(f"当前建议：{analysis.current_advice}", "#2ecc71"))
-        right_lines.append(_c(f"建议原因：{analysis.advice_reason}", "#2ecc71"))
+        # 建议原因：如果有对手预测相关文本，用红色高亮
+        advice_reason = escape(analysis.advice_reason)
+        if "[预测]" in advice_reason:
+            advice_reason = advice_reason.replace(
+                "[预测]",
+                '<span style="color:#e74c3c; font-weight:bold;">[预测]</span>'
+            )
+            # 将整条建议原因中的预测部分用红色包裹
+            parts = advice_reason.split("；")
+            colored_parts = []
+            for part in parts:
+                if "对手预测" in part:
+                    colored_parts.append(f'<span style="color:#e74c3c">{part}</span>')
+                else:
+                    colored_parts.append(part)
+            advice_reason = "；".join(colored_parts)
+        right_lines.append(_c(f"建议原因：{advice_reason}", "#2ecc71"))
 
         reminders = "；".join(analysis.strong_reminders)
         reminder_color = "#e74c3c" if reminders != "无硬错误" else "#2ecc71"

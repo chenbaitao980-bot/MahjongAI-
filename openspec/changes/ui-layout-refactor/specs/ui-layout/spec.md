@@ -42,3 +42,8 @@ New Capability（UI 体验优化），不涉及业务规则变更。
 - 位置：`_format_strategy_analysis_html()` 方法（约第 843-895 行）
 - 改前：两列布局（状态 / 建议）
 - 改后：三列布局（状态 / 建议 / 候选重排）
+
+- 文件：`ui/stable_battle_panel.py`
+- 位置：`_setup_ui()` 中 `_opponent_prediction_edit` 初始化（约第 263-266 行）
+- 改前：`setFixedHeight(160)`
+- 改后：`setFixedHeight(240)`，增加对手手牌预测区域高度，使三列表格内容显示更完整

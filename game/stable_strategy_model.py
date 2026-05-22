@@ -25,6 +25,7 @@ class StrategyModelScore:
     source: str
     reasons: list[str]
     features: dict[str, float]
+    opponent_penalty: float = 0.0
 
 
 def score_discard_candidate(candidate: Any, ctx: StrategyModelContext) -> StrategyModelScore:
@@ -118,6 +119,7 @@ def score_discard_candidate(candidate: Any, ctx: StrategyModelContext) -> Strate
         source="local_feature_model",
         reasons=reasons,
         features=features,
+        opponent_penalty=round(opponent_danger_bonus, 1),
     )
 
 
@@ -129,6 +131,7 @@ def rank_discard_candidates(candidates: list[Any], ctx: StrategyModelContext) ->
         setattr(candidate, "model_source", model.source)
         setattr(candidate, "model_reasons", model.reasons)
         setattr(candidate, "model_features", model.features)
+        setattr(candidate, "opponent_penalty", model.opponent_penalty)
         scored.append(candidate)
     return sorted(
         scored,

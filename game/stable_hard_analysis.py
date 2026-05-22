@@ -26,6 +26,7 @@ class HardDiscardCandidate:
     model_source: str = ""
     model_reasons: list[str] = field(default_factory=list)
     model_features: dict[str, float] = field(default_factory=dict)
+    opponent_penalty: float = 0.0
 
 
 @dataclass

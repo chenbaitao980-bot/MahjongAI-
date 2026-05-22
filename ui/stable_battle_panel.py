@@ -1103,12 +1103,16 @@ class StableBattlePanel(QWidget):
             discard = TILE_NAME_MAP.get(candidate.discard, candidate.discard)
             reason = " / ".join(candidate.model_reasons[:4]) if candidate.model_reasons else "硬算候选"
             score_color = "#2ecc71" if candidate.model_score >= 80 else ("#f39c12" if candidate.model_score >= 50 else "#e74c3c")
+            opponent_penalty = float(getattr(candidate, "opponent_penalty", 0.0))
+            penalty_color = "#e74c3c" if opponent_penalty > 0 else "#8e8e93"
+            penalty_html = f' | <span style="color:{penalty_color}">预测扣 {opponent_penalty:.1f}</span>'
             lines.append(
                 f'<div style="font-size:10px; margin-bottom:2px;">'
                 f'<span style="color:#4a90d9">{idx}. 打 {discard}</span> | '
                 f'<span style="color:{score_color}">分 {candidate.model_score:.1f}</span> | '
                 f'<span style="color:#4a90d9">向听 {candidate.shanten_after}</span> | '
-                f'<span style="color:#4a90d9">进张 {candidate.ukeire_count}</span><br>'
+                f'<span style="color:#4a90d9">进张 {candidate.ukeire_count}</span>'
+                f'{penalty_html}<br>'
                 f'<span style="color:#8e8e93; padding-left:12px;">{reason}</span>'
                 f'</div>'
             )

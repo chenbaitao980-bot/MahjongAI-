@@ -158,8 +158,12 @@ class PacketStateTracker:
         if event == "baida_update":
             return self._apply_baida(game)
         if event == "optional_action":
-            labels = [str(v) for v in game.get("option_labels") or game.get("options") or [] if v]
-            self.optional_actions = labels
+            actions = [str(v) for v in game.get("options") or [] if v]
+            labels = [str(v) for v in game.get("option_labels") or actions if v]
+            self.optional_actions = actions or labels
+            tile = self._resolve_tile_from_game(game, "optional_action", note_zero=False)
+            if tile:
+                self.action_tile = tile
             self.action_note = "可选动作：" + " / ".join(labels) if labels else ""
             self.current_turn = "self"
             self.turn_trusted = True
@@ -243,6 +247,8 @@ class PacketStateTracker:
                 elif player_id == self.opponent_player:
                     self.current_turn = "none"
                     self.turn_trusted = source == SOURCE_TRUSTED_ACTION
+                    if tile:
+                        self.action_tile = tile
             return True
 
         if event in ("kong", "chi", "pon"):
@@ -300,6 +306,8 @@ class PacketStateTracker:
         if event == "win":
             self.phase = "hupai"
             self.current_turn = "none"
+            self.optional_actions = []
+            self.action_note = "胡牌结算"
             return True
 
         if "baida_raw" in game:
@@ -510,6 +518,8 @@ class PacketStateTracker:
             "baida_trusted": self.baida_trusted,
             "turn_trusted": self.turn_trusted,
             "optional_actions": list(self.optional_actions),
+            "action_tile": self.action_tile,
+            "last_event": self.last_event,
             "action_note": self.action_note or self._marked_note() or self.hand_incomplete_reason,
             "hand_incomplete_reason": self.hand_incomplete_reason,
             "marked_tiles": list(self.marked_tiles),
@@ -607,6 +617,10 @@ class PacketStateTracker:
             self.remaining_tiles,
             self.baida_tile,
             self.current_turn,
+            self.phase,
+            self.last_event,
+            self.action_tile,
+            tuple(self.optional_actions),
             self.hand_trusted,
             self.baida_trusted,
             self.turn_trusted,

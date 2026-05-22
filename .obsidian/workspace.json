@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "openspecs/changes/stable-reader-hard-analysis-panel/tasks.md",
+                "file": "openspecs/archive/2026-05-22-stable-hard-analysis-tenpai-rank-fixes/bugfix.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "tasks"
+              "title": "bugfix"
             }
           }
         ]
@@ -78,7 +78,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300
+    "width": 418.5
   },
   "right": {
     "id": "4d516610c5cd5c96",
@@ -182,41 +182,41 @@
   },
   "active": "d12c1d62ab7237ca",
   "lastOpenFiles": [
-    "data/requestdeepseek/20260521_203010_234121.json",
-    "data/requestdeepseek/20260521_203010_201651.json",
-    "data/requestdeepseek/20260521_203006_343846.json",
-    "data/requestdeepseek/20260521_202953_303831.json",
-    "data/requestdeepseek/20260521_202953_221391.json",
-    "data/requestdeepseek/20260521_202945_619550.json",
-    "data/requestdeepseek/20260521_202939_168479.json",
-    "data/requestdeepseek/20260521_202931_068212.json",
-    "data/requestdeepseek/20260521_202927_077892.json",
-    "data/requestdeepseek/20260521_202921_802339.json",
-    "data/requestdeepseek/20260521_202915_102610.json",
-    "openspecs/changes/stable-only-capture-module/tasks.md",
-    "openspecs/changes/stable-reader-response-hu-mapping-fixes/tasks.md",
-    "openspecs/changes/stable-reader-response-hu-mapping-fixes/specs/stable-reader/spec.md",
-    "openspecs/changes/stable-reader-response-hu-mapping-fixes/proposal.md",
-    "openspecs/changes/stable-reader-response-hu-mapping-fixes/design.md",
-    "CLAUDE.md",
-    "AGENTS.md",
-    "openspecs/changes/stable-only-capture-module/delivery.md",
+    "data/stable_logs/~$牌面流水_20260522_124336.xlsx",
+    "data/requestdeepseek/20260522_130259_774480.json",
+    "logs/mahjongai_20260522_130252.log",
+    "ui/__pycache__/stable_battle_panel.cpython-313.pyc.1926014369008",
+    "ui/__pycache__/stable_battle_panel.cpython-312.pyc.2440586299840",
+    "data/requestdeepseek/20260522_125700_402144.json",
+    "data/requestdeepseek/20260522_125152_546166.json",
+    "data/requestdeepseek/20260522_125148_660331.json",
+    "data/requestdeepseek/20260522_125144_758695.json",
+    "data/requestdeepseek/20260522_125118_911118.json",
+    "data/requestdeepseek/20260522_125118_889879.json",
+    "regression-tests/cases/stable-panel-layout-optimization.md",
+    "openspecs/changes/stable-panel-layout-optimization/tasks.md",
+    "openspecs/changes/stable-panel-layout-optimization/proposal.md",
+    "openspecs/changes/stable-panel-layout-optimization/specs/stable-reader/spec.md",
+    "openspecs/changes/stable-panel-layout-optimization/design.md",
+    "openspecs/changes/stable-simulation-hand-structure-panel/delivery.md",
+    "openspecs/changes/stable-simulation-hand-structure-panel/bugfix.md",
+    "regression-tests/cases/stable-response-action-details.md",
+    "openspecs/changes/stable-response-action-details/bugfix.md",
+    "openspecs/changes/stable-response-action-details/tasks.md",
+    "openspecs/changes/stable-response-action-details/specs/stable-reader/spec.md",
+    "openspecs/changes/stable-response-action-details/proposal.md",
+    "openspecs/changes/stable-response-action-details/design.md",
     "openspecs/changes/stable-capture-training-data/tasks.md",
-    "openspecs/changes/stable-reader-hard-analysis-panel/tasks.md",
-    "openspecs/changes/stable-reader-hard-analysis-panel/proposal.md",
-    "openspecs/changes/stable-reader-hard-analysis-panel/design.md",
-    "openspecs/changes/stable-only-capture-module/design.md",
-    "openspecs/changes/stable-only-capture-module/proposal.md",
-    "openspecs/changes/stable-only-capture-module/specs/stable-reader/spec.md",
-    "openspecs/changes/stable-capture-training-data/proposal.md",
-    "openspecs/changes/stable-capture-training-data/specs/stable-reader/spec.md",
-    "openspecs/changes/stable-capture-training-data/design.md",
-    "openspecs/changes/stable-reader-optional-action-round2-fixes/tasks.md",
-    "openspecs/changes/stable-reader-optional-action-round2-fixes/design.md",
-    "openspecs/changes/stable-reader-hard-analysis-panel/specs/stable-reader/spec.md",
-    "openspecs/changes/stable-reader-optional-action-round2-fixes/delivery.md",
-    "openspecs/changes/stable-reader-optional-action-round2-fixes/proposal.md",
-    "openspecs/changes/excel-game-logger/tasks.md",
-    "openspecs/changes/stable-reader-optional-action-round2-fixes/specs/stable-reader/spec.md"
+    "openspecs/archive/2026-05-22-stable-only-capture-module/specs/stable-reader/spec.md",
+    "openspecs/archive/2026-05-22-stable-only-capture-module/tasks.md",
+    "openspecs/archive/2026-05-22-stable-only-capture-module/proposal.md",
+    "openspecs/archive/2026-05-22-stable-only-capture-module/design.md",
+    "openspecs/archive/2026-05-22-stable-only-capture-module/delivery.md",
+    "openspecs/archive/2026-05-22-stable-hard-analysis-tenpai-rank-fixes/specs/stable-reader/spec.md",
+    "openspecs/archive/2026-05-22-stable-hard-analysis-tenpai-rank-fixes/tasks.md",
+    "openspecs/archive/2026-05-22-stable-hard-analysis-tenpai-rank-fixes/proposal.md",
+    "openspecs/archive/2026-05-22-stable-hard-analysis-tenpai-rank-fixes/design.md",
+    "openspecs/archive/2026-05-22-stable-hard-analysis-tenpai-rank-fixes/bugfix.md",
+    "openspecs/archive/2026-05-22-stable-reader-hard-analysis-panel/specs/stable-reader/spec.md"
   ]
 }

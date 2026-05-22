@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from html import escape
 
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import (
@@ -23,6 +24,7 @@ from PyQt6.QtWidgets import (
 from battle.state import BattleAdvice
 from game.stable_hard_analysis import StableHardAnalysis, analyze_snapshot
 from game.state import ALL_TILE_IDS
+from stable.hand_structure import HandStructureGroup, build_hand_structure_arrangements
 from ui.battle_panel import TILE_NAME_MAP
 
 
@@ -203,9 +205,13 @@ class StableBattlePanel(QWidget):
         advice_layout.addWidget(self._strategy_label)
         self._summary_edit = QTextEdit()
         self._summary_edit.setReadOnly(True)
-        self._summary_edit.setMinimumHeight(48)
-        self._summary_edit.setMaximumHeight(80)
+        self._summary_edit.setFixedHeight(45)
         advice_layout.addWidget(self._summary_edit, 0)
+        self._hand_structure_edit = QTextEdit()
+        self._hand_structure_edit.setReadOnly(True)
+        self._hand_structure_edit.setMinimumHeight(60)
+        self._hand_structure_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.MinimumExpanding)
+        advice_layout.addWidget(self._hand_structure_edit, 0)
         self._hard_calc_edit = QTextEdit()
         self._hard_calc_edit.setReadOnly(True)
         self._hard_calc_edit.setMinimumHeight(400)
@@ -329,6 +335,7 @@ class StableBattlePanel(QWidget):
         unknowns = snapshot.get("unknowns", [])
         self._set_unknowns(unknowns)
         self._notify_unknowns(unknowns)
+        self._render_hand_structure(snapshot)
         self._render_hard_analysis(snapshot)
 
     def _refresh_advice_placeholder(self, snapshot: dict) -> None:
@@ -423,6 +430,92 @@ class StableBattlePanel(QWidget):
         if self._snapshot:
             self._render_hard_analysis(self._snapshot)
 
+    def _render_hand_structure(self, snapshot: dict) -> None:
+        players = snapshot.get("players", {}) if isinstance(snapshot.get("players"), dict) else {}
+        local = snapshot.get("local_player")
+        local_player = players.get(local) or players.get(str(local)) or {}
+        hand = [str(tile) for tile in local_player.get("hand", [])]
+        melds = list(local_player.get("melds", []) or [])
+        response_text = self._response_context_text(snapshot)
+        structure_title = "手牌结构"
+        if "hu" in [str(value) for value in snapshot.get("optional_actions", []) if value]:
+            action_tile = str(snapshot.get("action_tile") or "")
+            if str(snapshot.get("action_source") or "") == "opponent_discard" and action_tile:
+                hand = hand + [action_tile]
+                structure_title = f"手牌结构（加入 {TILE_NAME_MAP.get(action_tile, action_tile)} 后）"
+        analysis = analyze_snapshot(snapshot)
+        arrangements = build_hand_structure_arrangements(
+            hand,
+            melds,
+            recommended_discard=analysis.recommended_discard,
+            limit=3,
+        )
+        lines = []
+        if response_text:
+            lines.append(f'<div style="color:#f39c12; margin-bottom:6px;">{escape(response_text)}</div>')
+        lines.append(self._format_hand_structure_arrangements_html(arrangements, structure_title))
+        self._hand_structure_edit.setHtml("".join(lines))
+
+    @staticmethod
+    def _response_context_text(snapshot: dict) -> str:
+        actions = [str(value) for value in snapshot.get("optional_actions", []) if value]
+        tile = str(snapshot.get("action_tile") or "")
+        source = str(snapshot.get("action_source") or "")
+        tile_text = TILE_NAME_MAP.get(tile, tile) if tile else "当前牌"
+        if "hu" in actions and source == "opponent_discard":
+            return f"响应对方打出的 {tile_text} 可胡，不是自摸。"
+        if "hu" in actions and source == "self_draw":
+            return "当前手牌自摸可胡。"
+        if actions and source == "opponent_discard":
+            names = " / ".join(actions)
+            return f"响应对方打出的 {tile_text}：{names}"
+        return ""
+
+    @staticmethod
+    def _format_hand_structure_html(groups: list[HandStructureGroup], title: str = "手牌结构") -> str:
+        if not groups:
+            return f'<span style="color:#8e8e93">{escape(title)}：（空）</span>'
+        colors = {
+            "meld": "#58a6ff",
+            "triplet": "#3fb950",
+            "sequence": "#3fb950",
+            "pair": "#d29922",
+            "taatsu": "#a371f7",
+            "edge_wait": "#ff7b72",
+            "single": "#8b949e",
+        }
+        parts = []
+        if title:
+            parts.append(f'<div style="color:#c9d1d9; margin-bottom:4px;">{escape(title)}</div>')
+        for group in groups:
+            color = colors.get(group.kind, "#c9d1d9")
+            tiles = " ".join(TILE_NAME_MAP.get(tile, tile) for tile in group.tiles)
+            parts.append(
+                f'<span style="display:inline-block; color:{color}; margin-right:10px;">'
+                f'{escape(group.label)}[{escape(tiles)}]</span>'
+            )
+        return "".join(parts)
+
+    @staticmethod
+    def _format_hand_structure_arrangements_html(
+        arrangements: list[list[HandStructureGroup]],
+        title: str = "手牌结构",
+    ) -> str:
+        if not arrangements:
+            return f'<span style="color:#8e8e93">{escape(title)}：（空）</span>'
+        if len(arrangements) == 1:
+            return StableBattlePanel._format_hand_structure_html(arrangements[0], title)
+
+        parts = [f'<div style="color:#c9d1d9; margin-bottom:4px;">{escape(title)}（多种组合）</div>']
+        for idx, groups in enumerate(arrangements, start=1):
+            parts.append(
+                f'<div style="margin-top:3px; line-height:1.5;"><span style="color:#8e8e93;">组合{idx}：</span>'
+                f'{StableBattlePanel._format_hand_structure_html(groups, "")}</div>'
+            )
+        # 添加一个撑开容器高度的透明元素，确保多组合时容器能自适应
+        parts.append('<div style="height:1px;"></div>')
+        return "".join(parts)
+
     def _apply_hard_analysis(self, analysis: StableHardAnalysis) -> None:
         self._recommended_label.setText(f"当前建议：{analysis.current_advice}")
         self._strategy_label.setText(f"当前状态：{analysis.current_status}；财神：{analysis.caishen_text}")
@@ -460,35 +553,53 @@ class StableBattlePanel(QWidget):
         def _c(text: str, color: str) -> str:
             return f'<span style="color:{color}">{text}</span>'
 
-        lines: list[str] = []
-        lines.append(_c(f"当前状态：{analysis.current_status}", "#4a90d9"))
-        lines.append(_c(f"财神：{analysis.caishen_text}", "#d4a017"))
-        lines.append(_c(f"当前向听：{shanten}", "#4a90d9"))
-        lines.append(_c(f"是否听牌：{'是' if analysis.is_ting else '否'}", "#4a90d9"))
-        lines.append(_c(f"听牌列表：{self._fmt_waits(analysis.ting_tiles)}", "#4a90d9"))
-        lines.append(_c(f"最佳进听打法：{self._fmt_best_ting_discards(analysis.best_ting_discards)}", "#4a90d9"))
-        lines.append(_c(f"有效进张：{analysis.effective_count} 张（{_fmt_tiles(analysis.effective_tiles)}）", "#4a90d9"))
-        lines.append(_c(f"对方手牌可能性预测：{analysis.opponent_hand_prediction}", "#8e8e93"))
-        lines.append(_c(f"对方进度预测：{analysis.opponent_progress_prediction}", "#8e8e93"))
-        lines.append(_c(f"当前建议：{analysis.current_advice}", "#2ecc71"))
-        lines.append(_c(f"建议原因：{analysis.advice_reason}", "#2ecc71"))
+        # 左列：牌局状态类
+        left_lines: list[str] = []
+        left_lines.append(_c(f"当前状态：{analysis.current_status}", "#4a90d9"))
+        left_lines.append(_c(f"财神：{analysis.caishen_text}", "#d4a017"))
+        left_lines.append(_c(f"当前向听：{shanten}", "#4a90d9"))
+        left_lines.append(_c(f"是否听牌：{'是' if analysis.is_ting else '否'}", "#4a90d9"))
+        left_lines.append(_c(f"听牌列表：{self._fmt_waits(analysis.ting_tiles)}", "#4a90d9"))
+        left_lines.append(_c(f"最佳进听打法：{self._fmt_best_ting_discards(analysis.best_ting_discards)}", "#4a90d9"))
+        left_lines.append(_c(f"有效进张：{analysis.effective_count} 张（{_fmt_tiles(analysis.effective_tiles)}）", "#4a90d9"))
+
+        # 右列：分析建议类
+        right_lines: list[str] = []
+        right_lines.append(_c(f"当前建议：{analysis.current_advice}", "#2ecc71"))
+        right_lines.append(_c(f"建议原因：{analysis.advice_reason}", "#2ecc71"))
 
         reminders = "；".join(analysis.strong_reminders)
         reminder_color = "#e74c3c" if reminders != "无硬错误" else "#2ecc71"
-        lines.append(_c(f"强提醒：{reminders}", reminder_color))
+        right_lines.append(_c(f"强提醒：{reminders}", reminder_color))
 
         caishen_risk_color = "#e74c3c" if "高" in analysis.caishen_risk else ("#f39c12" if "中" in analysis.caishen_risk else "#2ecc71")
-        lines.append(_c(f"财神风险：{analysis.caishen_risk}", caishen_risk_color))
+        right_lines.append(_c(f"财神风险：{analysis.caishen_risk}", caishen_risk_color))
 
-        lines.append(_c(f"模型状态：{analysis.model_status}", "#9b59b6"))
-        lines.append(_c(f"推荐来源：{analysis.recommendation_source or '无'}", "#9b59b6"))
-        lines.append(_c("候选重排：", "#9b59b6"))
-        lines.append(self._fmt_model_candidates_html(analysis.candidates))
+        right_lines.append(_c(f"模型状态：{analysis.model_status}", "#9b59b6"))
+        right_lines.append(_c(f"推荐来源：{analysis.recommendation_source or '无'}", "#9b59b6"))
 
         conf_color = "#e74c3c" if "不足" in analysis.data_confidence or "等待" in analysis.data_confidence or "未知" in analysis.data_confidence else "#8e8e93"
-        lines.append(_c(f"数据可信度：{analysis.data_confidence}", conf_color))
+        right_lines.append(_c(f"数据可信度：{analysis.data_confidence}", conf_color))
 
-        return "<br>".join(lines)
+        # 两列布局容器（使用 HTML table，QTextEdit 不支持 flex）
+        left_html = "<br>".join(left_lines)
+        right_html = "<br>".join(right_lines)
+
+        parts: list[str] = []
+        parts.append(
+            f'<table style="width:100%; border-collapse:collapse;">'
+            f'<tr>'
+            f'<td style="width:50%; vertical-align:top; padding-right:10px;">{left_html}</td>'
+            f'<td style="width:50%; vertical-align:top; padding-left:10px;">{right_html}</td>'
+            f'</tr>'
+            f'</table>'
+        )
+
+        # 候选重排全宽展示
+        parts.append(_c("候选重排：", "#9b59b6"))
+        parts.append(self._fmt_model_candidates_html(analysis.candidates))
+
+        return "<br>".join(parts)
 
     def _format_hard_analysis(self, analysis: StableHardAnalysis) -> str:
         shanten = "--" if analysis.current_shanten is None else str(analysis.current_shanten)

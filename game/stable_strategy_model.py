@@ -37,6 +37,7 @@ def score_discard_candidate(candidate: Any, ctx: StrategyModelContext) -> Strate
     ukeire_count = int(getattr(candidate, "ukeire_count", 0))
     shanten_delta = int(getattr(candidate, "shanten_delta", 0))
     is_caishen = bool(getattr(candidate, "is_caishen", False))
+    shape_value = int(getattr(candidate, "shape_value", 0))
     danger = _danger_score(discard, ctx)
     is_raw = _is_raw_tile(discard, ctx)
     suit_focus = _suit_focus_after_discard(candidate)
@@ -46,6 +47,7 @@ def score_discard_candidate(candidate: Any, ctx: StrategyModelContext) -> Strate
         "ukeire_count": float(ukeire_count),
         "shanten_delta": float(shanten_delta),
         "is_caishen": 1.0 if is_caishen else 0.0,
+        "shape_value": float(shape_value),
         "danger": float(danger),
         "is_raw": 1.0 if is_raw else 0.0,
         "suit_focus": suit_focus,
@@ -56,6 +58,7 @@ def score_discard_candidate(candidate: Any, ctx: StrategyModelContext) -> Strate
     score -= max(0, shanten_delta) * 650.0
     score += max(0, -shanten_delta) * 250.0
     score += ukeire_count * 9.0
+    score += shape_value * 4.0
     score += suit_focus * 30.0
     score -= danger * _danger_weight(ctx.remaining_tiles)
     if is_caishen:
@@ -68,6 +71,7 @@ def score_discard_candidate(candidate: Any, ctx: StrategyModelContext) -> Strate
         ukeire_count=ukeire_count,
         shanten_delta=shanten_delta,
         is_caishen=is_caishen,
+        shape_value=shape_value,
         danger=danger,
         is_raw=is_raw,
         remaining_tiles=ctx.remaining_tiles,
@@ -177,6 +181,7 @@ def _reasons(
     ukeire_count: int,
     shanten_delta: int,
     is_caishen: bool,
+    shape_value: int,
     danger: int,
     is_raw: bool,
     remaining_tiles: int,
@@ -185,7 +190,7 @@ def _reasons(
     if shanten_delta < 0:
         reasons.append("进听")
     elif shanten_delta == 0:
-        reasons.append("不退听")
+        reasons.append("同档向听")
     else:
         reasons.append("退听惩罚")
     reasons.append(f"打后向听 {shanten_after}")
@@ -194,6 +199,12 @@ def _reasons(
         reasons.append("打财神高惩罚")
     else:
         reasons.append("保留财神")
+    if shape_value >= 45:
+        reasons.append("整理边张/孤张")
+    elif shape_value >= 30:
+        reasons.append("整理坎张")
+    elif shape_value < 0:
+        reasons.append("保留成组/对子")
     if danger >= 70:
         reasons.append("高危险度")
     elif danger <= 25:

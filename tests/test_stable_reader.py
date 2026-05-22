@@ -876,6 +876,80 @@ class StableReaderTests(unittest.TestCase):
             state = tracker.to_battle_state()
             self.assertFalse(state.is_conservative)
 
+    def test_stable_mapping_resolves_20260521_nine_wan_and_bai(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MappingStore(path=os.path.join(tmp, "mappings.yaml"))
+            self.assertEqual(store.resolve_tile(raw_key("stable", 0x19)), "9m")
+            self.assertEqual(store.resolve_tile(raw_key("stable", 0x53)), "7z")
+
+            tracker = PacketStateTracker(store, local_player=0, player_count=2)
+            tracker.apply(self.make_msg({
+                "event": "discard",
+                "player": 1,
+                "tile_raw": 0x19,
+                "tile_context": "stable",
+                "source": "trusted_action",
+            }))
+            tracker.apply(self.make_msg({
+                "event": "draw",
+                "player": 0,
+                "tile_raw": 0x53,
+                "tile_context": "stable",
+                "source": "trusted_action",
+            }))
+
+            snapshot = tracker.snapshot()
+            self.assertEqual(snapshot["players"][1]["discards"], ["9m"])
+            self.assertEqual(snapshot["players"][0]["hand"], ["7z"])
+            self.assertEqual(snapshot["unknowns"], [])
+
+    def test_tracker_preserves_optional_action_codes_for_hard_analysis(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MappingStore(path=os.path.join(tmp, "mappings.yaml"))
+            tracker = PacketStateTracker(store, local_player=0, player_count=2)
+            tracker.apply(self.make_msg({
+                "event": "optional_action",
+                "player": 0,
+                "options": ["pon", "pass"],
+                "option_labels": ["碰", "过"],
+                "tile_raw": 0x19,
+                "tile_context": "stable",
+                "source": "trusted_action",
+            }))
+
+            snapshot = tracker.snapshot()
+            self.assertEqual(snapshot["optional_actions"], ["pon", "pass"])
+            self.assertEqual(snapshot["action_tile"], "9m")
+            self.assertEqual(snapshot["last_event"], "optional_action")
+
+    def test_win_snapshot_clears_optional_actions_and_marks_last_event(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MappingStore(path=os.path.join(tmp, "mappings.yaml"))
+            tracker = PacketStateTracker(store, local_player=0, player_count=2)
+            tracker.apply(self.make_msg({
+                "event": "hand_update",
+                "player": 0,
+                "hand_raw": [0x11] * 13,
+                "hand_context": "stable",
+                "source": "trusted_hand",
+            }))
+            tracker.apply(self.make_msg({
+                "event": "optional_action",
+                "player": 0,
+                "options": ["hu", "pass"],
+                "source": "trusted_action",
+            }))
+            tracker.apply(self.make_msg({
+                "event": "win",
+                "player": 0,
+                "source": "trusted_action",
+            }))
+
+            snapshot = tracker.snapshot()
+            self.assertEqual(snapshot["phase"], "hupai")
+            self.assertEqual(snapshot["optional_actions"], [])
+            self.assertEqual(snapshot["last_event"], "win")
+
 
 if __name__ == "__main__":
     unittest.main()

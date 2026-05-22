@@ -19,6 +19,8 @@ class HardDiscardCandidate:
     ukeire_count: int = 0
     is_caishen: bool = False
     shanten_delta: int = 0
+    shape_value: int = 0
+    remaining_hand: list[str] = field(default_factory=list)
     model_score: float = 0.0
     model_source: str = ""
     model_reasons: list[str] = field(default_factory=list)
@@ -87,7 +89,7 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> StableHardAnalysis:
 
     candidates: list[HardDiscardCandidate] = []
     if can_recommend and baida:
-        candidates = _discard_candidates(hand, meld_count, baida, visible, current_shanten)
+        candidates = _discard_candidates(hand, meld_count, baida, visible, current_shanten, effective_count)
         candidates = rank_discard_candidates(
             candidates,
             StrategyModelContext(
@@ -102,7 +104,7 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> StableHardAnalysis:
         )
 
     ting_tiles = _current_ting_tiles(hand, meld_count, baida, visible, effective_count, candidates)
-    is_ting = bool(ting_tiles) or current_shanten == 0
+    is_ting = bool(ting_tiles)
     best_ting_discards = [
         c for c in candidates if c.ting_tiles and c.shanten_after == 0
     ]
@@ -239,6 +241,7 @@ def _discard_candidates(
     baida: str,
     visible: dict[str, int],
     current_shanten: int | None,
+    effective_count: int,
 ) -> list[HardDiscardCandidate]:
     result: list[HardDiscardCandidate] = []
     for discard in sorted(set(hand)):
@@ -255,15 +258,58 @@ def _discard_candidates(
                 ukeire_tiles=list(ukeire.get("tiles", [])),
                 ukeire_count=int(ukeire.get("count", 0)),
                 is_caishen=discard == baida,
-                shanten_delta=(
-                    shanten_after - current_shanten
-                    if current_shanten is not None
-                    else 0
-                ),
+                shanten_delta=0,
+                shape_value=_discard_shape_value(hand, discard),
+                remaining_hand=after,
             )
         )
+    if result:
+        if effective_count % 3 == 2:
+            baseline = min(c.shanten_after for c in result)
+        else:
+            baseline = current_shanten if current_shanten is not None else min(c.shanten_after for c in result)
+        for candidate in result:
+            candidate.shanten_delta = candidate.shanten_after - baseline
     result.sort(key=lambda c: (c.is_caishen, c.shanten_after, -c.ukeire_count, c.discard))
     return result
+
+
+def _discard_shape_value(hand: list[str], discard: str) -> int:
+    if not discard:
+        return 0
+    same_count = hand.count(discard)
+    if same_count >= 3:
+        return -30
+    if same_count == 2:
+        return -20
+    if discard.endswith("z"):
+        return 45
+
+    rank = int(discard[:-1])
+    suit = discard[-1]
+    ranks = [int(tile[:-1]) for tile in hand if tile.endswith(suit) and tile != discard]
+    rank_set = set(ranks)
+    in_sequence = any(
+        all(1 <= value <= 9 and (value == rank or value in rank_set) for value in (start, start + 1, start + 2))
+        for start in (rank - 2, rank - 1, rank)
+        if start <= rank <= start + 2
+    )
+    if in_sequence:
+        return -10
+
+    left = rank - 1 in rank_set
+    right = rank + 1 in rank_set
+    gap_left = rank - 2 in rank_set
+    gap_right = rank + 2 in rank_set
+    if not (left or right or gap_left or gap_right):
+        return 55
+    if (rank == 1 and right) or (rank == 9 and left):
+        return 50
+    if gap_left or gap_right:
+        return 34
+    if left and right:
+        return 8
+    return 16
 
 
 def _choose_recommendation(candidates: list[HardDiscardCandidate]) -> HardDiscardCandidate | None:
@@ -375,6 +421,7 @@ def _simulate_response_shanten(
     baida: str | None,
     meld_count: int,
     visible: dict[str, int],
+    action_tiles: list[str] | None = None,
 ) -> tuple[int | None, int]:
     if not baida or tile not in ALL_TILES:
         return None, 0
@@ -385,10 +432,19 @@ def _simulate_response_shanten(
     elif action == "kong":
         remove_count = 3
     elif action == "chi":
-        meld = _find_chi_tiles(simulated, tile)
-        if not meld:
+        tiles = [t for t in (action_tiles or []) if t in ALL_TILES]
+        if tiles and tile in tiles:
+            meld = list(tiles)
+            remove_tiles = list(tiles)
+            remove_tiles.remove(tile)
+        else:
+            meld = _find_chi_tiles(simulated, tile)
+            remove_tiles = list(meld)
+        if not remove_tiles:
             return None, 0
-        for value in meld:
+        for value in remove_tiles:
+            if value not in simulated:
+                return None, 0
             simulated.remove(value)
         next_meld_count += 1
         counts, baida_count = hand_to_counts(simulated, baida)
@@ -411,6 +467,47 @@ def _simulate_response_shanten(
     return calc_shanten(counts, next_meld_count, baida_count), int(ukeire.get("count", 0))
 
 
+def _response_action_options(snapshot: dict[str, Any], actions: list[str], tile: str) -> list[dict[str, Any]]:
+    details = snapshot.get("optional_action_details")
+    options: list[dict[str, Any]] = []
+    if isinstance(details, list):
+        for item in details:
+            if not isinstance(item, dict):
+                continue
+            action = _normalize_actions([item.get("type")])
+            if not action:
+                continue
+            action_type = action[0]
+            if action_type not in actions:
+                continue
+            tiles = [str(t) for t in item.get("tiles", []) if str(t) in ALL_TILES]
+            options.append(
+                {
+                    "type": action_type,
+                    "tile": str(item.get("tile") or tile),
+                    "tiles": tiles,
+                    "label": str(item.get("label") or ""),
+                }
+            )
+    if options:
+        return options
+    return [{"type": action, "tile": tile, "tiles": [], "label": ""} for action in actions]
+
+
+def _response_option_label(option: dict[str, Any], fallback: dict[str, str]) -> str:
+    label = str(option.get("label") or "").strip()
+    if label:
+        return label
+    action = str(option.get("type") or "")
+    tiles = [str(t) for t in option.get("tiles", []) if str(t) in ALL_TILES]
+    if action == "chi" and tiles:
+        return "吃 " + " ".join(tile_display_name(t) for t in tiles)
+    tile = str(option.get("tile") or "")
+    if tile in ALL_TILES and action in fallback:
+        return f"{fallback[action]} {tile_display_name(tile)}"
+    return fallback.get(action, action)
+
+
 def _response_advice(
     actions: list[str],
     *,
@@ -427,24 +524,45 @@ def _response_advice(
     tile_text = tile_display_name(tile) if tile else "当前牌"
     if "hu" in actions:
         return "建议胡", f"当前可胡 {tile_text}，胡牌优先级高于杠、碰、吃和过"
-    scored: list[tuple[int, int, str, str]] = []
+    scored: list[tuple[int, int, int, str, str, str]] = []
     priority = {"kong": 0, "pon": 1, "chi": 2}
     label = {"kong": "杠", "pon": "碰", "chi": "吃"}
-    for action in ("kong", "pon", "chi"):
-        if action not in actions:
+    for option in _response_action_options(snapshot, actions, tile):
+        action = str(option.get("type") or "")
+        if action not in ("kong", "pon", "chi"):
             continue
-        shanten_after, ukeire_count = _simulate_response_shanten(hand, action, tile, baida, meld_count, visible)
+        option_label = _response_option_label(option, label)
+        action_tile = str(option.get("tile") or tile)
+        action_tiles = [str(t) for t in option.get("tiles", []) if str(t) in ALL_TILES]
+        shanten_after, ukeire_count = _simulate_response_shanten(
+            hand,
+            action,
+            action_tile,
+            baida,
+            meld_count,
+            visible,
+            action_tiles,
+        )
         if shanten_after is None:
-            scored.append((99, 0, action, "数据不足，无法可靠评估响应后牌型"))
+            scored.append((99, 0, priority.get(action, 9), action, option_label, "数据不足，无法可靠评估响应后牌型"))
         else:
-            scored.append((shanten_after, -ukeire_count, action, f"{label[action]}后向听 {shanten_after}，有效进张 {ukeire_count} 张"))
+            scored.append(
+                (
+                    shanten_after,
+                    -ukeire_count,
+                    priority.get(action, 9),
+                    action,
+                    option_label,
+                    f"{option_label}后向听 {shanten_after}，有效进张 {ukeire_count} 张",
+                )
+            )
     if not scored:
         return "建议过", "当前只有过或缺少可验证响应动作，保守过"
-    scored.sort(key=lambda item: (item[0], item[1], priority.get(item[2], 9)))
-    best_shanten, _neg_ukeire, best_action, reason = scored[0]
+    scored.sort(key=lambda item: (item[0], item[1], item[2]))
+    best_shanten, _neg_ukeire, _priority, best_action, best_label, reason = scored[0]
     if best_shanten > 1:
         return "建议过", f"{reason}，收益不明确，保守过"
-    return f"建议{label[best_action]}", reason + "；过为备选"
+    return f"建议{best_label}", reason + "；过为备选"
 
 
 def _current_ting_tiles(
@@ -491,16 +609,14 @@ def _strong_reminders(
         reminders.append("打财神属于硬风险，除非没有其他合法选择")
     if recommended and recommended.is_caishen:
         reminders.append("当前推荐会打财神，请人工确认")
-    if recommended and current_shanten is not None and recommended.shanten_after > current_shanten:
+    if recommended and recommended.shanten_delta > 0:
         reminders.append("当前推荐会导致向听变差")
     if is_ting:
-        retreating = [c for c in candidates if c.shanten_after > 0]
+        retreating = [c for c in candidates if c.shanten_delta > 0]
         if retreating:
             reminders.append("已听牌，避免选择退听打法")
-    if candidates:
-        best_shanten = min(c.shanten_after for c in candidates)
-        if recommended and recommended.shanten_after > best_shanten:
-            reminders.append("存在更低向听打法，当前推荐可能漏听")
+    if recommended and recommended.shanten_delta > 0:
+        reminders.append("存在更低向听打法，当前推荐可能漏听")
     return reminders or ["无硬错误"]
 
 

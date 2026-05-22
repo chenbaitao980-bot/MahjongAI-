@@ -308,10 +308,21 @@ class StableSimulationGame:
         hand_count = len(self_player.hand)
         effective_count = len(self_player.hand) + sum(len(m.get("tiles", [])) for m in self_player.melds)
         optional_actions = []
+        optional_action_details = []
+        action_tile = ""
+        action_source = ""
         if self.pending_response and self.pending_response.get("responder") == self.local_player:
-            optional_actions = [str(a.get("type")) for a in self.pending_response.get("actions", [])]
+            response_actions = list(self.pending_response.get("actions", []) or [])
+            optional_actions = [str(a.get("type")) for a in response_actions]
+            optional_action_details = [self._snapshot_action(action) for action in response_actions]
+            action_tile = str(self.pending_response.get("tile") or "")
+            action_source = "opponent_discard"
         elif self.current_turn == "self":
-            optional_actions = [str(a.get("type")) for a in self.available_self_actions()]
+            self_actions = self.available_self_actions()
+            optional_actions = [str(a.get("type")) for a in self_actions]
+            optional_action_details = [self._snapshot_action(action) for action in self_actions]
+            if "hu" in optional_actions:
+                action_source = "self_draw"
         blocked = ""
         if self.phase != "playing":
             blocked = "模拟局已结束"
@@ -332,6 +343,9 @@ class StableSimulationGame:
             "baida_trusted": bool(self.baida_tile),
             "turn_trusted": True,
             "optional_actions": optional_actions,
+            "optional_action_details": optional_action_details,
+            "action_tile": action_tile,
+            "action_source": action_source,
             "action_note": "模拟对战中" if self.phase == "playing" else "模拟局已结束",
             "hand_incomplete_reason": "",
             "marked_tiles": [],
@@ -360,6 +374,15 @@ class StableSimulationGame:
             "analysis_blocked_reason": blocked,
             "analysis_mode": "full" if not blocked and self.phase == "playing" else "blocked",
             "last_error": self.last_error,
+        }
+
+    @staticmethod
+    def _snapshot_action(action: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "type": str(action.get("type") or ""),
+            "tile": str(action.get("tile") or ""),
+            "tiles": [str(tile) for tile in action.get("tiles", []) if tile],
+            "label": str(action.get("label") or ""),
         }
 
     def to_battle_state(self) -> BattleState:

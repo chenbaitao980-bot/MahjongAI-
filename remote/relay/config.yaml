@@ -1,0 +1,7 @@
+# relay 配置文件
+api_token: "change-me-shared-secret"
+game_server_ip: "47.96.0.227"
+game_server_port: 7777
+# 认证凭证（extractor 注册后自动填充，也可手动填写十六进制字符串）
+handshake_blob: ""
+auth_token_12b: ""

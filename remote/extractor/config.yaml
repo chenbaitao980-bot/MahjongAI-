@@ -1,0 +1,4 @@
+# extractor 配置文件
+relay_url: "http://your-relay-server:8000"
+api_token: "change-me-shared-secret"
+game_port: 7777

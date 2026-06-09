@@ -1,0 +1,3 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/tasks/06-09-remote-game-data/prd.md", "reason": "需求文档：完整架构、认证协议研究要点、验收标准"}
+{"file": ".trellis/tasks/06-09-remote-game-data/research/auth-protocol.md", "reason": "Auth 协议逆向结果：握手序列、帧格式、token 结构、可复用代码评估、实现建议代码"}

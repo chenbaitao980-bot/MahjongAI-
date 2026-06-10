@@ -1,0 +1,1 @@
+{"file": ".trellis/spec/backend/remote-access.md", "reason": "remote/ 架构契约：config 字段、/register /push /state 端点、抓包平台规则、token 提取，launcher 编排与 watch_state 据此读 config/调端点"}

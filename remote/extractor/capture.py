@@ -17,18 +17,65 @@ if _ROOT not in sys.path:
 
 from stable.protocol import PcapParser, MJProtocol, NpcapCapture, GAME_SERVER_PORT
 
+import logging
+
+_LOGGER = logging.getLogger("remote.extractor.capture")
+
+# Windows 移动热点/ICS 的固定网关；手机流量经此适配器
+HOTSPOT_GATEWAY = "192.168.137.1"
+
 
 def is_windows():
     """判断当前是否 Windows 平台"""
     return platform.system() == "Windows"
 
 
+def find_hotspot_iface(gateway=HOTSPOT_GATEWAY):
+    """
+    找到承载手机流量的热点/ICS 适配器（IP == gateway）。
+    返回 scapy NetworkInterface 对象，找不到返回 None。
+    """
+    try:
+        from scapy.all import get_working_ifaces
+    except Exception:
+        return None
+    try:
+        for ifc in get_working_ifaces():
+            if getattr(ifc, "ip", None) == gateway:
+                return ifc
+    except Exception:
+        return None
+    return None
+
+
 class NpcapCaptureAdapter:
     """Windows 平台 Npcap 抓包适配器"""
 
-    def __init__(self, port=GAME_SERVER_PORT):
+    def __init__(self, port=GAME_SERVER_PORT, interface=None):
         self.port = int(port)
-        self._capture = NpcapCapture(server_port=self.port)
+
+        # 解析抓包网卡：
+        #   - 显式指定（非 "any"）→ 直接用
+        #   - "any"/None → 自动选热点网卡（192.168.137.1），手机流量在此
+        #   - 找不到热点 → iface=None，回退 scapy 默认网卡（并告警）
+        resolved = None
+        if interface and interface != "any":
+            resolved = interface
+            _LOGGER.info("抓包网卡（显式指定）: %s", resolved)
+        else:
+            hot = find_hotspot_iface()
+            if hot is not None:
+                resolved = hot
+                _LOGGER.info("抓包网卡（自动选中热点）: %s | %s",
+                             getattr(hot, "name", hot), getattr(hot, "description", ""))
+            else:
+                _LOGGER.warning(
+                    "未找到热点网卡（IP %s）。将使用 scapy 默认网卡，"
+                    "若手机流量不在该网卡上将抓不到包。请确认移动热点已开、手机已连接。",
+                    HOTSPOT_GATEWAY)
+
+        self.iface = resolved
+        self._capture = NpcapCapture(server_port=self.port, iface=resolved)
         self._proto = MJProtocol(server_port=self.port)
         self._parser = PcapParser()
 
@@ -108,6 +155,6 @@ def create_capture(mode=None, port=GAME_SERVER_PORT, interface="any"):
     返回 NpcapCaptureAdapter 或 TcpdumpCaptureAdapter
     """
     if mode == "npcap" or (mode is None and is_windows()):
-        return NpcapCaptureAdapter(port=port)
+        return NpcapCaptureAdapter(port=port, interface=interface)
     else:
         return TcpdumpCaptureAdapter(port=port, interface=interface)

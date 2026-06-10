@@ -118,6 +118,8 @@ from stable.mapping import MappingStore
 | Windows | NpcapCapture（scapy） | Npcap 驱动 + scapy |
 | Linux / OpenWRT | tcpdump subprocess + PcapParser | tcpdump（通常内置） |
 
+> **抓包网卡必须是承载手机流量的那张（关键坑）**：全本机+热点拓扑下，手机流量走热点网卡（IP `192.168.137.1`，Microsoft Wi-Fi Direct Virtual Adapter），**不是** scapy 的默认 `conf.iface`。`NpcapCaptureAdapter` 必须把 interface 传给 `NpcapCapture(iface=...)`；当 interface 为 `any`/None 时用 `find_hotspot_iface()` 自动选中 IP==192.168.137.1 的网卡。早期 bug：adapter 丢弃 interface 参数 → 嗅探默认网卡 → 一个包都收不到、phase 永远 idle。验证：在热点网卡上 `tcp port 7777` 能抓到 `手机IP → 47.96.0.227:7777`。
+
 ```python
 import platform
 

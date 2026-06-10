@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MahjongAI · 实时手牌</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #1a1d24; --panel2: #232733;
+    --txt: #e8eaed; --muted: #9aa0ab; --line: #333947;
+    --man: #c0392b; --pin: #2563c9; --sou: #1e9e5a; --honor: #2d3340;
+    --accent: #f5b301;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--txt);
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  .status { font-size: 12px; color: var(--muted); }
+  .status.ok { color: var(--sou); }
+  .status.err { color: var(--man); }
+  header input { background: var(--panel2); border: 1px solid var(--line);
+    color: var(--txt); padding: 5px 8px; border-radius: 6px; font-size: 12px; width: 220px; }
+  .banner { display: flex; gap: 18px; flex-wrap: wrap; padding: 8px 16px;
+    font-size: 13px; color: var(--muted); background: var(--panel); }
+  .banner b { color: var(--txt); }
+  main { padding: 16px; max-width: 1000px; margin: 0 auto; }
+  section { background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
+  section h2 { font-size: 13px; margin: 0 0 10px; color: var(--muted);
+    font-weight: 600; letter-spacing: .5px; }
+  .tiles { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-end; }
+  .tile { width: 40px; height: 56px; border-radius: 6px; background: #fafafa;
+    border: 1px solid #cfd3da; box-shadow: 0 1px 0 #b8bcc4, 0 2px 4px rgba(0,0,0,.3);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-weight: 700; line-height: 1; position: relative; user-select: none; }
+  .tile .num { font-size: 22px; }
+  .tile .suit { font-size: 11px; margin-top: 3px; opacity: .85; }
+  .tile.m { color: var(--man); }
+  .tile.p { color: var(--pin); }
+  .tile.s { color: var(--sou); }
+  .tile.z { color: #1a1d24; }
+  .tile.z .num { font-size: 20px; }
+  .tile.small { width: 30px; height: 42px; }
+  .tile.small .num { font-size: 16px; }
+  .tile.small .suit { font-size: 9px; margin-top: 2px; }
+  .tile.back { background: linear-gradient(135deg, #3a7d3a, #2c5e2c); border-color: #244a24; }
+  .tile.drawn { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .meld { display: inline-flex; gap: 3px; padding: 4px; margin: 0 8px 6px 0;
+    background: var(--panel2); border-radius: 6px; }
+  .row { display: flex; gap: 22px; flex-wrap: wrap; }
+  .col { flex: 1; min-width: 280px; }
+  .empty { color: var(--muted); font-size: 12px; }
+  .pulse { display:inline-block; width:8px; height:8px; border-radius:50%; background: var(--muted); margin-right:6px; }
+  .pulse.live { background: var(--sou); box-shadow: 0 0 6px var(--sou); }
+</style>
+</head>
+<body>
+<header>
+  <h1>🀄 MahjongAI 实时手牌</h1>
+  <span><span class="pulse" id="pulse"></span><span class="status" id="status">未连接</span></span>
+  <span style="margin-left:auto;font-size:12px;color:var(--muted)">token:</span>
+  <input id="token" placeholder="粘贴 api_token" autocomplete="off">
+</header>
+
+<div class="banner" id="banner">
+  <span>阶段 <b id="phase">-</b></span>
+  <span>当前回合 <b id="turn">-</b></span>
+  <span>剩余牌 <b id="remain">-</b></span>
+  <span>百搭 <b id="baida">-</b></span>
+  <span id="note" style="color:var(--accent)"></span>
+</div>
+
+<main>
+  <section>
+    <h2>我的手牌 <span id="handcount" style="color:var(--muted)"></span></h2>
+    <div class="tiles" id="hand"></div>
+    <div id="mymelds" style="margin-top:10px"></div>
+  </section>
+
+  <div class="row">
+    <section class="col">
+      <h2>我的弃牌</h2>
+      <div class="tiles" id="mydiscards"></div>
+    </section>
+    <section class="col">
+      <h2>对手 <span id="oppcount" style="color:var(--muted)"></span></h2>
+      <div id="oppmelds" style="margin-bottom:8px"></div>
+      <div class="tiles" id="oppdiscards"></div>
+    </section>
+  </div>
+</main>
+
+<script>
+const HONOR = {1:'东',2:'南',3:'西',4:'北',5:'白',6:'发',7:'中'};
+const SUITNAME = {m:'万', p:'筒', s:'条'};
+
+function parseTile(t) {
+  // t 形如 "3m" / "5p" / "7s" / "1z"；容错：若是数字 id 也处理
+  if (typeof t === 'number') {
+    const id = t; const suits = ['m','p','s'];
+    if (id < 27) return { num: (id%9)+1, suit: suits[Math.floor(id/9)] };
+    return { num: id-26, suit: 'z' };
+  }
+  const s = String(t);
+  const m = s.match(/^(\d)([mpsz])$/);
+  if (!m) return { num: '?', suit: 'z', raw: s };
+  return { num: parseInt(m[1],10), suit: m[2] };
+}
+
+function tileEl(t, opts={}) {
+  const { num, suit } = parseTile(t);
+  const el = document.createElement('div');
+  el.className = 'tile ' + suit + (opts.small ? ' small' : '') + (opts.drawn ? ' drawn' : '');
+  if (suit === 'z') {
+    el.innerHTML = '<span class="num">' + (HONOR[num] || '?') + '</span>';
+  } else {
+    el.innerHTML = '<span class="num">' + num + '</span><span class="suit">' + (SUITNAME[suit]||'') + '</span>';
+  }
+  return el;
+}
+
+function backTile(small=false){
+  const el = document.createElement('div');
+  el.className = 'tile back' + (small?' small':'');
+  return el;
+}
+
+function renderTiles(container, list, opts={}) {
+  container.innerHTML = '';
+  if (!list || !list.length) { container.innerHTML = '<span class="empty">（无）</span>'; return; }
+  list.forEach(t => container.appendChild(tileEl(t, opts)));
+}
+
+function renderMelds(container, melds, small=false) {
+  container.innerHTML = '';
+  if (!melds || !melds.length) { container.innerHTML = '<span class="empty">无副露</span>'; return; }
+  melds.forEach(m => {
+    const g = document.createElement('div'); g.className = 'meld';
+    (m.tiles || []).forEach(t => g.appendChild(tileEl(t, {small})));
+    container.appendChild(g);
+  });
+}
+
+function setText(id, v){ document.getElementById(id).textContent = (v===null||v===undefined||v==='')?'-':v; }
+
+function render(snap) {
+  const local = snap.local_player, opp = snap.opponent_player;
+  const players = snap.players || {};
+  const me = players[local] || {};
+  const them = players[opp] || {};
+
+  setText('phase', snap.phase);
+  setText('turn', snap.current_turn);
+  setText('remain', snap.remaining_tiles);
+  setText('baida', snap.baida_tile);
+  setText('note', snap.action_note || '');
+
+  // 手牌：把摸到的牌单独高亮（若 drawn_tile 在手牌里，标记最后一张匹配的）
+  const hand = (me.hand || []).slice();
+  const drawn = snap.drawn_tile;
+  const handBox = document.getElementById('hand');
+  handBox.innerHTML = '';
+  if (!hand.length) { handBox.innerHTML = '<span class="empty">（暂无手牌，进入一局后出现）</span>'; }
+  let drawnMarked = false;
+  hand.forEach(t => {
+    const isDrawn = (!drawnMarked && drawn && String(t) === String(drawn));
+    if (isDrawn) drawnMarked = true;
+    handBox.appendChild(tileEl(t, { drawn: isDrawn }));
+  });
+  setText('handcount', me.hand_count ? ('· ' + me.hand_count + ' 张') : '');
+
+  renderMelds(document.getElementById('mymelds'), me.melds, false);
+  renderTiles(document.getElementById('mydiscards'), me.discards, { small: true });
+
+  // 对手：手牌看不到 → 背面数量；弃牌/副露可见
+  const oppHandN = them.hand_count || (them.hand ? them.hand.length : 0);
+  setText('oppcount', oppHandN ? ('手牌 ' + oppHandN + ' 张(暗)') : '');
+  renderMelds(document.getElementById('oppmelds'), them.melds, true);
+  renderTiles(document.getElementById('oppdiscards'), them.discards, { small: true });
+}
+
+// --- 轮询 ---
+const tokenInput = document.getElementById('token');
+const statusEl = document.getElementById('status');
+const pulseEl = document.getElementById('pulse');
+
+// token 优先级：URL ?token= > localStorage
+const urlToken = new URLSearchParams(location.search).get('token');
+tokenInput.value = urlToken || localStorage.getItem('mj_token') || '';
+tokenInput.addEventListener('change', () => localStorage.setItem('mj_token', tokenInput.value.trim()));
+
+function setStatus(text, cls) {
+  statusEl.textContent = text; statusEl.className = 'status ' + (cls||'');
+  pulseEl.className = 'pulse' + (cls==='ok' ? ' live' : '');
+}
+
+async function poll() {
+  const token = tokenInput.value.trim();
+  if (!token) { setStatus('请填 token', 'err'); return; }
+  try {
+    const r = await fetch('/state?token=' + encodeURIComponent(token), { cache: 'no-store' });
+    if (r.status === 401) { setStatus('token 错误 (401)', 'err'); return; }
+    if (!r.ok) { setStatus('错误 ' + r.status, 'err'); return; }
+    const snap = await r.json();
+    render(snap);
+    const t = new Date().toLocaleTimeString();
+    setStatus('已连接 · ' + t + (snap.phase==='idle'?' · 等待进入牌局':''), 'ok');
+  } catch (e) {
+    setStatus('连接失败（relay 未启动?）', 'err');
+  }
+}
+setInterval(poll, 1500);
+poll();
+</script>
+</body>
+</html>

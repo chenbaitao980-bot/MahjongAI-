@@ -1,0 +1,1 @@
+{"file": ".trellis/spec/backend/remote-access.md", "reason": "relay API 契约(/state 返回 snapshot)、token 鉴权、全本机/云端拓扑；新增 GET / 页面与测试 bat 据此对接 /state"}

@@ -57,6 +57,15 @@ Response 200: {"status": "ok"}
 Response 401: {"detail": "Invalid api_token"}
 ```
 
+### GET /
+
+```
+返回实时手牌展示页(static/index.html)。页面内 JS 轮询 /state?token= 渲染本家整桌
+(手牌/摸牌高亮/弃牌/副露 + 对手弃牌/副露 + phase/剩余/百搭)，CSS 画牌零图片资源。
+云端打开 http://<云IP>:8000/ 即可看；本地 http://127.0.0.1:8000/?token=<token>。
+snapshot.players[pid].hand 是字符串牌列表(如 "3m")，页面直接解析。
+```
+
 ### GET /state
 
 ```

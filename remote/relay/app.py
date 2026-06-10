@@ -18,6 +18,7 @@ if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from typing import Any, Dict, Optional
 
@@ -26,12 +27,29 @@ from game_client import GameClient
 
 _LOGGER = logging.getLogger("remote.relay.app")
 
+# 实时手牌展示页（GET /）；放在 static/index.html，启动时读入内存
+_STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+_INDEX_HTML_PATH = os.path.join(_STATIC_DIR, "index.html")
+
 # 由 main.py 在启动时注入
 _cfg = {}           # relay 配置字典
 _state_store = StateStore()
 _game_client = None  # GameClient 实例（懒启动）
 
 app = FastAPI(title="MahjongAI Remote Relay")
+
+
+@app.get("/", response_class=HTMLResponse)
+async def index():
+    """实时手牌展示页。页面内 JS 轮询 /state 渲染手牌。"""
+    try:
+        with open(_INDEX_HTML_PATH, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    except FileNotFoundError:
+        return HTMLResponse(
+            content="<h1>index.html 缺失</h1><p>请确认 remote/relay/static/index.html 已部署。</p>",
+            status_code=500,
+        )
 
 
 # ─── 请求/响应模型 ─────────────────────────────────────────────

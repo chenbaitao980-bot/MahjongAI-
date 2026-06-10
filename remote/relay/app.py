@@ -89,6 +89,7 @@ def _ensure_game_client_running():
     handshake_hex = _cfg.get("handshake_blob", "")
     auth_hex = _cfg.get("auth_token_12b", "")
     if not handshake_hex or not auth_hex:
+        _LOGGER.debug("extractor 离线但无凭证（handshake_blob/auth_token_12b 为空），跳过 GameClient 启动")
         return  # 没有凭证，无法连接
 
     if _game_client is not None and not _game_client._running:

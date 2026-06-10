@@ -39,20 +39,27 @@ class StateStore:
         with self._lock:
             self.latest_snapshot = snapshot
 
+    def _is_extractor_offline_unlocked(self):
+        """(需已持有 _lock) 判断 extractor 是否离线"""
+        if self.last_push_time == 0.0:
+            return True
+        return (time.time() - self.last_push_time) > self.PUSH_TIMEOUT
+
     def should_use_game_client(self):
         """
         判断是否应该启动/保持 GameClient 主动连接。
         返回 True 当且仅当超过 PUSH_TIMEOUT 秒未收到 extractor 推送。
         """
         with self._lock:
-            if self.last_push_time == 0.0:
-                # 从未收到推送，应启动 GameClient
-                return True
-            return (time.time() - self.last_push_time) > self.PUSH_TIMEOUT
+            return self._is_extractor_offline_unlocked()
 
     def get_snapshot(self):
         """获取当前最新 snapshot，无数据时返回 idle 状态"""
         with self._lock:
+            is_game_client = self._is_extractor_offline_unlocked()
+            data_source = "game_client" if is_game_client else "extractor"
             if not self.latest_snapshot:
-                return {"phase": "idle"}
-            return dict(self.latest_snapshot)
+                return {"phase": "idle", "data_source": data_source}
+            snap = dict(self.latest_snapshot)
+            snap["data_source"] = data_source
+            return snap

@@ -69,6 +69,7 @@
   <span>当前回合 <b id="turn">-</b></span>
   <span>剩余牌 <b id="remain">-</b></span>
   <span>百搭 <b id="baida">-</b></span>
+  <span>数据源 <b id="datasrc">-</b></span>
   <span id="note" style="color:var(--accent)"></span>
 </div>
 
@@ -155,6 +156,10 @@ function render(snap) {
   setText('turn', snap.current_turn);
   setText('remain', snap.remaining_tiles);
   setText('baida', snap.baida_tile);
+  const src = snap.data_source || 'unknown';
+  const srcEl = document.getElementById('datasrc');
+  srcEl.textContent = src === 'extractor' ? 'extractor ✅' : src === 'game_client' ? 'GameClient ⚠️' : '-';
+  srcEl.style.color = src === 'extractor' ? 'var(--sou)' : 'var(--accent)';
   setText('note', snap.action_note || '');
 
   // 手牌：把摸到的牌单独高亮（若 drawn_tile 在手牌里，标记最后一张匹配的）

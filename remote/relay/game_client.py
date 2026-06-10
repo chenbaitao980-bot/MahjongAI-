@@ -88,13 +88,22 @@ class GameClient:
         """指数退避重连循环"""
         delay = 5.0
         max_delay = 60.0
+        consecutive_failures = 0
         while self._running:
             try:
                 await self._run_once()
                 delay = 5.0  # 正常断开后重置退避
+                consecutive_failures = 0
             except asyncio.CancelledError:
                 break
             except Exception as exc:
+                consecutive_failures += 1
+                if consecutive_failures >= 10:
+                    _LOGGER.error(
+                        "连续 %d 次连接失败，凭证可能已过期。"
+                        "请等待 extractor 推送新凭证或重启 relay 重新注册。",
+                        consecutive_failures,
+                    )
                 _LOGGER.warning("连接断开: %s，%g 秒后重连", exc, delay)
             if not self._running:
                 break

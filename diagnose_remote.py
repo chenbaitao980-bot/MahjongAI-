@@ -28,6 +28,16 @@ import sys
 from datetime import datetime
 
 # ---------------------------------------------------------------------------
+# stdout/stderr 容错 — 控制台可能是 cp936/GBK，避免 UnicodeEncodeError 崩溃
+# (Python 3.7+ reconfigure; 失败忽略，纯加固，不改变正常行为)
+# ---------------------------------------------------------------------------
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
+# ---------------------------------------------------------------------------
 # 日志初始化 — 同时输出到终端和文件（格式对齐 test_remote.py）
 # ---------------------------------------------------------------------------
 _LOG_DIR = os.path.join(os.path.dirname(__file__), "logs")

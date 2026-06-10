@@ -91,7 +91,7 @@ class PacketStateTracker:
             return
         if self.hand_trusted:
             return
-        if raw_len < 13:
+        if raw_len not in (13, 14):
             return
         if player_id not in self.players:
             return
@@ -177,14 +177,17 @@ class PacketStateTracker:
         if event == "hand_update":
             player_id = int(player)
             raw_len = len(game.get("hand_raw", []))
+            self._maybe_lock_local_player(player_id, raw_len, source)
             if self._is_new_round_hand_update(player_id, raw_len, source):
                 history = self.history
                 self.reset(keep_history=True)
                 self.history = history
                 self.phase = "playing"
-            self._maybe_lock_local_player(player_id, raw_len, source)
+                self._maybe_lock_local_player(player_id, raw_len, source)
             if self._is_relevant_player(player_id):
                 if source == SOURCE_TRUSTED_HAND:
+                    if self.phase == "idle":
+                        self.phase = "playing"
                     hand = self._resolve_tiles(game.get("hand_raw", []), str(game.get("hand_context") or "nibble"), "hand")
                     self.players[player_id].hand = hand
                     self._apply_marked_tiles(game)
@@ -389,14 +392,24 @@ class PacketStateTracker:
             return False
         if raw_len not in (13, 14):
             return False
-        if not self.hand_trusted:
-            return False
         if self.phase == "hupai":
             return True
         has_visible_old_round = any(
             p.discards or p.melds
             for p in self.players.values()
         )
+        has_round_residue = bool(
+            has_visible_old_round
+            or self.event_log
+            or self.optional_actions
+            or self.action_tile
+            or self.action_note
+            or self.last_draw_tile
+            or self.current_turn != "none"
+            or self.remaining_tiles < 108
+        )
+        if not self.hand_trusted:
+            return self.phase in ("idle", "playing") and has_round_residue
         return self.phase == "playing" and has_visible_old_round and self.remaining_tiles <= 70
 
     @staticmethod

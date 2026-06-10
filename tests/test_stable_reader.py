@@ -467,6 +467,28 @@ class StableReaderTests(unittest.TestCase):
             self.assertEqual(snapshot["players"][0]["hand"], ["1s", "1s", "1s", "1s", "2s", "2s", "2s", "2s", "3s", "3s", "3s", "3s", "4s"])
             self.assertTrue(snapshot["hand_trusted"])
 
+    def test_first_stable_hand_update_locks_local_player_and_recognizes_hand(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MappingStore(path=os.path.join(tmp, "mappings.yaml"))
+            tracker = PacketStateTracker(store, local_player=1, player_count=2)
+
+            tracker.apply(self.make_msg({
+                "event": "hand_update",
+                "player": 0,
+                "hand_raw": [0x11, 0x12, 0x13, 0x14, 0x21, 0x22, 0x23, 0x24, 0x31, 0x32, 0x33, 0x34, 0x41],
+                "hand_context": "stable",
+                "source": "trusted_hand",
+            }))
+
+            snapshot = tracker.snapshot()
+            self.assertEqual(snapshot["local_player"], 0)
+            self.assertEqual(snapshot["opponent_player"], 1)
+            self.assertEqual(
+                snapshot["players"][0]["hand"],
+                ["1m", "2m", "3m", "4m", "1s", "2s", "3s", "4s", "1p", "2p", "3p", "4p", "1z"],
+            )
+            self.assertTrue(snapshot["hand_trusted"])
+
     def test_snapshot_sorts_only_local_hand_for_display(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = MappingStore(path=os.path.join(tmp, "mappings.yaml"))
@@ -732,6 +754,48 @@ class StableReaderTests(unittest.TestCase):
             self.assertEqual(snapshot["events"], ["00:00:00 我方手牌更新：13 张"])
             self.assertEqual(snapshot["baida_tile"], "7z")
             self.assertTrue(snapshot["baida_trusted"])
+            self.assertEqual(snapshot["drawn_tile"], "")
+
+    def test_new_round_hand_update_resets_old_state_even_when_waiting_for_trusted_hand(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MappingStore(path=os.path.join(tmp, "mappings.yaml"))
+            tracker = PacketStateTracker(store, local_player=0, player_count=2)
+            tracker.apply(
+                self.make_msg(
+                    {
+                        "event": "hand_update",
+                        "player": 0,
+                        "hand_raw": [0x11, 0x12, 0x13, 0x14, 0x21, 0x22, 0x23, 0x24, 0x31, 0x32, 0x33, 0x34, 0x41],
+                        "hand_context": "stable",
+                        "source": "trusted_hand",
+                    }
+                )
+            )
+            tracker.apply(self.make_msg({"event": "discard", "player": 0, "tile_raw": 0x11, "tile_context": "stable", "source": "trusted_action"}))
+            tracker.apply(self.make_msg({"event": "discard", "player": 1, "tile_raw": 0x21, "tile_context": "stable", "source": "trusted_action"}))
+            tracker.apply(self.make_msg({"event": "hand_update", "player": 0, "hand_raw": [], "hand_context": "stable", "source": "partial"}))
+
+            tracker.apply(
+                self.make_msg(
+                    {
+                        "event": "hand_update",
+                        "player": 0,
+                        "hand_raw": [0x15, 0x16, 0x17, 0x18, 0x25, 0x26, 0x27, 0x28, 0x35, 0x36, 0x37, 0x38, 0x42],
+                        "hand_context": "stable",
+                        "source": "trusted_hand",
+                    }
+                )
+            )
+
+            snapshot = tracker.snapshot()
+            self.assertEqual(snapshot["phase"], "playing")
+            self.assertTrue(snapshot["hand_trusted"])
+            self.assertEqual(snapshot["remaining_tiles"], 108)
+            self.assertEqual(snapshot["players"][0]["discards"], [])
+            self.assertEqual(snapshot["players"][1]["discards"], [])
+            self.assertEqual(snapshot["players"][0]["melds"], [])
+            self.assertEqual(len(snapshot["events"]), 1)
+            self.assertEqual(snapshot["players"][0]["hand"], ["5m", "6m", "7m", "8m", "5s", "6s", "7s", "8s", "5p", "6p", "7p", "8p", "2z"])
             self.assertEqual(snapshot["drawn_tile"], "")
 
     def test_manual_mapping_replays_history_into_chinese_events(self):

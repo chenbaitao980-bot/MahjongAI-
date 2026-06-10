@@ -173,13 +173,35 @@ relay/ 运行时需要 tile mapping 数据。两种方式：
 
 ## 8. 本地测试
 
-### 一键测试脚本
+### 全本机部署拓扑（单机 + 电脑模拟路由器）
+
+当 extractor 与 relay 都跑在同一台 Windows 电脑、且用「电脑当路由器」给手机供网时：
+
+```
+手机登录游戏 ──Wi-Fi──▶ 电脑(Windows 移动热点/ICS) ──▶ 互联网→游戏服务器
+                            │ 手机流量经过电脑网卡
+                            ├─ extractor 嗅探共享网卡 → POST /register/push
+                            └─ relay (127.0.0.1:8000) GET /state
+```
+
+- relay 与 extractor 同机 → `extractor/config.yaml` 的 `relay_url` 应为 `http://127.0.0.1:8000`（默认占位符 `your-relay-server` 需手动改）。
+- **电脑必须先开 Windows 移动热点或 ICS**，手机连此热点，游戏流量才会过本机网卡被 Npcap/scapy 嗅探到。
+- **关键自检信号**：Windows 移动热点和 ICS 的默认网关固定是 `192.168.137.1`。`ipconfig` 输出里出现该地址 = 路由器模拟已生效；没有 = 热点/ICS 未开，extractor 抓不到包。
+- extractor 必须嗅探「承载手机流量的共享适配器」，不是 WAN/本地以太网口。
+- 此拓扑下主路径是场景A（被动嗅探 + push）；场景B（GameClient 主动连云端）基本用不到。
+
+### 一键测试 + 诊断脚本
 
 ```bash
-# 在项目根目录
-python test_remote.py
-# 日志写入 logs/test_remote_<YYYYMMDD_HHMMSS>.log
+# 在项目根目录，命令行
+python test_remote.py        # 单元 + 集成测试（13 用例），日志 logs/test_remote_<ts>.log
+python diagnose_remote.py    # 本机链路在线诊断（A-E 五项），日志 logs/diagnose_remote_<ts>.log
+
+# 或一键：项目根双击
+test_remote.bat              # 检查 Python/venv/依赖 → 跑上面两个脚本 → 汇总 + 日志路径
 ```
+
+`diagnose_remote.py` 五项检查：A relay 依赖、B extractor 抓包依赖(scapy+Npcap)、C relay `/state` 可达性、D 路由器模拟自检(查 192.168.137.1)、E 游戏服务器 7777 连通(参考项)。四态 PASS/WARN/FAIL/SKIP，仅 FAIL 才 exit 1（WARN 不算失败）。**凭证/token 落盘前必须 `_mask` 脱敏**（只露前 4 位 + 长度）。
 
 覆盖三个层次：
 - **Suite 1 StateStore**：直接 import `remote/relay/state_store.py`，4 个纯单元测试，无网络依赖

@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/remote-access.md", "reason": "remote/ 子系统架构契约：API 端点、配置字段、抓包跨平台规则、token 提取条件，诊断脚本据此读 config 与判断链路"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "diagnose_remote.py 落盘日志需遵循项目日志规范（格式/路径/级别）"}

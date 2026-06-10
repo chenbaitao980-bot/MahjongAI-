@@ -1,0 +1,1 @@
+{"file": ".trellis/spec/backend/remote-access.md", "reason": "remote/ 架构契约：§4 sys.path 规则、§5 跨平台抓包(tcpdump/OpenWRT 兼容)、§7 MappingStore 部署、config 字段，软路由打包与安装据此"}

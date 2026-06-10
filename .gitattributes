@@ -1,0 +1,4 @@
+# 软路由部署脚本必须用 LF 行尾，否则在 OpenWRT(ash)/Linux 上因 \r 报错
+*.sh text eol=lf
+remote/extractor/files/mahjong-extractor.init text eol=lf
+remote/extractor/files/mahjong-extractor.service text eol=lf

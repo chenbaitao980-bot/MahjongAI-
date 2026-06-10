@@ -130,6 +130,12 @@ def create_capture(config):
         return TcpdumpCaptureAdapter(config)
 ```
 
+**软路由常开部署**：`remote/extractor/package_extractor.py` 把 extractor 运行所需最小模块集
+（`stable/{protocol,tracker,mapping}` + `battle/{__init__,state}` + `game/` + `utils/`，**不含 cv2/numpy**，
+依赖 `battle/__init__.py` 的 BattleService 懒加载解耦）打成 bundle，配 `install_openwrt.sh`(procd) /
+`install_linux.sh`(systemd) / `selfcheck_capture.sh`(验证流量经过本机) / `DEPLOY.md`。relay 部署在云服务器。
+详见 `remote/extractor/DEPLOY.md`。
+
 **OpenWRT Python 版本**：按 Python 3.6 兼容性编写 extractor：
 - 禁用 `:=` walrus operator（3.8+）
 - 禁用 `match` 语句（3.10+）

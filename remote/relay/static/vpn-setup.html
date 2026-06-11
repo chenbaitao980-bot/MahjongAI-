@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<!--
+  DEPRECATED (Option A 不需要)
+  纯 PSK 系统 VPN 方案（场景C / Option A）首次在手机上手填 3 个字段即可，
+  不需要本 captive portal / VPN setup 页面自动投送配置。
+  本文件仅为旧的软路由/热点方案保留，逻辑未动。
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mahjong VPN</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:-apple-system,sans-serif;max-width:500px;margin:10px auto;padding:0 12px;background:#0f0f23;color:#ccc;line-height:1.6}
+h1{color:#fff;text-align:center;font-size:20px;margin:10px 0}
+.sub{text-align:center;color:#4f8;font-size:12px;margin-bottom:15px}
+.step{background:#1a1a2e;padding:10px 14px;margin:8px 0;border-radius:8px;border-left:3px solid #4f8}
+.step b{color:#4f8}
+.cred{background:#0a0a15;padding:8px 12px;border-radius:6px;font-size:13px;margin:6px 0}
+.cred span{color:#888;font-size:11px}
+.cred .val{color:#4f8;font-family:monospace;font-size:14px}
+.btn{background:#2a5a3e;color:#fff;border:none;padding:12px 20px;border-radius:6px;font-size:15px;width:100%;margin:8px 0;cursor:pointer}
+.note{font-size:11px;color:#666;text-align:center;margin:15px 0}
+</style>
+</head>
+<body>
+<h1>Mahjong VPN</h1>
+<div class="sub">6 fields, 1 minute, forever</div>
+
+<div class="step"><b>Settings > VPN > +</b></div>
+<div class="cred">
+<span>Name:</span> <span class="val">Mahjong</span><br>
+<span>Type:</span> <span class="val">IPSec IKEv2 PSK</span><br>
+<span>Server:</span> <span class="val">8.136.37.136</span><br>
+<span>IPSec identifier:</span> <span class="val">8.136.37.136</span><br>
+<span>IPSec pre-shared key:</span> <span class="val">123456</span><br>
+<span>Username:</span> <span class="val">mahjong</span><br>
+<span>Password:</span> <span class="val">fey6dXE0s0E3zc5F</span>
+</div>
+<div class="step">Save > gear icon > <b>Always-on VPN = ON</b></div>
+<a class="btn" href="intent://com.android.settings.Settings$VpnSettingsActivity#Intent;scheme=android-app;end">Open VPN Settings</a>
+<div class="note">If phone warns "unsafe", just tap OK/Connect to continue.<br>After setup, auto-connects on any network forever.</div>
+</body></html>

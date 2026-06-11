@@ -57,6 +57,151 @@ async def index():
         )
 
 
+# ─── VPN 配置页（GET /vpn-setup）─────────────────────────────
+
+def _build_vpn_setup_page():
+    """读取 phone-setup.txt 并渲染为配置页"""
+    import os as _os
+    # phone-setup.txt 可能在 bundle 的 vpn/ 目录下
+    for search in ["/opt/mahjong-extractor/vpn/phone-setup.txt",
+                   _os.path.join(_os.path.dirname(__file__), "..", "..", "vpn", "phone-setup.txt")]:
+        if _os.path.isfile(search):
+            with open(search, "r", encoding="utf-8") as f:
+                setup = f.read()
+            break
+    else:
+        setup = "phone-setup.txt not found. Run vpn_configure.py first."
+
+    # Parse credentials
+    lines = setup.split("\n")
+    creds = {}
+    for line in lines:
+        stripped = line.strip()
+        if "Server:" in stripped and "IPSec" not in stripped:
+            creds["Server"] = stripped.split(":", 1)[-1].strip()
+        elif "pre-shared key:" in stripped:
+            creds["PSK"] = stripped.split(":", 1)[-1].strip()
+        elif stripped.startswith("Username:"):
+            creds["Username"] = stripped.split(":", 1)[-1].strip()
+        elif stripped.startswith("Password:"):
+            creds["Password"] = stripped.split(":", 1)[-1].strip()
+
+    server = creds.get("Server", "?")
+    psk = creds.get("PSK", "?")
+    username = creds.get("Username", "?")
+    password = creds.get("Password", "?")
+
+    html = """<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VPN Setup</title>
+<style>
+*{{box-sizing:border-box}}
+body{{font-family:-apple-system,sans-serif;max-width:500px;margin:10px auto;padding:0 12px;background:#0f0f23;color:#ccc;line-height:1.6}}
+h1{{color:#fff;text-align:center;font-size:20px;margin:10px 0}}
+.sub{{text-align:center;color:#4f8;font-size:12px;margin-bottom:15px}}
+.step{{background:#1a1a2e;padding:10px 14px;margin:8px 0;border-radius:8px;border-left:3px solid #4f8}}
+.cred{{background:#0a0a15;padding:8px 12px;border-radius:6px;font-size:13px;margin:6px 0}}
+.cred span{{color:#888;font-size:11px}}
+.cred .val{{color:#4f8;font-family:monospace;font-size:14px;word-break:break-all}}
+.btn{{background:#2a5a3e;color:#fff;border:none;padding:8px 20px;border-radius:6px;font-size:14px;width:100%;margin:8px 0;cursor:pointer}}
+.btn:hover{{background:#3a7a5e}}
+.copy{{background:#3a3a5e;color:#ccc;border:1px solid #5a5a8e;padding:3px 8px;border-radius:4px;font-size:11px;cursor:pointer;float:right;margin-top:-2px}}
+.note{{font-size:11px;color:#666;text-align:center;margin:15px 0}}
+</style>
+<script>
+function copyToClipboard(text) {{
+  navigator.clipboard.writeText(text).then(function() {{
+    var el = event.target;
+    el.textContent = 'Copied!';
+    setTimeout(function(){{ el.textContent = 'Copy'; }}, 1500);
+  }});
+}}
+</script>
+</head>
+<body>
+<h1>Mahjong VPN</h1>
+<div class="sub">System VPN - no app - 1 minute</div>
+<div class="step">
+<b>Step 1:</b> Open VPN Settings<br>
+<a href="intent://com.android.settings.Settings\$VpnSettingsActivity#Intent;scheme=android-app;end" style="color:#4f8;font-size:14px">Tap here to open VPN Settings</a>
+<br><span style="color:#888;font-size:11px">or manually: Settings > Network > VPN > +</span>
+</div>
+<div class="step">
+<b>Step 2:</b> Tap +, fill in (tap Copy for each):
+<div class="cred">
+<span>Name:</span> <span class="val">Mahjong</span>
+<button class="copy" onclick="copyToClipboard('Mahjong')">Copy</button><br>
+<span>Type:</span> <span class="val">IPSec IKEv2 RSA</span><br><br>
+<b>First: Install CA Certificate</b><br>
+<a href="/ca.crt" style="color:#4f8;font-size:14px">Tap to download CA certificate</a><br>
+<span style="color:#888;font-size:11px">Open downloaded file > Name: Mahjong CA > OK</span><br><br>
+<b>Then: Add VPN</b>
+<div class="cred">
+<span>Server:</span> <span class="val">""" + server + """</span>
+<button class="copy" onclick="copyToClipboard('""" + server + """')">Copy</button><br>
+<span>IPSec identifier:</span> <span class="val">8.136.37.136</span><br>
+<span>IPSec CA certificate:</span> <span class="val">Mahjong CA</span><br>
+<span>Username:</span> <span class="val">""" + username + """</span>
+<button class="copy" onclick="copyToClipboard('""" + username + """')">Copy</button><br>
+<span>Password:</span> <span class="val">""" + password + """</span>
+<button class="copy" onclick="copyToClipboard('""" + password + """')">Copy</button>
+</div>
+</div>
+<div class="step">
+<b>Step 3:</b> Save > gear icon > <b>Always-on VPN = ON</b>
+</div>
+<button class="btn" onclick="location.href='intent://com.android.settings.Settings\$VpnSettingsActivity#Intent;scheme=android-app;end'">Open VPN Settings</button>
+<div class="note">Split tunnel: only game traffic goes VPN. WeChat/4G direct.<br>After setup, never touch again.</div>
+</body></html>"""
+    return html
+
+
+@app.get("/vpn-setup", response_class=HTMLResponse)
+async def vpn_setup():
+    """VPN setup page: static HTML with cert-only auth (no username/password)"""
+    import os as _os
+    for search in [_os.path.join(_STATIC_DIR, "vpn-setup.html"),
+                   "/opt/mahjong-extractor/remote/relay/static/vpn-setup.html"]:
+        if _os.path.isfile(search):
+            with open(search, "r", encoding="utf-8") as f:
+                return HTMLResponse(content=f.read())
+    # Fallback: inline page
+    return HTMLResponse(content="""<!DOCTYPE html>
+<html><body style="background:#111;color:#ccc;font-family:sans-serif;padding:30px">
+<h2>Mahjong VPN</h2>
+<p><a href="/mahjong-vpn.p12" style="color:#4f8;font-size:18px">Download Certificate</a></p>
+<p>Then: Settings > VPN > + > IPSec IKEv2 RSA</p>
+<p>Server: 8.136.37.136 | CA: Mahjong CA | User cert: Mahjong VPN</p>
+</body></html>""")
+
+
+@app.get("/mahjong-vpn.p12")
+async def p12_download():
+    """Serve client PKCS12 certificate for phone import"""
+    from fastapi.responses import FileResponse
+    import os as _os
+    for p in ["/opt/mahjong-extractor/mahjong-vpn.p12", "/tmp/mahjong-vpn.p12"]:
+        if _os.path.isfile(p):
+            return FileResponse(p, media_type="application/x-pkcs12", filename="mahjong-vpn.p12")
+    return HTMLResponse(content="Certificate not found", status_code=404)
+
+
+@app.get("/ca.crt")
+async def ca_cert():
+    """Serve CA certificate for phone to install"""
+    import os as _os
+    ca_paths = ["/etc/ipsec.d/cacerts/ca.crt"]
+    for p in ca_paths:
+        if _os.path.isfile(p):
+            with open(p, "r") as f:
+                from fastapi.responses import PlainTextResponse
+                return PlainTextResponse(content=f.read(), media_type="application/x-x509-ca-cert")
+    return HTMLResponse(content="CA cert not found", status_code=404)
+
+
 # ─── 请求/响应模型 ─────────────────────────────────────────────
 
 
@@ -83,27 +228,35 @@ def _check_api_token(token: str):
 
 def _ensure_game_client_running():
     """
-    如果 extractor 离线（状态存储判断）且 GameClient 未运行，则启动它。
-    只有在已配置 handshake_blob 和 auth_token_12b 时才启动。
+    如果 extractor 离线且 GameClient 未运行，则启动它。
+    需要 handshake_blob（必需）+ auth_token_12b（强烈建议，用于 0x0006 认证）。
+    缺少 auth_token_12b 时 GameClient 仍会启动但无法完成服务端认证。
     """
     global _game_client
 
     use_gc = _state_store.should_use_game_client()
     handshake_hex = _cfg.get("handshake_blob", "")
-    auth_hex = _cfg.get("auth_token_12b", "")
     last_push = _state_store.last_push_time
 
     if not use_gc:
         _LOGGER.debug("[模式] extractor 在线 (last_push=%.1fs前), 不需要 GameClient",
                       time.time() - last_push if last_push else float('inf'))
-        return  # extractor 在线，不需要 GameClient
+        return
 
-    if not handshake_hex or not auth_hex:
-        _LOGGER.info("[模式] extractor 离线 (last_push=%s), 但无凭证 (handshake=%s bytes, auth=%s bytes), 跳过 GameClient",
-                     "从未推送" if last_push == 0.0 else f"{time.time() - last_push:.1f}s前",
-                     len(handshake_hex) // 2 if handshake_hex else 0,
-                     len(auth_hex) // 2 if auth_hex else 0)
-        return  # 没有凭证，无法连接
+    if not handshake_hex:
+        _LOGGER.info("[模式] extractor 离线 (last_push=%s), 但无 handshake_blob, 跳过 GameClient",
+                     "从未推送" if last_push == 0.0 else f"{time.time() - last_push:.1f}s前")
+        return
+
+    auth_hex = _cfg.get("auth_token_12b", "")
+    if not auth_hex:
+        now = time.time()
+        if now - getattr(_ensure_game_client_running, '_last_auth_warn', 0) > 30.0:
+            _LOGGER.warning("[模式] extractor 离线, 有 handshake_blob 但缺少 auth_token_12b。"
+                            "GameClient 不会启动（缺少 0x0006 认证包 = 服务端立即断开连接）。"
+                            "请确保 extractor 部署在手机流量经过的路由器/NAS/旁路由上。")
+            _ensure_game_client_running._last_auth_warn = now
+        return
 
     if _game_client is not None and not _game_client._running:
         _LOGGER.info("[模式] 旧 GameClient 已停止，准备重建")
@@ -113,15 +266,18 @@ def _ensure_game_client_running():
         _LOGGER.debug("[模式] GameClient 已在运行中, running=%s", _game_client._running)
         return
 
-    _LOGGER.info("[模式] extractor 离线 (last_push=%s), 有凭证 (handshake=%d bytes, auth=%d bytes), 启动 GameClient",
+    _LOGGER.info("[模式] extractor 离线 (last_push=%s), 有 handshake_blob (%d bytes), 启动 GameClient",
                  "从未推送" if last_push == 0.0 else f"{time.time() - last_push:.1f}s前",
-                 len(handshake_hex) // 2, len(auth_hex) // 2)
+                 len(handshake_hex) // 2)
 
     try:
         handshake_blob = bytes.fromhex(handshake_hex)
-        auth_token_12b = bytes.fromhex(auth_hex)
+        auth_token = bytes.fromhex(auth_hex) if auth_hex else None
+        if auth_token and len(auth_token) != 12:
+            _LOGGER.warning("[模式] auth_token_12b 长度异常 (%d bytes, 期望 12)，忽略", len(auth_token))
+            auth_token = None
     except ValueError:
-        _LOGGER.error("[模式] 凭证 hex 格式错误，无法启动 GameClient")
+        _LOGGER.error("[模式] handshake_blob hex 格式错误，无法启动 GameClient")
         return
 
     server_ip = _cfg.get("game_server_ip", "47.96.0.227")
@@ -131,7 +287,7 @@ def _ensure_game_client_running():
         server_ip=server_ip,
         server_port=server_port,
         handshake_blob=handshake_blob,
-        auth_token_12b=auth_token_12b,
+        auth_token_12b=auth_token,
         state_store=_state_store,
     )
     try:
@@ -203,9 +359,10 @@ async def register(req: RegisterRequest):
     # 持久化凭证到 config.yaml
     _persist_credentials(req.handshake_blob, req.auth_token_12b)
 
-    # 凭证更新后重启 GameClient
-    _stop_game_client()
-    _ensure_game_client_running()
+    # 注意：不在此处启动 GameClient。GameClient 已确认不可行
+    # （缺少 SRS 认证层，服务端立即关闭连接）。
+    # /state 端点会在每次请求时调用 _ensure_game_client_running()
+    # 进行凭证完备性检查。
 
     return {"status": "ok", "message": "凭证已注册"}
 
@@ -232,6 +389,7 @@ async def get_state(token: str = Query(..., description="鉴权 token")):
     """
     返回最新游戏状态 snapshot。
     无数据时返回 {"phase": "idle"}，无效 token 返回 401。
+    附加 credential_ready 字段表示 relay 是否持有认证凭证（断热点后 GameClient 可用）。
     """
     _check_api_token(token)
 
@@ -239,6 +397,10 @@ async def get_state(token: str = Query(..., description="鉴权 token")):
     _ensure_game_client_running()
 
     snapshot = _state_store.get_snapshot()
+    # 附加凭证状态，方便调用方判断断热点后是否能自动接管
+    hs = _cfg.get("handshake_blob", "")
+    at = _cfg.get("auth_token_12b", "")
+    snapshot["credential_ready"] = bool(hs and at)
     return snapshot
 
 
@@ -247,7 +409,11 @@ async def get_state(token: str = Query(..., description="鉴权 token")):
 
 def configure(cfg: dict, cfg_path: str = ""):
     """注入配置，由 main.py 在启动时调用"""
-    global _cfg, _cfg_path
+    global _cfg, _cfg_path, _state_store
     _cfg.update(cfg)
     if cfg_path:
         _cfg_path = cfg_path
+    # 从配置读取 push_timeout，默认 10 秒（断热点后快速切换 GameClient）
+    push_timeout = float(cfg.get("push_timeout", 10.0))
+    _state_store.push_timeout = push_timeout
+    _LOGGER.info("push_timeout=%.1fs (超过此时间无 /push 即启动 GameClient)", push_timeout)

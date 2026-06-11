@@ -195,7 +195,15 @@ class PcapParser:
             return self._parse_ethernet_ip_tcp(data)
         if self.network in (101, 228):
             return self._parse_ip_tcp(data)
-        return self._parse_ethernet_ip_tcp(data) or self._parse_ip_tcp(data)
+        if self.network == 113:        # LINUX_SLL (cooked v1)
+            return self._parse_sll_ip_tcp(data)
+        if self.network == 276:        # LINUX_SLL2 (cooked v2)
+            return self._parse_sll2_ip_tcp(data)
+        # unknown link type: try all known encapsulations in turn
+        return (self._parse_ethernet_ip_tcp(data)
+                or self._parse_sll2_ip_tcp(data)
+                or self._parse_sll_ip_tcp(data)
+                or self._parse_ip_tcp(data))
 
     def _parse_ethernet_ip_tcp(self, data: bytes) -> dict[str, Any] | None:
         if len(data) < 14:
@@ -204,6 +212,22 @@ class PcapParser:
         if eth_type != 0x0800:
             return None
         return self._parse_ip_tcp(data[14:])
+
+    def _parse_sll_ip_tcp(self, data: bytes) -> dict[str, Any] | None:
+        # LINUX_SLL: 16B header, protocol (EtherType) at [14:16]
+        if len(data) < 16:
+            return None
+        if struct.unpack(">H", data[14:16])[0] != 0x0800:
+            return None
+        return self._parse_ip_tcp(data[16:])
+
+    def _parse_sll2_ip_tcp(self, data: bytes) -> dict[str, Any] | None:
+        # LINUX_SLL2: 20B header, protocol (EtherType) at [0:2]
+        if len(data) < 20:
+            return None
+        if struct.unpack(">H", data[0:2])[0] != 0x0800:
+            return None
+        return self._parse_ip_tcp(data[20:])
 
     def _parse_ip_tcp(self, ip: bytes) -> dict[str, Any] | None:
         return PcapParser._parse_ip_tcp_static(ip)

@@ -19,16 +19,67 @@
               relay/（云服务器）
               GET /state → 返回最新 snapshot
 
-场景B（extractor 离线，如外出打牌）
+场景B（extractor 离线，如外出打牌）⚠️ 不可用
   游戏机 → 网络 → 游戏服务器
-                       ↑ relay 作为第二客户端
+                       ↑ relay 试图作为第二客户端
               relay/ GameClient
-              主动 TCP 连接 → 接收游戏数据包
-              PacketStateTracker 重建状态
-              GET /state → 返回最新 snapshot
+              主动 TCP 连接 → 跳过 SRS 认证层(0x0001/0x0005 native .so)
+              → 服务端立即关闭连接（存活 0.0 秒）
+              → GameClient 无法工作
+
+> **2026-06-11 最终结论**：GameClient 不可行。游戏连接的 SRS 认证层
+> （0x0001 sub=0x0000 握手、0x0005 reauth 加密帧、m_key 协商）全部
+> 在 native libcocos2dlua.so 中实现，纯 Python 无法复现。
+> apk_research 结论已确认。正确的断热点方案是软路由/NAS 部署 extractor，
+> 或使用 VPN 隧穿（见场景C）。
+> 当缺少 auth_token_12b 时 GameClient 自动启动已被禁用。
+
+场景C（VPN 隧穿，出门 4G 可用）
+```
+手机(任意网络/4G) ──IKEv2 IPSec──▶ 云服务器[strongSwan + extractor + relay]
+  系统 VPN（无需 app）                 │ sniff -i any    GET /state
+  全量隧道 0.0.0.0/0                  │                  │
+  (Android 原生 VPN 强制)            └── POST /push ────┘
+                                               │
+                                         游戏服务器:7777
 ```
 
-**模式切换**：`StateStore.PUSH_TIMEOUT = 60s`，超过此时间无 `/push` → 自动启动 GameClient。
+> **VPN 隧穿原理（Option A：纯 PSK）**：手机用 Android 系统自带 VPN
+> （Settings > VPN > Add > 类型 **`IKEv2/IPSec PSK`**），不需要装任何 app、
+> 不需要证书、不需要用户名密码。认证为**双向 PSK**：strongSwan 配置
+> `leftauth=psk` + `rightauth=psk`，`ipsec.secrets` 用单行 `: PSK "..."`
+> 匹配 `%any` road-warrior 客户端；`rightsourceip=10.99.0.0/24` 给手机分配虚拟 IP。
+> 手机端只需手填 **3 个字段**：类型（`IKEv2/IPSec PSK`）、服务器、预共享密钥
+> （标识符留空、不填用户名密码）。**类型必须选 PSK，选 RSA/证书 或 MSCHAPv2
+> 都会卡在"正在连接…不安全"连不上。**
+> **隧道必须全量 `leftsubnet=0.0.0.0/0`（不能 split tunnel）**：Android 系统自带
+> VPN 客户端请求 `0.0.0.0/0`，若服务器把流量选择器收窄成 `47.96.0.227/32`，
+> 客户端会拒绝并在握手成功后立刻发 DELETE 自杀（现象＝手机"已连接"零点几秒即变"失败"）。
+> server-side split tunnel **只有 strongSwan app 支持**，系统 VPN 不支持。代价：手机全部
+> 流量经云服务器（需 `iptables -t nat ... -s 10.99.0.0/24 -o eth0 MASQUERADE` + FORWARD ACCEPT）。
+> 云服务器上 strongSwan 解密 IPSec → 内核 xfrm → extractor 用 `tcpdump -i any` 嗅探。
+> 手机自己完成登录/加密/打牌，extractor 不碰认证层。
+> 详见 `remote/extractor/vpn/README.md`。
+>
+> **实战三坑（2026-06-11 真机打通存档）**：
+> 1. **手机类型选错**：选 `IKEv2/IPSec RSA`/`MSCHAPv2` → 永远卡"正在连接…不安全"。必须 `IKEv2/IPSec PSK`。
+> 2. **抓包解析全失败（大帧在流但 relay 一直 idle）**：新版 libpcap 的 `tcpdump -i any`
+>    产出链路类型 **LINUX_SLL2（DLT 276，头20字节）**，旧 `PcapParser` 只认以太网/raw-IP，
+>    每包错位丢弃。已在 `stable/protocol.py` 的 `PcapParser._parse_packet` 增加 SLL(113)/SLL2(276) 分支修复。
+> 3. **解析出帧但 push 401**：extractor 与 relay 的 `api_token` 必须一致，否则 `/push` 被拒、relay 永远 idle。
+> 4. **服务端进程存活**：extractor 用 `systemd-run --unit=mjx ...` 常驻；裸 `nohup &` 经 SSH 会话起会被 HUP 收掉。
+> 5. **阿里云**：安全组必须放行入方向 **UDP 500 + UDP 4500**（TCP 通不代表 UDP 通，否则握手包根本到不了，且报错很安静）。
+>
+> **部署**：`package_extractor.py --with-vpn --vpn-server-ip <公网IP>` 将 strongSwan 模块
+> （`install_vpn.sh`, `vpn_configure.py`, README + 生成的纯 PSK `ipsec.conf`/`ipsec.secrets`/
+> `phone-setup.txt`）预配置打包进 bundle。云端解包后按 vpn/README.md 部署。
+> 纯 PSK 方案首次在手机手填 3 字段即可，无需 captive portal / `portal.py` 自动投送配置。
+> 一次配置手机，之后永远自动连接。
+```
+
+**模式切换**：`push_timeout` 可配置（默认 10s），超过此时间无 `/push` →
+检查凭证完备性。若 auth_token_12b 缺失则不启动 GameClient（已知不可行），
+仅通过 `/state` 的 `credential_ready: false` 告知调用方需部署 extractor。
 
 ---
 
@@ -80,10 +131,9 @@ Response 200: <snapshot dict>  或  {"phase": "idle", "data_source": "game_clien
 Response 401: {"detail": "Unauthorized"}
 ```
 
-snapshot 固定包含 `data_source` 字段，标识数据来源：
-- `"extractor"` — 数据来自 extractor 被动嗅探推送（场景A）
-- `"game_client"` — 数据来自 relay GameClient 主动连接（场景B）
-- `"game_client"` — idle 状态（无数据时）
+snapshot 固定包含 `data_source` 和 `credential_ready` 字段：
+- `data_source`: `"extractor"`（场景A）/ `"game_client"`（场景B / idle）
+- `credential_ready`: `true` 当 relay 持有有效认证凭证（断热点后 GameClient 可自动接管），`false` 表示需先连热点让 extractor 注册凭证
 
 > **Design Decision**：`/state` 使用 `token` 而非 `api_token` 作为参数名，因为这是面向外部调用方的 API，与内部 extractor 通信的 `api_token` 区分开，但验证逻辑相同（对比同一个 config.api_token）。
 
@@ -144,6 +194,10 @@ from stable.mapping import MappingStore
 |------|------|------|
 | Windows | NpcapCapture（scapy） | Npcap 驱动 + scapy |
 | Linux / OpenWRT | tcpdump subprocess + PcapParser | tcpdump（通常内置） |
+
+> **VPN 自动检测**：在 Linux 上，当 `interface=any` 时 `TcpdumpCaptureAdapter` 会
+> 检测虚拟网卡（wg0 等），存在则自动使用。strongSwan/IPSec 使用内核 xfrm 解密，
+> 流量在 `-i any` 上可见，BPF filter `port 7777` 过滤。Windows 暂不支持自动检测。
 
 > **抓包网卡必须是承载手机流量的那张（关键坑）**：全本机+热点拓扑下，手机流量走热点网卡（IP `192.168.137.1`，Microsoft Wi-Fi Direct Virtual Adapter），**不是** scapy 的默认 `conf.iface`。`NpcapCaptureAdapter` 必须把 interface 传给 `NpcapCapture(iface=...)`；当 interface 为 `any`/None 时用 `find_hotspot_iface()` 自动选中 IP==192.168.137.1 的网卡。早期 bug：adapter 丢弃 interface 参数 → 嗅探默认网卡 → 一个包都收不到、phase 永远 idle。验证：在热点网卡上 `tcp port 7777` 能抓到 `手机IP → 47.96.0.227:7777`。
 

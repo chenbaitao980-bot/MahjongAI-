@@ -26,9 +26,9 @@ from stable.protocol import MJProtocol
 from stable.tracker import PacketStateTracker
 from stable.mapping import MappingStore
 
-from capture import create_capture
-from token_extractor import TokenExtractor
-from uploader import register, push
+from remote.extractor.capture import create_capture
+from remote.extractor.token_extractor import TokenExtractor
+from remote.extractor.uploader import register, push
 
 _LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 logging.basicConfig(
@@ -93,6 +93,11 @@ class ExtractorApp:
         # token 提取
         self._extractor = TokenExtractor(on_registered=self._on_token_registered)
 
+        # 凭证提取提醒（每 120 秒最多提醒一次）
+        self._credential_warn_interval = 120.0
+        self._last_credential_warn = 0.0
+        self._first_packet_ts = None  # 收到第一个包的时间戳
+
     def _on_token_registered(self, handshake_blob, auth_token_12b):
         """两个凭证都提取到时的回调"""
         _LOGGER.info("提取到认证凭证，正在注册到 relay...")
@@ -120,8 +125,33 @@ class ExtractorApp:
                     seen, payload.hex(), trunc,
                 )
 
+            # 记录首包时间
+            if self._first_packet_ts is None:
+                self._first_packet_ts = time.time()
+
             # 向 token 提取器喂消息
             self._extractor.feed(msg)
+
+            # 凭证缺失提醒：首包后超过 60 秒仍无凭证，每 120 秒提醒一次
+            if not self._extractor.is_complete and self._first_packet_ts is not None:
+                now = time.time()
+                if (now - self._first_packet_ts > 60 and
+                        now - self._last_credential_warn > self._credential_warn_interval):
+                    self._last_credential_warn = now
+                    if self._extractor.handshake_blob is not None:
+                        _LOGGER.warning(
+                            "已提取 handshake_blob (%d bytes)，但未捕获到 auth_token_12b！"
+                            "游戏使用了本地缓存的 token 走 reauth，未发送 0x0006 认证包。"
+                            "需要清除游戏 App 数据后重新登录（Android: 设置→应用→清除数据）。"
+                            "此操作只需一次，之后 relay 永久持有凭证。",
+                            len(self._extractor.handshake_blob),
+                        )
+                    else:
+                        _LOGGER.warning(
+                            "尚未提取到任何认证凭证（handshake_blob/auth_token）。"
+                            "请确认手机已连 PC 热点，且游戏正在运行。"
+                            "如果游戏已登录，请清除游戏 App 数据后重新登录。"
+                        )
 
             # 向状态追踪器喂消息，检查是否有状态变化
             changed = self._tracker.apply(msg)
@@ -134,6 +164,12 @@ class ExtractorApp:
     def run(self):
         """阻塞运行主循环"""
         _LOGGER.info("extractor 启动，监听 port %d → relay %s", self.game_port, self.relay_url)
+        _LOGGER.info(
+            "提示：如需提取认证凭证（断热点后 relay 自动接管），需要在 extractor 运行期间，"
+            "清除游戏 App 数据后重新登录（Android: 设置→应用→清除数据；iOS: 删除重装）。"
+            "仅杀进程或断线重连不会触发 0x0006 认证包——游戏用本地缓存的 token 走 reauth。"
+            "此操作只需一次，凭证持久化到 relay 后即可断热点自动接管。"
+        )
         try:
             self._capture.run(self._on_packet)
         except KeyboardInterrupt:

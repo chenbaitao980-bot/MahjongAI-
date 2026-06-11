@@ -30,6 +30,29 @@ def is_windows():
     return platform.system() == "Windows"
 
 
+def _detect_vpn_interface():
+    """
+    Detect VPN virtual interface (WireGuard wg0 or strongSwan ipsec).
+    Returns interface name if found, None otherwise.
+    strongSwan uses kernel xfrm (no virtual interface), so we fall back to "any".
+    """
+    # WireGuard wg0 (if WG is used instead of strongSwan)
+    if os.path.isdir("/sys/class/net/wg0"):
+        return "wg0"
+    # strongSwan/IPSec: traffic goes through kernel xfrm, visible on "any"
+    try:
+        result = subprocess.run(
+            ["ip", "link", "show", "wg0"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            universal_newlines=True, timeout=5,
+        )
+        if result.returncode == 0:
+            return "wg0"
+    except Exception:
+        pass
+    return None
+
+
 def find_hotspot_iface(gateway=HOTSPOT_GATEWAY):
     """
     找到承载手机流量的热点/ICS 适配器（IP == gateway）。
@@ -105,7 +128,12 @@ class TcpdumpCaptureAdapter:
 
     def __init__(self, port=GAME_SERVER_PORT, interface="any"):
         self.port = int(port)
+        # Auto-detect VPN interface (wg0 or fallback to any)
+        if interface == "any":
+            interface = _detect_vpn_interface() or "any"
         self.interface = interface
+        if self.interface != "any":
+            _LOGGER.info("抓包网卡（auto-detect）: %s", self.interface)
         self._parser = PcapParser()
         self._proc = None
         self._stop_event = threading.Event()

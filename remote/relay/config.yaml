@@ -1,5 +1,6 @@
 api_token: acec67bfa9e518b5906d3e6a
+auth_token_12b: ''
 game_server_ip: 47.96.0.227
 game_server_port: 7777
 handshake_blob: ''
-auth_token_12b: ''
+push_timeout: 10

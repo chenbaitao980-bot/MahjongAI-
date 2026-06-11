@@ -377,6 +377,7 @@ def _suite_relay_api():
             data = r2.json()
             expected = dict(snapshot)
             expected["data_source"] = "extractor"
+            expected["credential_ready"] = True  # test_register_valid 已注册凭证
             assert data == expected, f"expected {expected}, got {data}"
 
         _run(suite, "test_push_and_state", test_push_and_state)

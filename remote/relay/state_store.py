@@ -22,14 +22,15 @@ class StateStore:
     - GameClient 收到数据时：直接更新 snapshot（不更新 last_push_time）
     """
 
-    PUSH_TIMEOUT = 60.0  # 超过此秒数无推送认为 extractor 离线
+    DEFAULT_PUSH_TIMEOUT = 10.0  # 默认 10 秒无推送认为 extractor 离线
 
-    def __init__(self):
+    def __init__(self, push_timeout=None):
         self._lock = threading.Lock()
         self.latest_snapshot = {}            # 最新游戏状态
         self.last_push_time = 0.0           # extractor 最后推送时间（epoch 秒）
         self._on_extractor_online = None    # extractor 恢复时回调
         self._on_extractor_offline = None   # extractor 超时时回调
+        self.push_timeout = push_timeout if push_timeout is not None else self.DEFAULT_PUSH_TIMEOUT
 
     def on_push(self, snapshot):
         """extractor 推送时调用，更新状态和时间戳"""
@@ -46,7 +47,7 @@ class StateStore:
         """(需已持有 _lock) 判断 extractor 是否离线"""
         if self.last_push_time == 0.0:
             return True
-        return (time.time() - self.last_push_time) > self.PUSH_TIMEOUT
+        return (time.time() - self.last_push_time) > self.push_timeout
 
     def should_use_game_client(self):
         """
@@ -60,7 +61,7 @@ class StateStore:
             elif result:
                 elapsed = time.time() - self.last_push_time
                 _LOGGER.debug("[模式判断] 距上次推送 %.1fs (> %.1fs) → 离线, use_game_client=%s",
-                             elapsed, self.PUSH_TIMEOUT, result)
+                             elapsed, self.push_timeout, result)
             return result
 
     def get_snapshot(self):

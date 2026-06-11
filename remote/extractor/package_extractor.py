@@ -74,6 +74,13 @@ _ASSET_FILES = [
 
 _TOP = "mahjong-extractor"  # bundle 顶层目录
 
+# strongSwan VPN 部署资产（相对 remote/extractor/vpn/，打到 bundle 顶层 vpn/）
+_VPN_ASSET_FILES = [
+    "install_vpn.sh",
+    "portal.py",
+    "README.md",
+]
+
 
 def _iter_dir(rel_dir):
     base = os.path.join(_ROOT, rel_dir)
@@ -138,6 +145,66 @@ def _write_relay_config(path, api_token, game_server_ip, game_server_port):
         f.write(data)
 
 
+def _collect_vpn_files(args, api_token, game_server_ip, game_server_port):
+    """Collect strongSwan IKEv2 VPN files for bundling.
+    Returns list of (arcname, filepath_or_None, data_bytes_or_None).
+    """
+    import subprocess as _sp
+    import tempfile as _tmp
+    import shutil as _sh
+
+    files = []
+    vpn_dir = os.path.join(_HERE, "vpn")
+    vpn_bundle_prefix = "{}/vpn".format(_TOP)
+
+    # 1) Static assets
+    for asset in _VPN_ASSET_FILES:
+        src = os.path.join(vpn_dir, asset)
+        if not os.path.isfile(src):
+            print("[WARN] VPN 资产缺失（跳过）: {}".format(asset))
+            continue
+        arcname = "{}/{}".format(vpn_bundle_prefix, asset)
+        files.append((arcname, src, None))
+
+    # 2) vpn_configure.py
+    vpn_configure_src = os.path.join(vpn_dir, "vpn_configure.py")
+    if os.path.isfile(vpn_configure_src):
+        arcname = "{}/vpn_configure.py".format(vpn_bundle_prefix)
+        files.append((arcname, vpn_configure_src, None))
+    else:
+        print("[WARN] vpn_configure.py 缺失，跳过")
+
+    # 3) Pre-generate VPN configs
+    tmpdir = _tmp.mkdtemp(prefix="vpn_config_")
+    try:
+        cmd = [
+            sys.executable, vpn_configure_src,
+            "--server-ip", args.vpn_server_ip,
+            "--game-server-ip", game_server_ip,
+            "--output-dir", tmpdir,
+        ]
+        result = _sp.run(cmd, capture_output=True, text=True, timeout=30)
+        if result.returncode != 0:
+            print("[WARN] vpn_configure.py 失败: {}".format(result.stderr.strip()))
+            print("        VPN 配置将不会预生成，请部署后手动运行 vpn_configure.py")
+        else:
+            for cfg_name in ["ipsec.conf", "ipsec.secrets", "phone-setup.txt"]:
+                cfg_path = os.path.join(tmpdir, cfg_name)
+                if os.path.isfile(cfg_path):
+                    with open(cfg_path, "r", encoding="utf-8") as f:
+                        data = f.read()
+                    arcname = "{}/{}".format(vpn_bundle_prefix, cfg_name)
+                    files.append((arcname, None, data))
+            print("[ok] VPN 配置已预生成: server={}".format(args.vpn_server_ip))
+            print(result.stdout.strip())
+    finally:
+        _sh.rmtree(tmpdir, ignore_errors=True)
+
+    print("[ok] VPN 模块已收集 (含 {} 个文件)".format(len(files)))
+    print("     云端部署后按 vpn/README.md 指引配置 VPN 隧道")
+    return files
+
+
 def main():
     ap = argparse.ArgumentParser(description="Package extractor for soft-router deploy")
     ap.add_argument("-o", "--output", default=os.path.join(_ROOT, "mahjong-extractor-bundle.tar.gz"))
@@ -165,13 +232,27 @@ def main():
         default=None,
         help="Game server port for --write-relay-config (default: value from remote/relay/config.yaml or 7777)",
     )
+    ap.add_argument(
+        "--with-vpn",
+        action="store_true",
+        help="Include strongSwan IKEv2 VPN tunneling support in the bundle (install_vpn.sh, vpn_configure.py, portal.py, README.md)",
+    )
+    ap.add_argument(
+        "--vpn-server-ip",
+        help="Cloud VM / router public IP for VPN server. Required when --with-vpn is set.",
+    )
     args = ap.parse_args()
 
     api_token = args.api_token
     if args.relay_url and not api_token:
         api_token = secrets.token_hex(12)
+    if args.with_vpn and not api_token:
+        api_token = secrets.token_hex(12)
     if args.write_relay_config and not api_token:
         print("[ERROR] --write-relay-config requires --api-token or --relay-url")
+        return 1
+    if args.with_vpn and not args.vpn_server_ip:
+        print("[ERROR] --with-vpn requires --vpn-server-ip <public_ip>")
         return 1
 
     config_override = None
@@ -200,6 +281,12 @@ def main():
         return 1
 
     out = args.output
+
+    # 收集 VPN 文件（要在 tarball 创建阶段一起写入，gzip 不支持追加）
+    vpn_files = []  # list of (arcname, filepath) or (arcname, None, bytes_data)
+    if args.with_vpn:
+        vpn_files = _collect_vpn_files(args, api_token, game_server_ip, game_server_port)
+
     with tarfile.open(out, "w:gz") as tar:
         # 1) 模块文件，保持包路径，放在 bundle 顶层目录下
         for rel in rels:
@@ -224,6 +311,17 @@ def main():
             "    main()\n"
         )
         _add_bytes(tar, run_py, "{}/run.py".format(_TOP))
+
+        # 4) VPN 文件（如果有）
+        vpn_count = 0
+        for arcname, src_path, data_bytes in vpn_files:
+            if data_bytes is not None:
+                _add_bytes(tar, data_bytes, arcname)
+            else:
+                _add(tar, src_path, arcname)
+            vpn_count += 1
+        if vpn_count > 0:
+            print("[ok] VPN 模块已打包 (含 {} 个文件)".format(vpn_count))
 
     if args.write_relay_config:
         _write_relay_config(args.write_relay_config, api_token, game_server_ip, game_server_port)

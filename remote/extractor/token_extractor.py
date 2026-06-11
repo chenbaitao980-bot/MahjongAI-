@@ -79,7 +79,7 @@ class TokenExtractor:
         if message.msg_type == 0x000F:
             self._seen_init = True
 
-        # 已注册则不再重复提取
+        # 已注册 (两个凭证都齐全) 则不再重复提取
         if self._registered:
             return
 
@@ -101,6 +101,8 @@ class TokenExtractor:
             if self._handshake_blob:
                 print("[TokenExtractor] 已提取 handshake_blob: {} bytes (sub_type=0x{:04x})".format(
                     len(self._handshake_blob), message.sub_type))
+                _LOGGER.info("handshake_blob 已提取 (%d bytes)，等待 auth_token_12b (0x0006)...",
+                             len(self._handshake_blob))
 
         elif message.msg_type == 0x0006 and self._auth_token_12b is None:
             # 提取 auth_token_12b：C->S 0x0006 payload 的 bytes 4-15（需要 payload 完整16字节）
@@ -108,9 +110,10 @@ class TokenExtractor:
                 self._auth_token_12b = payload[4:16]
                 print("[TokenExtractor] 已提取 auth_token_12b: {}".format(
                     self._auth_token_12b.hex()))
+                _LOGGER.info("auth_token_12b 已提取: %s", self._auth_token_12b.hex())
 
-        # 检查是否两个都提取到了
-        if self.is_complete and not self._registered:
+        # 两个凭证都齐全后才注册（auth_token_12b 由服务端在连接后数十秒~数分钟触发）
+        if self._handshake_blob is not None and self._auth_token_12b is not None and not self._registered:
             self._registered = True
             if self._on_registered is not None:
                 self._on_registered(self._handshake_blob, self._auth_token_12b)

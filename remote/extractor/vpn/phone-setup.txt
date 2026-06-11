@@ -1,0 +1,32 @@
+============================================================
+Phone VPN Setup (Android system VPN - no app needed)
+============================================================
+
+Only 3 fields to fill in. Pure pre-shared-key (PSK).
+NO username, NO password, NO certificate.
+
+1. Settings > Network & internet > VPN
+2. Tap "+" (Add VPN)
+3. Fill in EXACTLY these 3 fields:
+   Type (类型):                 IKEv2/IPSec PSK
+       ^^^ MUST be PSK. NOT "IKEv2/IPSec RSA" (certificate),
+           NOT "IKEv2/IPSec MSCHAPv2". Wrong type = can't connect.
+   Server (服务器):             8.136.37.136
+   Pre-shared key (预共享密钥): 123456
+
+   IPSec identifier (标识符):   LEAVE EMPTY (留空)
+   Username / Password:         DO NOT FILL (不要填用户名/密码)
+   Name (名称):                 Mahjong (anything you like)
+
+4. Tap Save
+5. Tap the gear icon next to the VPN entry
+6. Enable "Always-on VPN" = ON
+7. Done! Phone will auto-connect on any network forever.
+
+NOTE: If you previously created an old entry with Type RSA /
+certificate, DELETE it first, then add a new one as above.
+
+Full tunnel: ALL phone traffic goes through the VPN.
+(Android's built-in VPN does not support server-side split tunnel;
+ WeChat/browser also route via the cloud server while VPN is on.)
+============================================================

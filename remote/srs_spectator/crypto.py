@@ -1,27 +1,29 @@
-"""AES-256-CTR encryption/decryption for SRS protocol.
+"""AES-192-CTR encryption for SRS protocol.
 
-Uses the hardcoded default key extracted from libcocos2dlua.so.
+Key finding from Frida (2026-06-11):
+- setDefaultAesKey sets hardcoded 32-byte key, then setAesKey overwrites with:
+- AES-192: 24-byte ALL-ZERO key
+- Default IV: 15ff010034ab4cd355fea122084f1307 (16 bytes)
+- transformStr = hex encoding (sprintf("%02x", byte))
 """
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
-DEFAULT_KEY = bytes.fromhex(
-    "f362120513e389ff2311d73601231007"
-    "05a210007acc023c3901da2ecb12448b"
-)  # 32 bytes
+# Frida-confirmed: all-zero 24-byte key
+SRS_KEY = bytes(24)  # 24 bytes of 0x00
 
-DEFAULT_IV = bytes.fromhex(
-    "15ff010034ab4cd355fea122084f1307"
-)  # 16 bytes
+# Default IV from libcocos2dlua.so
+SRS_IV = bytes.fromhex("15ff010034ab4cd355fea122084f1307")
 
 
 class SRSCrypto:
-    """AES-256-CTR encrypt/decrypt for SRS protocol."""
+    """AES-CTR encrypt/decrypt for SRS protocol.
 
-    def __init__(self, key: bytes = DEFAULT_KEY, iv: bytes = DEFAULT_IV):
+    Uses AES-192 (24-byte all-zero key) + hex-encoding transform.
+    """
+
+    def __init__(self, key: bytes = SRS_KEY, iv: bytes = SRS_IV):
         self.key = bytes(key)
         self.iv = bytes(iv)
-        self._encryptor = None
-        self._decryptor = None
         self._reset()
 
     def _reset(self) -> None:
@@ -34,17 +36,26 @@ class SRSCrypto:
 
     def set_key(self, key: bytes) -> None:
         """Set a new AES key (e.g., m_key from RespPlayerPlusData)."""
-        if len(key) not in (16, 24, 32):
-            raise ValueError(f"Invalid key length: {len(key)}")
         self.key = bytes(key)
         self._reset()
 
-    def encrypt(self, data: bytes) -> bytes:
-        return self._encryptor.update(data)
+    def encrypt_payload(self, plaintext: bytes) -> bytes:
+        """Encrypt with AES-CTR directly (for post-handshake, when m_key is set)."""
+        return self._encryptor.update(plaintext)
 
-    def decrypt(self, data: bytes) -> bytes:
-        return self._decryptor.update(data)
+    def decrypt_payload(self, ciphertext: bytes) -> bytes:
+        return self._decryptor.update(ciphertext)
 
-    def encrypt_frame_payload(self, payload: bytes) -> bytes:
-        """Encrypt only the payload portion (msgid=5 PlayerConnect)."""
-        return self.encrypt(payload)
+    def transform_and_encrypt(self, plaintext: bytes) -> bytes:
+        """hex_encode(plaintext) → AES-CTR encrypt.
+
+        This is the encryptStr flow used by GuoPengFei::sendMessage.
+        """
+        hex_encoded = plaintext.hex().encode("ascii")
+        encrypted = self._encryptor.update(hex_encoded)
+        return encrypted
+
+    def decrypt_and_untransform(self, ciphertext: bytes) -> bytes:
+        """AES-CTR decrypt → hex_decode → original bytes."""
+        decrypted = self._decryptor.update(ciphertext)
+        return bytes.fromhex(decrypted.decode("ascii"))

@@ -184,3 +184,74 @@ class SocketMJDecoder:
 ## 7. 双端在线验证
 
 已实测：游戏服务器**允许同一账号同时双端在线**。云端主动客户端连接时不会踢掉游戏机的真实客户端。
+
+---
+
+## 8. SRS 旁观协议（ReqRealtimeGameRecord）
+
+> 来源：`apk_research/decrypted-lua/` 反编译 Lua（2026-06）。完整逆向证据见
+> `.trellis/tasks/06-11-srs-client-finish/research/srs-spectator-protocol.md`。
+> Python 实现：`remote/srs_spectator/`。
+
+### 旁观 msgid 真值表（XY_ID，十进制）
+
+| 消息 | msgid | hex | 证据 |
+|------|-------|-----|------|
+| ReqRealtimeGameRecord  | 3000 | 0x0BB8 | `IMProtocol.lua:73` |
+| RespRealtimeGameRecord | 3001 | 0x0BB9 | `IMProtocol.lua:74` |
+| ReqUnwatch  | 3002 | 0x0BBA | `IMProtocol.lua:75` |
+| RespUnwatch | 3003 | 0x0BBB | `IMProtocol.lua:76` |
+
+> **Gotcha：同名 XY_ID 靠 processid 区分**。IMProtocol 与 MatchLinkProtocol 用**相同**的
+> 3000/3001 数值，靠 `processid` 区分：**IM=100**，**MatchLink=1006**（watch1006 模式）。
+> 旁观 Watch 流程实际走哪套由 `lobby/Modules/Watch/Module.lua` 决定。
+
+> **Common Mistake**：`remote/srs_spectator/spectator.py` 曾用占位猜测值 `0x2F1E/0x2F1D`
+> （来自 `stable/protocol.py` 无依据命名）。真值是十进制 3000/3001，常量定义在 `frame.py`。
+
+### 请求/响应体布局（已与 Lua 核对，wire payload 加密前）
+
+```
+ReqRealtimeGameRecord  payload: struct("<iiii", askid, roomid, offset, before_round)
+                       （仅 roomid 上 wire；gameid 仅客户端本地用）
+RespRealtimeGameRecord header: 32B = struct("<8i", askid, flag, room_id, max_offset,
+                                            current, total, zip, payload_size) + payload
+  - flag==1 (NOT_GOOD) → 数据不完整，丢弃
+  - zip!=1            → 非回放数据，不做 zlib 解压，丢弃（勿塞进分片缓冲）
+  - total==0          → 无回放数据
+  - 分片按 current/total（1-based）合并后再 zlib.decompress
+```
+
+### RespJoinTable（通道B 抓 roomid/gameid 的根基）
+
+```
+RoomProtocol RespJoinTable  msg_type=14（processid=84），S->C
+  payload 偏移：roomid @ +17，gameid @ +21（均 LE int32）
+  证据：RoomProtocol.lua:8,242,268-303
+```
+
+> `remote/extractor/token_extractor.py:_extract_room_from_sc` 按此偏移解析，已实测正确。
+> 注意 `msg_type=14` 在 `frame.py` 里与 SRS 的 `MSG_SRS_ADDR=14` 撞号——靠 processid/方向区分。
+
+### ⛔ Blocker：standalone Python 无法复现 SRS 认证层
+
+与场景B（`remote/relay/game_client.py`）**同一堵墙**。即使填对所有 msgid，纯 Python 客户端
+目前也**发不出一个能被服务端接受的旁观请求**，因为以下三项全在 native `libcocos2dlua.so`：
+
+1. **`identify` 字段** = 设备硬件码经 RC4 加密生成（`SRSProtocol.lua:67` 仅调用，实现在 native）。
+2. **CTR 计数器重置策略**（每条消息 reset 还是整条连接连续流）由 native 决定。
+3. **wire 帧 `sub_type`/`extra` ↔ processid 映射公式**未逆出；relay 现有抓包样本里**没有**旁观帧。
+
+> **要发出有效的 0x0BB8 旁观请求，必须先真机抓一帧 `msg_type=0x0BB8` 的旁观包，读出其
+> `sub_type`/`extra`**。为此 `token_extractor.py` 已内置旁观帧取证捕获（落盘
+> `spectator_forensic.jsonl`，详见 §旁观取证）。`handshake.py` 假设的握手序列
+> EncryptVer(1)/ReqKey(3)/HandshakeRsp(4) 在 Lua 里**根本不存在**——那是 native 握手层
+> msgid，**非** SRSProtocol.lua 定义，纯 Python 不可驱动。这些点在代码里以 `BLOCKER` 注释标注，
+> 不要写假实现糊弄。
+
+### 旁观取证（捕获 native 钥匙）
+
+`token_extractor.py` 对 msgid 3000-3003 双向无条件 dump 完整明文帧头（msg_type/sub_type/
+extra/pay_len/direction）+ payload hex 到 `spectator_forensic.jsonl`；`config.yaml` 的
+`spectator_forensic_all_heads: true` 时额外 dump **每一帧**的帧头（不含 payload，低噪音），
+用于人工逆 `sub_type/extra ↔ processid` 映射。真机操作：**进观战模式跑一局**即可抓到 0x0BB8。

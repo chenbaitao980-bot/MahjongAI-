@@ -55,6 +55,28 @@ def register(relay_url, api_token, handshake_blob, auth_token_12b):
     return success
 
 
+def register_room(relay_url, api_token, room_id, game_id):
+    """
+    向 relay 上报房间信息（通道B：零配置旁观）。
+
+    relay_url: str，如 "http://1.2.3.4:8000"
+    api_token: str，鉴权密钥
+    room_id: int
+    game_id: int
+    返回 True 表示成功
+    """
+    url = relay_url.rstrip("/") + "/register-room"
+    data = {
+        "room_id": room_id,
+        "game_id": game_id,
+        "api_token": api_token,
+    }
+    success, code = _post(url, data)
+    if success:
+        print("[Uploader] 房间信息已上报到 relay (roomid={}, gameid={})".format(room_id, game_id))
+    return success
+
+
 def push(relay_url, api_token, snapshot):
     """
     向 relay 推送当前游戏状态快照。

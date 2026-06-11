@@ -4,3 +4,5 @@ game_server_ip: 47.96.0.227
 game_server_port: 7777
 handshake_blob: ''
 push_timeout: 10
+# srs_spectator 服务地址（通道B），同机部署默认 localhost:8001
+spectator_url: "http://localhost:8001"

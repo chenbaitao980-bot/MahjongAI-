@@ -31,6 +31,10 @@ class StateStore:
         self._on_extractor_online = None    # extractor 恢复时回调
         self._on_extractor_offline = None   # extractor 超时时回调
         self.push_timeout = push_timeout if push_timeout is not None else self.DEFAULT_PUSH_TIMEOUT
+        # Room info for Channel B (srs_spectator)
+        self.room_id: int | None = None
+        self.game_id: int | None = None
+        self.last_room_time: float = 0.0
 
     def on_push(self, snapshot):
         """extractor 推送时调用，更新状态和时间戳"""
@@ -63,6 +67,22 @@ class StateStore:
                 _LOGGER.debug("[模式判断] 距上次推送 %.1fs (> %.1fs) → 离线, use_game_client=%s",
                              elapsed, self.push_timeout, result)
             return result
+
+    def set_room_info(self, room_id: int, game_id: int = 0):
+        """存储房间信息（通道B：热点端 extractor 上报）"""
+        with self._lock:
+            self.room_id = room_id
+            self.game_id = game_id
+            self.last_room_time = time.time()
+
+    def get_room_info(self) -> dict:
+        """获取当前房间信息（供 srs_spectator 查询）"""
+        with self._lock:
+            return {
+                "room_id": self.room_id,
+                "game_id": self.game_id,
+                "last_room_time": self.last_room_time,
+            }
 
     def get_snapshot(self):
         """获取当前最新 snapshot，无数据时返回 idle 状态"""

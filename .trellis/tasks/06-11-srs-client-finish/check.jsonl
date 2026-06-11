@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/game-protocol.md", "reason": "Verify SRS frame format and handshake sequence correctness in implementation"}
+{"file": ".trellis/spec/backend/remote-access.md", "reason": "Verify API contract compliance with relay, credential flow, and config patterns"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Verify logging follows project conventions"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Verify error handling follows project patterns"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Code quality standards to check against"}

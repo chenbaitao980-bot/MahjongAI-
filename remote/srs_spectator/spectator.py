@@ -15,8 +15,9 @@ logger = logging.getLogger(__name__)
 # Protocol message IDs (from IMProtocol.lua / MatchLinkProtocol.lua)
 # These are the XY_ID values for spectator messages
 # We use IMProtocol by default; the server may use MatchLinkProtocol (watch1006 mode)
-SPECTATOR_REQ_MSGID = 0x2F1E   # ReqRealtimeGameRecord (IMProtocol - needs actual ID)
-SPECTATOR_RESP_MSGID = 0x2F1D  # RespRealtimeGameRecord (needs actual ID)
+# XY_ID 在两套协议里完全相同（3000/3001），区分两套靠 frame 的 processid（100 vs 1006）。
+SPECTATOR_REQ_MSGID = 3000   # ReqRealtimeGameRecord, IMProtocol.lua:73 确认值 (0xBB8)
+SPECTATOR_RESP_MSGID = 3001  # RespRealtimeGameRecord, IMProtocol.lua:74 (0xBB9)
 
 
 class SpectatorClient:
@@ -79,6 +80,23 @@ class SpectatorClient:
 
         if askid not in self._fragments:
             logger.debug(f"Ignoring spectator response for unknown askid={askid}")
+            return False
+
+        # flag == FLAG.NOT_GOOD(1) 表示数据不完整，直接丢弃
+        # (IMProtocol.lua:1860-1862, ReqRealtimeGameRecord.lua:65-69)
+        if flag == 1:
+            logger.warning(f"Spectator response flag=NOT_GOOD, data incomplete: askid={askid}")
+            return False
+
+        # zip != 1 不是回放协议（是其他推送），直接丢弃，不进分片缓冲
+        # (ReqRealtimeGameRecord.lua:72 `if msgData.zip ~= 1 then return end`)
+        if zip_flag != 1:
+            logger.debug(f"Spectator response zip={zip_flag} != 1, not replay data, dropping")
+            return False
+
+        # total == 0 表示旁观数据不存在 (ReqRealtimeGameRecord.lua:81-87)
+        if total == 0:
+            logger.warning(f"Spectator response total=0, no replay data: askid={askid}")
             return False
 
         frag = self._fragments[askid]

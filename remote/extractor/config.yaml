@@ -1,3 +1,9 @@
 relay_url: http://127.0.0.1:8000
 api_token: acec67bfa9e518b5906d3e6a
 game_port: 7777
+
+# 旁观帧取证：全量帧头取证开关（默认 true）。
+# true  = 把每一帧的 (dir,msg_type,sub_type,extra,pay_len) 帧头追加到 spectator_forensic.jsonl，
+#         旁观帧 3000-3003 额外带 payload hex。用于人工逆 sub_type/extra ↔ processid 映射。
+# false = 只记录旁观帧 3000-3003，不记录其余帧头（低噪音但可能漏掉 processid 信号线索）。
+spectator_forensic_all_heads: true

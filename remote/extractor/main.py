@@ -90,8 +90,15 @@ class ExtractorApp:
         self._mapping = MappingStore()
         self._tracker = PacketStateTracker(mapping_store=self._mapping)
 
-        # token 提取
-        self._extractor = TokenExtractor(on_registered=self._on_token_registered)
+        # 旁观帧取证开关（默认开启全量帧头取证，用于逆 sub_type/extra ↔ processid 映射）
+        self._capture_all_heads = bool(cfg.get("spectator_forensic_all_heads", True))
+
+        # token 提取 + 旁观帧取证
+        self._extractor = TokenExtractor(
+            on_registered=self._on_token_registered,
+            on_room_info=self._on_room_info,
+            capture_all_heads=self._capture_all_heads,
+        )
 
         # 凭证提取提醒（每 120 秒最多提醒一次）
         self._credential_warn_interval = 120.0
@@ -104,6 +111,19 @@ class ExtractorApp:
         ok = register(self.relay_url, self.api_token, handshake_blob, auth_token_12b)
         if not ok:
             _LOGGER.warning("注册失败，将在下次启动时重试")
+
+    def _on_room_info(self, room_id, game_id):
+        """房间信息提取到时的回调"""
+        _LOGGER.info("提取到房间信息，正在上报 roomid=%d, gameid=%d...", room_id, game_id)
+        try:
+            from remote.extractor.uploader import register_room
+            ok = register_room(self.relay_url, self.api_token, room_id, game_id)
+            if ok:
+                _LOGGER.info("房间信息已上报 relay (roomid=%d, gameid=%d)", room_id, game_id)
+            else:
+                _LOGGER.warning("房间信息上报失败 (roomid=%d, gameid=%d)", room_id, game_id)
+        except Exception as exc:
+            _LOGGER.error("上报房间信息异常: %s", exc)
 
     def _on_packet(self, pkt):
         """每收到一个 TCP 包的回调"""
@@ -170,12 +190,14 @@ class ExtractorApp:
             "仅杀进程或断线重连不会触发 0x0006 认证包——游戏用本地缓存的 token 走 reauth。"
             "此操作只需一次，凭证持久化到 relay 后即可断热点自动接管。"
         )
+        _LOGGER.info("旁观帧取证落盘: %s", self._extractor.forensic_path)
         try:
             self._capture.run(self._on_packet)
         except KeyboardInterrupt:
             _LOGGER.info("用户中断，退出")
         finally:
             self._capture.stop()
+            self._extractor.close()
 
 
 def main():

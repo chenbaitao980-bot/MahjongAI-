@@ -17,7 +17,7 @@ from .frame import (
     pack_frame, unpack_frame, read_frame_from_stream,
     MSG_ENCRYPT_VER, MSG_REQ_KEY, MSG_HANDSHAKE_RSP,
     MSG_PLAYER_CONNECT, MSG_PLAYER_DATA, MSG_REQ_PLUS_DATA,
-    MSG_RESP_PLUS_DATA, MSG_NAMES,
+    MSG_RESP_PLUS_DATA, MSG_SPECTATOR_RESP, MSG_NAMES,
 )
 from .crypto import SRSCrypto
 from .handshake import (
@@ -156,7 +156,10 @@ class SRSClient:
         elif msg_type == MSG_HANDSHAKE_RSP:
             # Received handshake_rsp (25B nonce) → send PlayerConnect
             logger.debug("→ PlayerConnect (msgid=5)")
-            identify = "test_device_001"  # TODO: use real identify from config
+            # ⚠️ BLOCKER: 真实 identify 是设备硬件指纹经 RC4 加密后的串（SRSProtocol.lua:67
+            # "硬件识别码(RC4加密)"），由 native libcocos2dlua.so 生成，standalone Python
+            # 无法复现。须真机抓取或 Frida 桥接拿到真实 identify。此处为占位假值，连不上真服。
+            identify = "test_device_001"
             pc_frame = build_player_connect(
                 userid="",
                 sessionid=self.auth_token[:16],
@@ -193,7 +196,7 @@ class SRSClient:
                 self._on_handshake_done()
 
         # Spectator protocol handling
-        elif self._spectator and msg_type == 0x2F1D:
+        elif self._spectator and msg_type == MSG_SPECTATOR_RESP:
             self._spectator.handle_response(payload)
 
         # Forward to user callback

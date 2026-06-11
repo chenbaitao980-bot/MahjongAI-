@@ -216,6 +216,12 @@ class PushRequest(BaseModel):
     api_token: str
 
 
+class RegisterRoomRequest(BaseModel):
+    room_id: int
+    game_id: int = 0
+    api_token: str
+
+
 # ─── 内部辅助 ──────────────────────────────────────────────────
 
 
@@ -384,6 +390,33 @@ async def push(req: PushRequest):
     return {"status": "ok"}
 
 
+@app.post("/register-room")
+async def register_room(req: RegisterRoomRequest):
+    """
+    接收热点端 extractor 上传的 roomid/gameid（通道B）。
+    存储到内存，供 srs_spectator 服务拉取。
+    """
+    _check_api_token(req.api_token)
+
+    _state_store.set_room_info(req.room_id, req.game_id)
+    _LOGGER.info("[通道B] 注册房间: room_id=%d, game_id=%d", req.room_id, req.game_id)
+
+    # 尝试通知 srs_spectator 服务
+    _notify_spectator(req.room_id, req.game_id)
+
+    return {"status": "ok", "message": "房间已注册", "room_id": req.room_id, "game_id": req.game_id}
+
+
+@app.get("/watch-info")
+async def get_watch_info(token: str = Query(..., description="鉴权 token")):
+    """
+    返回当前需要旁观的房间信息（供 srs_spectator 轮询）。
+    """
+    _check_api_token(token)
+    info = _state_store.get_room_info()
+    return info
+
+
 @app.get("/state")
 async def get_state(token: str = Query(..., description="鉴权 token")):
     """
@@ -404,6 +437,46 @@ async def get_state(token: str = Query(..., description="鉴权 token")):
     return snapshot
 
 
+# ─── 旁观通知（通道B）────────────────────────────────────────
+
+# srs_spectator 服务地址（同机部署默认 localhost:8001）
+_SPECTATOR_URL = ""
+
+
+def _set_spectator_url(url: str):
+    """设置 srs_spectator 服务地址"""
+    global _SPECTATOR_URL
+    _SPECTATOR_URL = url.rstrip("/") if url else ""
+
+
+def _notify_spectator(room_id: int, game_id: int):
+    """通知 srs_spectator 服务开始旁观（异步，不阻塞）"""
+    global _SPECTATOR_URL
+    if not _SPECTATOR_URL:
+        _SPECTATOR_URL = _cfg.get("spectator_url", "http://localhost:8001")
+    if not _SPECTATOR_URL:
+        return
+
+    def _do_notify():
+        try:
+            api_token = _cfg.get("api_token", "")
+            resp = requests.post(
+                f"{_SPECTATOR_URL}/watch",
+                # srs_spectator WatchRequest 期望 roomid/gameid（main.py:49-53），
+                # 字段名必须与该契约一致，否则 FastAPI 返回 422。
+                json={"roomid": room_id, "gameid": game_id, "api_token": api_token},
+                timeout=5,
+            )
+            if resp.status_code == 200:
+                _LOGGER.info("[通道B] 已通知 srs_spectator: room_id=%d, game_id=%d", room_id, game_id)
+            else:
+                _LOGGER.warning("[通道B] srs_spectator 通知失败: %d %s", resp.status_code, resp.text)
+        except Exception as e:
+            _LOGGER.debug("[通道B] srs_spectator 通知异常: %s", e)
+
+    threading.Thread(target=_do_notify, daemon=True).start()
+
+
 # ─── 应用配置注入（由 main.py 调用）──────────────────────────
 
 
@@ -417,3 +490,8 @@ def configure(cfg: dict, cfg_path: str = ""):
     push_timeout = float(cfg.get("push_timeout", 10.0))
     _state_store.push_timeout = push_timeout
     _LOGGER.info("push_timeout=%.1fs (超过此时间无 /push 即启动 GameClient)", push_timeout)
+    # 设置 srs_spectator 地址
+    spec_url = cfg.get("spectator_url", "http://localhost:8001")
+    if spec_url:
+        _set_spectator_url(spec_url)
+        _LOGGER.info("srs_spectator URL: %s", spec_url)

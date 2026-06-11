@@ -151,8 +151,14 @@ def _suite_token_extractor():
             log.info("[SKIP] %s.%s", suite, name)
         return
 
-    # fake ProtocolMessage
-    FakeMsg = namedtuple("FakeMsg", ["msg_type", "sub_type", "direction", "raw_hex", "pay_len"])
+    # fake ProtocolMessage —— 字段须与真实 stable.protocol.ProtocolMessage 对齐，
+    # 否则旁路取证（SpectatorForensicLogger）读 extra/ts 会与生产接口脱节。
+    # 真实 ProtocolMessage 有 extra(4字节hex字符串) 和 ts(字符串) 两个字段。
+    FakeMsg = namedtuple(
+        "FakeMsg",
+        ["msg_type", "sub_type", "direction", "raw_hex", "pay_len", "extra", "ts"],
+        defaults=["00000000", "0.0"],  # extra / ts 默认值，与真实接口语义一致
+    )
 
     def _make_hex(header_bytes: bytes, payload: bytes) -> str:
         return (header_bytes + payload).hex()

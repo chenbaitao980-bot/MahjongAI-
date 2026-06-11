@@ -52,15 +52,26 @@ def read_frame_from_stream(buf: bytearray) -> tuple:
 
 
 # Known SRS message types
-MSG_ENCRYPT_VER = 1     # EncryptVer handshake
-MSG_REQ_KEY = 3         # ReqKey / heartbeat_req
-MSG_HANDSHAKE_RSP = 4   # RespKey / handshake_rsp
-MSG_PLAYER_CONNECT = 5  # PlayerConnect (auth)
-MSG_PLAYER_DATA = 6     # PlayerData (auth result)
-MSG_SRS_LOAD = 10       # ReqSRSLoad
-MSG_SRS_ADDR = 14       # ReqSRSAddr
-MSG_REQ_PLUS_DATA = 23  # ReqPlayerPlusData
-MSG_RESP_PLUS_DATA = 24 # RespPlayerPlusData
+# ⚠️ BLOCKER: 以下三个是 native C++ 加密协商层 (un.network.TcpConnection) 的 msgid，
+# 在 SRSProtocol.lua 里查无此物（无 XY_ID=1/3/4），是 Python 侧为 native 握手起的名字。
+# native 握手（EncryptVer→ReqKey→HandshakeRsp、CTR/transformStr、m_key 协商）
+# 全在 libcocos2dlua.so 中实现，纯 Python 无法驱动（见 research §握手 / §0）。
+MSG_ENCRYPT_VER = 1     # native 握手层 msgid，非 SRSProtocol.lua XY_ID
+MSG_REQ_KEY = 3         # native 握手层 msgid，非 SRSProtocol.lua XY_ID
+MSG_HANDSHAKE_RSP = 4   # native 握手层 msgid，非 SRSProtocol.lua XY_ID
+MSG_PLAYER_CONNECT = 5  # PlayerConnect (auth), SRSProtocol.lua:5
+MSG_PLAYER_DATA = 6     # PlayerData (auth result), SRSProtocol.lua:6
+MSG_SRS_LOAD = 10       # ReqSRSLoad, SRSProtocol.lua:9
+MSG_SRS_ADDR = 14       # ReqSRSAddr, SRSProtocol.lua:12（与 RoomProtocol RespJoinTable=14 撞号，靠 processid 区分）
+MSG_REQ_PLUS_DATA = 23  # ReqPlayerPlusData, SRSProtocol.lua:16
+MSG_RESP_PLUS_DATA = 24 # RespPlayerPlusData, SRSProtocol.lua:17
+
+# Spectator message types (IMProtocol.lua:73-76 / MatchLinkProtocol.lua:3-6)
+# XY_ID 两套协议相同；区分 IMProtocol(processid=100) vs MatchLinkProtocol(processid=1006) 靠 frame processid。
+MSG_SPECTATOR_REQ = 3000    # ReqRealtimeGameRecord (0xBB8)
+MSG_SPECTATOR_RESP = 3001   # RespRealtimeGameRecord (0xBB9)
+MSG_UNWATCH_REQ = 3002      # ReqUnwatchRealtimeGameRecord (0xBBA)
+MSG_UNWATCH_RESP = 3003     # RespUnwatchRealtimeGameRecord (0xBBB)
 
 MSG_NAMES = {
     MSG_ENCRYPT_VER: "EncryptVer",
@@ -72,4 +83,8 @@ MSG_NAMES = {
     MSG_SRS_ADDR: "SRSAddr",
     MSG_REQ_PLUS_DATA: "ReqPlayerPlusData",
     MSG_RESP_PLUS_DATA: "RespPlayerPlusData",
+    MSG_SPECTATOR_REQ: "ReqRealtimeGameRecord",
+    MSG_SPECTATOR_RESP: "RespRealtimeGameRecord",
+    MSG_UNWATCH_REQ: "ReqUnwatchRealtimeGameRecord",
+    MSG_UNWATCH_RESP: "RespUnwatchRealtimeGameRecord",
 }

@@ -233,25 +233,51 @@ RoomProtocol RespJoinTable  msg_type=14（processid=84），S->C
 > `remote/extractor/token_extractor.py:_extract_room_from_sc` 按此偏移解析，已实测正确。
 > 注意 `msg_type=14` 在 `frame.py` 里与 SRS 的 `MSG_SRS_ADDR=14` 撞号——靠 processid/方向区分。
 
-### ⛔ Blocker：standalone Python 无法复现 SRS 认证层
+### 两个目标要分清：被动解密（可行）vs 主动连接（不必要）
 
-与场景B（`remote/relay/game_client.py`）**同一堵墙**。即使填对所有 msgid，纯 Python 客户端
-目前也**发不出一个能被服务端接受的旁观请求**，因为以下三项全在 native `libcocos2dlua.so`：
+| 目标 | 需要什么 | 状态 |
+|------|---------|------|
+| **被动解密**：嗅热点流量 → 解密 → 读数据（用户真正要的） | 只需 **AES key**（见 §9） | ✅ **key 已逆出**，差一条真实样本闭环 |
+| **主动连接**：云端纯 Python 当旁观者连服务器 | identify(RC4) + sub_type/extra↔processid 映射 + 反篡改 | ⛔ 仍卡 native，**且没必要** |
 
-1. **`identify` 字段** = 设备硬件码经 RC4 加密生成（`SRSProtocol.lua:67` 仅调用，实现在 native）。
-2. **CTR 计数器重置策略**（每条消息 reset 还是整条连接连续流）由 native 决定。
-3. **wire 帧 `sub_type`/`extra` ↔ processid 映射公式**未逆出；relay 现有抓包样本里**没有**旁观帧。
+> **历史教训（2026-06，本会话曾误判）**：一度以为"纯 Python 无法复现 SRS 认证层、与场景B 同墙、
+> key 拿不到"——**错**。把"主动连接"的难点错套到了"被动解密"上。被动解密**根本不需要** identify /
+> sub_type 映射 / 反篡改 bypass，只需 AES key，而 key 是**静态可逆 + 线缆可读**的（§9）。
 
-> **要发出有效的 0x0BB8 旁观请求，必须先真机抓一帧 `msg_type=0x0BB8` 的旁观包，读出其
-> `sub_type`/`extra`**。为此 `token_extractor.py` 已内置旁观帧取证捕获（落盘
-> `spectator_forensic.jsonl`，详见 §旁观取证）。`handshake.py` 假设的握手序列
-> EncryptVer(1)/ReqKey(3)/HandshakeRsp(4) 在 Lua 里**根本不存在**——那是 native 握手层
-> msgid，**非** SRSProtocol.lua 定义，纯 Python 不可驱动。这些点在代码里以 `BLOCKER` 注释标注，
-> 不要写假实现糊弄。
+主动连接路（若将来真要）才卡这三项 native：`identify`=设备硬件码经 RC4（`SRSProtocol.lua:67` 仅调用）；
+wire 帧 `sub_type`/`extra`↔processid 映射未逆出；`handshake.py` 假设的 EncryptVer(1)/ReqKey(3)/
+HandshakeRsp(4) 握手序列在 Lua 里不存在（native 层 msgid）。这些**仅主动连接需要**，被动读牌不碰。
 
-### 旁观取证（捕获 native 钥匙）
+### 旁观帧取证（仅"主动连接"路才需要）
 
-`token_extractor.py` 对 msgid 3000-3003 双向无条件 dump 完整明文帧头（msg_type/sub_type/
-extra/pay_len/direction）+ payload hex 到 `spectator_forensic.jsonl`；`config.yaml` 的
-`spectator_forensic_all_heads: true` 时额外 dump **每一帧**的帧头（不含 payload，低噪音），
-用于人工逆 `sub_type/extra ↔ processid` 映射。真机操作：**进观战模式跑一局**即可抓到 0x0BB8。
+`token_extractor.py` 对 msgid 3000-3003 双向 dump 完整明文帧头（msg_type/sub_type/extra/
+pay_len/direction）+ payload hex 到 `spectator_forensic.jsonl`；`config.yaml`
+`spectator_forensic_all_heads: true` 时额外 dump 每一帧帧头（不含 payload）。**仅当将来要走
+"主动连接"路、需要逆 `sub_type/extra↔processid` 映射时才用**；被动解密读牌不需要它。
+
+---
+
+## 9. SRS 加密（AES-256-CFB128）— key 已逆出
+
+> 来源：`apk_research/native/libcocos2dlua.so` 反汇编（符号未 strip）。完整证据见
+> `.trellis/tasks/06-11-srs-client-finish/research/srs-key-derivation.md`。
+> Python 实现：`remote/srs_spectator/crypto.py` + 验证工具 `decrypt_validate.py`。
+
+| 项 | 真值 | 证据 |
+|----|------|------|
+| **模式** | **AES-CFB128**（OpenSSL `AES_cfb128_encrypt`，**不是 CTR**） | `encrypt` 内 GOT 重定位 |
+| **默认 key** | 32B AES-256 `f362120513e389ff2311d73601231007 05a210007acc023c3901da2ecb12448b` | `setDefaultAesKey` @.rodata 0x11f660c，写 len=0x20 |
+| **IV** | 固定 `15ff010034ab4cd355fea122084f1307` | @0x11f662c |
+| **会话 key** | 服务端 `RespKey` 报文直接下发：payload = `len`(1B) + `key`(len B)，`onRespKey` **原样拷给** `setAesKey` 覆盖默认 key，**无 KDF/XOR/变换** | `onRespKey` 反汇编 `ldrb len`+`add key ptr`→`setAesKey` |
+
+> **Common Mistake（本会话踩过）**：Frida hook `setAesKey` 在打了 gadget 的 APK 上读到"24字节全零
+> key"——**假的**，是反篡改库（libapkpatch/libpanglearmor）检测改包后把 crypto 清零的结果。真 key
+> 一直静态躺在 .so 里。**别用动态 hook 的全零值，用静态默认 key + 线缆上的 RespKey 会话 key。**
+
+**被动解密链路**：嗅热点 → 初始帧用默认 key（CFB128, IV 15ff…）解 → 找到 `RespKey` 读出会话 key →
+`set_key(会话key)` → 后续业务帧用会话 key 解。无需 root / 反篡改 bypass / identify。
+
+**两个待真实样本敲定的点**（静态到顶）：① `RespKey` 在线缆字节里的精确 offset（C++ 模板序列化吞了
+布局）；② `transformStr`(hex 编码) 作用在 AES **之前还是之后**（`encrypt` 体内不调 transformStr，二者独立）。
+抓一条 RespKey + 紧随的已知明文密文，喂 `decrypt_validate.py`（它自动试 hex-before/after × 默认/会话
+key 各组合，命中 0x4001 帧头即判对），三点齐即闭环。

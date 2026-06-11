@@ -113,12 +113,16 @@ class GameClient:
     async def _run_once(self):
         """单次连接生命周期"""
         _LOGGER.info("连接游戏服务器 %s:%d", self.server_ip, self.server_port)
+        _conn_started = time.monotonic()
         reader, writer = await asyncio.open_connection(self.server_ip, self.server_port)
 
         # 初始化协议解码器和状态追踪
         decoder = SocketMJDecoder()
         mapping = MappingStore()
         tracker = PacketStateTracker(mapping_store=mapping)
+
+        # 认证标志：只发一次 0x0006（提到 try 外，finally 里也能读到）
+        auth_sent = False
 
         try:
             # 阶段1：发送初始化包 0x000F x2
@@ -134,8 +138,6 @@ class GameClient:
             writer.write(build_frame(0x0003, _HEARTBEAT_REQ_PAYLOAD, sub_type=0x047b, extra=b"\x38\x56\x4c\x05"))
             await writer.drain()
 
-            # 认证标志：只发一次 0x0006
-            auth_sent = False
             last_heartbeat = time.monotonic()
 
             # 主收包循环
@@ -154,7 +156,9 @@ class GameClient:
                 except asyncio.TimeoutError:
                     continue
                 if not chunk:
-                    _LOGGER.info("服务器关闭连接")
+                    _elapsed = time.monotonic() - _conn_started
+                    _LOGGER.info("服务器关闭连接，本次存活 %.1f 秒，auth_sent=%s",
+                                 _elapsed, auth_sent)
                     break
 
                 msgs = decoder.feed(chunk, direction="S->C")
@@ -189,6 +193,9 @@ class GameClient:
                 await writer.wait_closed()
             except Exception:
                 pass
+            _elapsed = time.monotonic() - _conn_started
+            _LOGGER.info("连接结束，本次存活 %.1f 秒", _elapsed)
+            _LOGGER.info("断开时 auth_sent=%s", auth_sent)
             _LOGGER.info("与游戏服务器连接已关闭")
 
     async def _send_auth(self, writer):

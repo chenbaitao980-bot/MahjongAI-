@@ -30,11 +30,37 @@ from capture import create_capture
 from token_extractor import TokenExtractor
 from uploader import register, push
 
+_LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    format=_LOG_FORMAT,
 )
+
+# 额外挂文件日志 handler，便于事后取证（console 是独立黑窗口，存不下）
+_LOG_FILE = os.path.join(os.path.dirname(__file__), "extractor.log")
+
+
+def _attach_file_handler():
+    root = logging.getLogger()
+    # 避免重复添加（模块可能被多次导入）
+    for h in root.handlers:
+        if isinstance(h, logging.FileHandler) and \
+                getattr(h, "baseFilename", None) == os.path.abspath(_LOG_FILE):
+            return
+    file_handler = logging.FileHandler(_LOG_FILE, mode="a", encoding="utf-8")
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(logging.Formatter(_LOG_FORMAT))
+    root.addHandler(file_handler)
+
+
+_attach_file_handler()
+
 _LOGGER = logging.getLogger("remote.extractor")
+# 双向控制帧取证日志（propagate 到 root，自动进 extractor.log）
+_FORENSIC = logging.getLogger("remote.extractor.frames")
+
+# 取证日志排除的高频帧：游戏事件主帧 + keepalive 空帧
+_FORENSIC_SKIP_MSG_TYPES = frozenset((0x2BC0, 0x0002))
 
 
 def load_config(path):
@@ -83,6 +109,17 @@ class ExtractorApp:
             return
 
         for msg in messages:
+            # 双向控制帧取证（排除高频游戏数据/keepalive 帧）
+            if msg.msg_type not in _FORENSIC_SKIP_MSG_TYPES:
+                payload = bytes.fromhex(msg.raw_hex)[12:] if msg.raw_hex else b""
+                seen = len(payload)
+                trunc = " [TRUNCATED]" if seen < msg.pay_len else ""
+                _FORENSIC.info(
+                    "dir=%s msg_type=0x%04x sub_type=0x%04x pay_len=%d seen=%d payload=%s%s",
+                    msg.direction, msg.msg_type, msg.sub_type, msg.pay_len,
+                    seen, payload.hex(), trunc,
+                )
+
             # 向 token 提取器喂消息
             self._extractor.feed(msg)
 

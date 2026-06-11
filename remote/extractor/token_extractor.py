@@ -6,6 +6,7 @@ token_extractor.py — 从协议流中提取认证凭证
 - msg_type == 0x0006 且 len(payload)==16 → 提取 auth_token_12b（payload[4:16]，只取第一个）
 两个都提取到后，通过 on_registered 回调通知调用方
 """
+import logging
 import os
 import sys
 
@@ -14,6 +15,8 @@ if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
 from stable.protocol import MJProtocol, GAME_SERVER_PORT
+
+_LOGGER = logging.getLogger("remote.extractor.token")
 
 
 class TokenExtractor:
@@ -34,6 +37,7 @@ class TokenExtractor:
         self._handshake_blob = None   # bytes
         self._auth_token_12b = None   # bytes
         self._registered = False
+        self._seen_init = False       # 是否已见过 C->S 0x000F（init 包）
         self._on_registered = on_registered
 
     @property
@@ -58,6 +62,23 @@ class TokenExtractor:
         if message.direction != "C->S":
             return
 
+        # 取证日志：无条件记录 C->S 的 0x0001/0x0006/0x000F，
+        # 即使已注册也继续打印（方便看后续还有没有更大的 0x0001 出现）
+        if message.msg_type in (0x0001, 0x0006, 0x000F):
+            _forensic_payload = bytes.fromhex(message.raw_hex)[12:] if message.raw_hex else b""
+            _LOGGER.info(
+                "msg_type=0x%04x sub_type=0x%04x pay_len=%d raw_payload_len=%d head16=%s",
+                message.msg_type,
+                message.sub_type,
+                message.pay_len,
+                len(_forensic_payload),
+                _forensic_payload[:16].hex(),
+            )
+
+        # 标记：已见过 C->S 0x000F（init 包）
+        if message.msg_type == 0x000F:
+            self._seen_init = True
+
         # 已注册则不再重复提取
         if self._registered:
             return
@@ -68,16 +89,18 @@ class TokenExtractor:
         # 对于短帧（<=84字节 payload）raw_hex 足够
         pay_len = message.pay_len
 
-        if message.msg_type == 0x0001 and self._handshake_blob is None:
-            # 提取 handshake_blob：C->S 0x0001 的 payload
+        if (message.msg_type == 0x0001 and self._handshake_blob is None
+                and (self._seen_init or message.sub_type == 0x047b)):
+            # 提取 handshake_blob：必须是"已见过 C->S 0x000F 之后"出现的 0x0001
+            # （或 sub_type==0x047b 无条件优先采纳），跳过 0x000F 之前的杂包
             if len(payload) >= pay_len:
                 self._handshake_blob = payload[:pay_len]
             elif len(payload) > 0:
                 # raw_hex 截断时取已有部分（最多84字节）
                 self._handshake_blob = payload
             if self._handshake_blob:
-                print("[TokenExtractor] 已提取 handshake_blob: {} bytes".format(
-                    len(self._handshake_blob)))
+                print("[TokenExtractor] 已提取 handshake_blob: {} bytes (sub_type=0x{:04x})".format(
+                    len(self._handshake_blob), message.sub_type))
 
         elif message.msg_type == 0x0006 and self._auth_token_12b is None:
             # 提取 auth_token_12b：C->S 0x0006 payload 的 bytes 4-15（需要 payload 完整16字节）

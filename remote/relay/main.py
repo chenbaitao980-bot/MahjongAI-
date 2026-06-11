@@ -21,10 +21,32 @@ if _ROOT not in sys.path:
 
 import yaml
 
+_LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    format=_LOG_FORMAT,
 )
+
+# 额外挂文件日志 handler，便于事后诊断 GameClient 连接问题
+# （console 是独立黑窗口，用户看不到也存不下）
+_LOG_FILE = os.path.join(os.path.dirname(__file__), "relay.log")
+
+
+def _attach_file_handler():
+    root = logging.getLogger()
+    # 避免重复添加（模块可能被多次导入 / uvicorn reload）
+    for h in root.handlers:
+        if isinstance(h, logging.FileHandler) and \
+                getattr(h, "baseFilename", None) == os.path.abspath(_LOG_FILE):
+            return
+    file_handler = logging.FileHandler(_LOG_FILE, mode="a", encoding="utf-8")
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(logging.Formatter(_LOG_FORMAT))
+    root.addHandler(file_handler)
+
+
+_attach_file_handler()
+
 _LOGGER = logging.getLogger("remote.relay")
 
 # 加载配置并注入到 app 模块

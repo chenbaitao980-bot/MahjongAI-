@@ -1,0 +1,7 @@
+{"file": ".trellis/tasks/06-11-zero-touch-vpn/prd.md", "reason": "PRD with final scope: reverse engineer SRS auth in libcocos2dlua.so → standalone Python client using spectator protocol"}
+{"file": ".trellis/spec/backend/remote-access.md", "reason": "Core spec for remote access architecture, API contracts, extractor/relay patterns"}
+{"file": ".trellis/tasks/06-11-zero-touch-vpn/research/native-srs-reverse-final.md", "reason": "Static reverse engineering report: AES-256-CTR confirmed, default key/IV extracted, frame format (Packer32 8B header), SRS handshake 4-step flow, ZhouLuJun container layout"}
+{"file": ".trellis/tasks/06-11-zero-touch-vpn/research/android-alt-routing.md", "reason": "Exhaustive research confirming all non-VPN routing approaches are dead ends"}
+{"file": ".trellis/tasks/06-11-zero-touch-vpn/research/creative-data-paths.md", "reason": "12 creative approaches analyzed; spectator protocol identified as viable path"}
+{"file": ".trellis/tasks/06-11-zero-touch-vpn/research/cloud-emulator-extraction.md", "reason": "Cloud emulator approach ruled out (cost, ban risk, latency)"}
+{"file": ".trellis/tasks/06-11-zero-touch-vpn/research/screen-based-extraction.md", "reason": "Screen capture approach ruled out (per-session dialog, sub-100% accuracy)"}

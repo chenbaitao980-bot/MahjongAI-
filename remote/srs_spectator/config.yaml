@@ -1,0 +1,12 @@
+# srs_spectator 配置
+# 部署后填入真实值（不提交到仓库）
+
+# relay 地址（用于推送 snapshot）
+relay_url: "http://localhost:8000"
+
+# api_token（与 relay config.yaml 一致）
+api_token: "your-secret-token"
+
+# 游戏服务器连接信息
+game_server_ip: "47.96.0.227"
+game_server_port: 7777

@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/remote-access.md", "reason": "verify remote deployment behavior and documented topology"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "check config/package/deploy docs stay consistent"}

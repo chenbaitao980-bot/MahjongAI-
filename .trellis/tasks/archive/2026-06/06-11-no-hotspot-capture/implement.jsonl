@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/game-protocol.md", "reason": "protocol constraints: passive sniffing is the viable path"}
+{"file": ".trellis/spec/backend/remote-access.md", "reason": "remote extractor/relay architecture and deployment contract"}

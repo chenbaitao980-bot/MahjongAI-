@@ -12,10 +12,14 @@ import asyncio
 import logging
 import os
 import sys
+import threading
+import time
 
 _ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
+
+import yaml
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse
@@ -33,6 +37,7 @@ _INDEX_HTML_PATH = os.path.join(_STATIC_DIR, "index.html")
 
 # 由 main.py 在启动时注入
 _cfg = {}           # relay 配置字典
+_cfg_path = ""      # 配置文件路径（用于凭证持久化）
 _state_store = StateStore()
 _game_client = None  # GameClient 实例（懒启动）
 
@@ -83,42 +88,58 @@ def _ensure_game_client_running():
     """
     global _game_client
 
-    if not _state_store.should_use_game_client():
-        return  # extractor 在线，不需要 GameClient
-
+    use_gc = _state_store.should_use_game_client()
     handshake_hex = _cfg.get("handshake_blob", "")
     auth_hex = _cfg.get("auth_token_12b", "")
+    last_push = _state_store.last_push_time
+
+    if not use_gc:
+        _LOGGER.debug("[模式] extractor 在线 (last_push=%.1fs前), 不需要 GameClient",
+                      time.time() - last_push if last_push else float('inf'))
+        return  # extractor 在线，不需要 GameClient
+
     if not handshake_hex or not auth_hex:
-        _LOGGER.debug("extractor 离线但无凭证（handshake_blob/auth_token_12b 为空），跳过 GameClient 启动")
+        _LOGGER.info("[模式] extractor 离线 (last_push=%s), 但无凭证 (handshake=%s bytes, auth=%s bytes), 跳过 GameClient",
+                     "从未推送" if last_push == 0.0 else f"{time.time() - last_push:.1f}s前",
+                     len(handshake_hex) // 2 if handshake_hex else 0,
+                     len(auth_hex) // 2 if auth_hex else 0)
         return  # 没有凭证，无法连接
 
     if _game_client is not None and not _game_client._running:
+        _LOGGER.info("[模式] 旧 GameClient 已停止，准备重建")
         _game_client = None  # 旧客户端已停止，重建
 
-    if _game_client is None:
-        try:
-            handshake_blob = bytes.fromhex(handshake_hex)
-            auth_token_12b = bytes.fromhex(auth_hex)
-        except ValueError:
-            _LOGGER.error("凭证 hex 格式错误，无法启动 GameClient")
-            return
+    if _game_client is not None:
+        _LOGGER.debug("[模式] GameClient 已在运行中, running=%s", _game_client._running)
+        return
 
-        server_ip = _cfg.get("game_server_ip", "47.96.0.227")
-        server_port = int(_cfg.get("game_server_port", 7777))
+    _LOGGER.info("[模式] extractor 离线 (last_push=%s), 有凭证 (handshake=%d bytes, auth=%d bytes), 启动 GameClient",
+                 "从未推送" if last_push == 0.0 else f"{time.time() - last_push:.1f}s前",
+                 len(handshake_hex) // 2, len(auth_hex) // 2)
 
-        _game_client = GameClient(
-            server_ip=server_ip,
-            server_port=server_port,
-            handshake_blob=handshake_blob,
-            auth_token_12b=auth_token_12b,
-            state_store=_state_store,
-        )
-        try:
-            loop = asyncio.get_event_loop()
-            _game_client.start(loop=loop)
-            _LOGGER.info("GameClient 已启动（场景B：extractor 离线）")
-        except RuntimeError:
-            _LOGGER.warning("无法获取事件循环，GameClient 未启动")
+    try:
+        handshake_blob = bytes.fromhex(handshake_hex)
+        auth_token_12b = bytes.fromhex(auth_hex)
+    except ValueError:
+        _LOGGER.error("[模式] 凭证 hex 格式错误，无法启动 GameClient")
+        return
+
+    server_ip = _cfg.get("game_server_ip", "47.96.0.227")
+    server_port = int(_cfg.get("game_server_port", 7777))
+
+    _game_client = GameClient(
+        server_ip=server_ip,
+        server_port=server_port,
+        handshake_blob=handshake_blob,
+        auth_token_12b=auth_token_12b,
+        state_store=_state_store,
+    )
+    try:
+        loop = asyncio.get_event_loop()
+        _game_client.start(loop=loop)
+        _LOGGER.info("[模式] GameClient 已启动（场景B：extractor 离线）→ 连接 %s:%d", server_ip, server_port)
+    except RuntimeError:
+        _LOGGER.warning("[模式] 无法获取事件循环，GameClient 未启动")
 
 
 def _stop_game_client():
@@ -127,7 +148,33 @@ def _stop_game_client():
     if _game_client is not None:
         _game_client.stop()
         _game_client = None
-        _LOGGER.info("GameClient 已停止（extractor 上线，切换到被动模式）")
+        _LOGGER.info("[模式] GameClient 已停止（extractor 上线，切换到被动模式）")
+
+
+def _persist_credentials(handshake_hex: str, auth_hex: str):
+    """将凭证持久化到 config.yaml，relay 重启后仍可用"""
+    global _cfg_path
+    if not _cfg_path:
+        _LOGGER.warning("[持久化] 未设置配置文件路径，无法持久化凭证")
+        return
+    try:
+        # 读取当前配置文件
+        cfg_on_disk = {}
+        if os.path.isfile(_cfg_path):
+            with open(_cfg_path, "r", encoding="utf-8") as f:
+                cfg_on_disk = yaml.safe_load(f) or {}
+
+        # 只更新凭证字段
+        cfg_on_disk["handshake_blob"] = handshake_hex
+        cfg_on_disk["auth_token_12b"] = auth_hex
+
+        # 写回
+        with open(_cfg_path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(cfg_on_disk, f, allow_unicode=True, default_flow_style=False)
+
+        _LOGGER.info("[持久化] 凭证已写入 %s", _cfg_path)
+    except Exception as exc:
+        _LOGGER.error("[持久化] 写入凭证失败: %s", exc)
 
 
 # ─── 端点 ──────────────────────────────────────────────────────
@@ -136,7 +183,7 @@ def _stop_game_client():
 @app.post("/register")
 async def register(req: RegisterRequest):
     """
-    接收 extractor 上传的认证凭证，存入内存配置，触发 GameClient 启动。
+    接收 extractor 上传的认证凭证，存入内存配置，持久化到 config.yaml，触发 GameClient 启动。
     """
     _check_api_token(req.api_token)
 
@@ -149,8 +196,12 @@ async def register(req: RegisterRequest):
 
     _cfg["handshake_blob"] = req.handshake_blob
     _cfg["auth_token_12b"] = req.auth_token_12b
-    _LOGGER.info("已注册凭证: handshake_blob=%d bytes, auth_token_12b=%d bytes",
-                 len(req.handshake_blob) // 2, len(req.auth_token_12b) // 2)
+    _LOGGER.info("已注册凭证: handshake_blob=%d bytes(%s...), auth_token_12b=%d bytes(%s...)",
+                 len(req.handshake_blob) // 2, req.handshake_blob[:8],
+                 len(req.auth_token_12b) // 2, req.auth_token_12b[:8])
+
+    # 持久化凭证到 config.yaml
+    _persist_credentials(req.handshake_blob, req.auth_token_12b)
 
     # 凭证更新后重启 GameClient
     _stop_game_client()
@@ -194,7 +245,9 @@ async def get_state(token: str = Query(..., description="鉴权 token")):
 # ─── 应用配置注入（由 main.py 调用）──────────────────────────
 
 
-def configure(cfg: dict):
+def configure(cfg: dict, cfg_path: str = ""):
     """注入配置，由 main.py 在启动时调用"""
-    global _cfg
+    global _cfg, _cfg_path
     _cfg.update(cfg)
+    if cfg_path:
+        _cfg_path = cfg_path

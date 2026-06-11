@@ -66,6 +66,15 @@ S->C  0x0004  handshake_rsp  (服务端确认，14B protobuf)
 
 > **Gotcha**：认证触发时机由服务端决定（连接后数十秒到数分钟不等），客户端不能主动触发，只能在维持 keepalive 循环的过程中等待服务端发来 0x0004。当收到 0x0004 响应时即可认为认证完成。实现上可以在建立连接后立即发送 0x0003 + 0x0006，服务端会在合适时机响应 0x0004。
 
+> **Common Mistake: 等待 S→C 0x0006 做触发信号导致死锁**
+>
+> 不要等收到 S→C 0x0006 之后再发 C→S 0x0006。
+> - S→C 0x0006 是**认证结果**（33B protobuf），不是触发信号
+> - 服务端也在等你的 C→S 0x0006 token → **死锁**
+> - 正确做法：0x0003（心跳）发出后**立即**发 0x0006（token），然后等待 S→C 0x0004 (handshake_rsp) 或 S→C 0x0006 (认证结果) 做确认
+>
+> 详见 `remote/relay/game_client.py` `_run_once()` 的阶段4 实现。
+
 ---
 
 ## 3. Auth Token Structure

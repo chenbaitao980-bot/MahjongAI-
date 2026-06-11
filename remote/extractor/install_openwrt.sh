@@ -29,13 +29,21 @@ echo "    python3: $(python3 --version 2>&1)"
 
 # --- 2. 交互配置 ---
 echo "[2/6] 配置 (直接回车用默认/示例值)"
-printf "  云端 relay_url [http://YOUR_CLOUD_IP:8000]: "; read RELAY_URL
+if [ -z "$RELAY_URL" ]; then
+    printf "  云端 relay_url [http://YOUR_CLOUD_IP:8000]: "; read RELAY_URL
+fi
 [ -z "$RELAY_URL" ] && RELAY_URL="http://YOUR_CLOUD_IP:8000"
-printf "  api_token (须与云 relay 一致): "; read API_TOKEN
+if [ -z "$API_TOKEN" ]; then
+    printf "  api_token (须与云 relay 一致): "; read API_TOKEN
+fi
 [ -z "$API_TOKEN" ] && API_TOKEN="change-me-shared-secret"
-printf "  抓包网卡 interface [br-lan]: "; read IFACE
+if [ -z "$IFACE" ]; then
+    printf "  抓包网卡 interface [br-lan]: "; read IFACE
+fi
 [ -z "$IFACE" ] && IFACE="br-lan"
-printf "  安装目录 [$DEFAULT_INSTALL_DIR]: "; read INSTALL_DIR
+if [ -z "$INSTALL_DIR" ]; then
+    printf "  安装目录 [$DEFAULT_INSTALL_DIR]: "; read INSTALL_DIR
+fi
 [ -z "$INSTALL_DIR" ] && INSTALL_DIR="$DEFAULT_INSTALL_DIR"
 
 # --- 3. 拷贝 + 写配置 ---

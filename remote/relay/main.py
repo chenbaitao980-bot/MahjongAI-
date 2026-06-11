@@ -66,7 +66,7 @@ _cfg = _load_config(_DEFAULT_CONFIG)
 
 # 注入配置到 app
 from app import app, configure
-configure(_cfg)
+configure(_cfg, cfg_path=_DEFAULT_CONFIG)
 
 
 def main():
@@ -79,10 +79,21 @@ def main():
     # 重新加载指定配置文件
     if args.config != _DEFAULT_CONFIG:
         cfg = _load_config(args.config)
-        configure(cfg)
+        configure(cfg, cfg_path=args.config)
 
     import uvicorn
     _LOGGER.info("启动 relay 服务: http://%s:%d", args.host, args.port)
+
+    # 启动时报告凭证状态
+    hs = _cfg.get("handshake_blob", "")
+    at = _cfg.get("auth_token_12b", "")
+    if hs and at:
+        _LOGGER.info("[启动] 已有持久化凭证: handshake_blob=%d bytes, auth_token_12b=%d bytes "
+                     "→ 断开热点后 GameClient 可用",
+                     len(hs) // 2, len(at) // 2)
+    else:
+        _LOGGER.info("[启动] 无持久化凭证 → 需要先连热点让 extractor 注册凭证")
+
     uvicorn.run(app, host=args.host, port=args.port)
 
 

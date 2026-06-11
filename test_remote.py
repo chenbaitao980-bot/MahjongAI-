@@ -89,7 +89,7 @@ def _suite_state_store():
     def test_idle():
         ss = StateStore()
         snap = ss.get_snapshot()
-        assert snap == {"phase": "idle"}, f"expected idle, got {snap}"
+        assert snap == {"phase": "idle", "data_source": "game_client"}, f"expected idle, got {snap}"
 
     _run(suite, "test_state_store_idle", test_idle)
 
@@ -99,7 +99,9 @@ def _suite_state_store():
         payload = {"phase": "playing", "hand": ["1m"]}
         ss.on_push(payload)
         snap = ss.get_snapshot()
-        assert snap == payload, f"expected {payload}, got {snap}"
+        expected = dict(payload)
+        expected["data_source"] = "extractor"
+        assert snap == expected, f"expected {expected}, got {snap}"
 
     _run(suite, "test_state_store_push", test_push)
 
@@ -150,7 +152,7 @@ def _suite_token_extractor():
         return
 
     # fake ProtocolMessage
-    FakeMsg = namedtuple("FakeMsg", ["msg_type", "direction", "raw_hex", "pay_len"])
+    FakeMsg = namedtuple("FakeMsg", ["msg_type", "sub_type", "direction", "raw_hex", "pay_len"])
 
     def _make_hex(header_bytes: bytes, payload: bytes) -> str:
         return (header_bytes + payload).hex()
@@ -162,7 +164,7 @@ def _suite_token_extractor():
         ext = TokenExtractor()
         payload = bytes(range(19))  # 19 字节 payload
         raw = _make_hex(_HEADER, payload)
-        msg = FakeMsg(msg_type=0x0001, direction="C->S", raw_hex=raw, pay_len=19)
+        msg = FakeMsg(msg_type=0x0001, sub_type=0x047B, direction="C->S", raw_hex=raw, pay_len=19)
         ext.feed(msg)
         assert ext.handshake_blob is not None, "handshake_blob should be extracted"
         assert len(ext.handshake_blob) == 19, f"expected 19 bytes, got {len(ext.handshake_blob)}"
@@ -176,7 +178,7 @@ def _suite_token_extractor():
         token12 = bytes(range(12, 24))  # 12 bytes token
         payload = rand4 + token12  # total 16 bytes
         raw = _make_hex(_HEADER, payload)
-        msg = FakeMsg(msg_type=0x0006, direction="C->S", raw_hex=raw, pay_len=16)
+        msg = FakeMsg(msg_type=0x0006, sub_type=0x0093, direction="C->S", raw_hex=raw, pay_len=16)
         ext.feed(msg)
         assert ext.auth_token_12b is not None, "auth_token_12b should be extracted"
         assert ext.auth_token_12b == token12, (
@@ -190,7 +192,7 @@ def _suite_token_extractor():
         ext = TokenExtractor()
         payload = bytes(range(19))
         raw = _make_hex(_HEADER, payload)
-        msg = FakeMsg(msg_type=0x0001, direction="S->C", raw_hex=raw, pay_len=19)
+        msg = FakeMsg(msg_type=0x0001, sub_type=0x047B, direction="S->C", raw_hex=raw, pay_len=19)
         ext.feed(msg)
         assert ext.handshake_blob is None, "S->C should be ignored"
 
@@ -208,7 +210,7 @@ def _suite_token_extractor():
         # Feed handshake msg
         hs_payload = bytes(range(19))
         hs_raw = _make_hex(_HEADER, hs_payload)
-        hs_msg = FakeMsg(msg_type=0x0001, direction="C->S", raw_hex=hs_raw, pay_len=19)
+        hs_msg = FakeMsg(msg_type=0x0001, sub_type=0x047B, direction="C->S", raw_hex=hs_raw, pay_len=19)
         ext.feed(hs_msg)
 
         # Feed auth token msg
@@ -216,7 +218,7 @@ def _suite_token_extractor():
         tok12 = bytes(range(12))
         auth_payload = rand4 + tok12
         auth_raw = _make_hex(_HEADER, auth_payload)
-        auth_msg = FakeMsg(msg_type=0x0006, direction="C->S", raw_hex=auth_raw, pay_len=16)
+        auth_msg = FakeMsg(msg_type=0x0006, sub_type=0x0093, direction="C->S", raw_hex=auth_raw, pay_len=16)
         ext.feed(auth_msg)
 
         assert len(callback_calls) == 1, (
@@ -238,6 +240,15 @@ def _suite_relay_api():
         import requests  # type: ignore
     except ImportError:
         log.warning("[SKIP] requests 未安装，跳过 Suite 3")
+        for name in [
+            "test_state_unauthorized",
+            "test_state_idle",
+            "test_register_valid",
+            "test_register_unauthorized",
+            "test_push_and_state",
+        ]:
+            _results.append((f"{suite}.{name}", None, "SKIP"))
+            log.info("[SKIP] %s.%s", suite, name)
         return
 
     # 生成临时 config
@@ -364,7 +375,9 @@ def _suite_relay_api():
             r2 = requests.get(f"{base_url}/state", params={"token": "test_secret"}, timeout=5)
             assert r2.status_code == 200, f"state failed: {r2.status_code}"
             data = r2.json()
-            assert data == snapshot, f"expected {snapshot}, got {data}"
+            expected = dict(snapshot)
+            expected["data_source"] = "extractor"
+            assert data == expected, f"expected {expected}, got {data}"
 
         _run(suite, "test_push_and_state", test_push_and_state)
 

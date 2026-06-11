@@ -25,10 +25,25 @@ python remote/extractor/package_extractor.py
 
 bundle 已含 extractor 运行所需最小模块集（**不含 cv2/numpy/PyQt**）+ 安装脚本。
 
+如果这是为“手机连正常 WiFi，不再连 PC 热点”的部署准备，推荐直接生成预配置包：
+
+```bash
+python remote/extractor/package_extractor.py \
+  --relay-url http://<云服务器公网IP>:8000 \
+  --write-relay-config remote/relay/config.no-hotspot.yaml \
+  -o mahjong-extractor-no-hotspot.tar.gz
+```
+
+脚本会自动生成一个强随机 `API_TOKEN` 并打印出来，同时：
+
+- 把 `relay_url/api_token/game_port` 写进 bundle 内部的 `remote/extractor/config.yaml`
+- 写出一份匹配的 `remote/relay/config.no-hotspot.yaml`，上传云服务器后可作为 relay 的 `config.yaml`
+- 不修改仓库里的默认 `remote/extractor/config.yaml`，避免把真实 token 提交进仓库
+
 把它传到路由器：
 
 ```bash
-scp mahjong-extractor-bundle.tar.gz root@<路由器IP>:/tmp/
+scp mahjong-extractor-no-hotspot.tar.gz root@<路由器IP>:/tmp/
 ```
 
 ---
@@ -41,7 +56,7 @@ extractor 要往云 relay 推数据，所以先部署 relay（一台有公网 IP
 # 云服务器上
 git clone <repo> mahjong && cd mahjong            # 或只传 remote/relay/ + stable/ + game/ + battle/ + utils/
 pip install fastapi uvicorn pyyaml requests
-# 编辑 remote/relay/config.yaml: 设一个 api_token（记住它，后面 extractor 要填同一个）
+# 使用上一步生成的 config.no-hotspot.yaml 作为 remote/relay/config.yaml
 python remote/relay/main.py --host 0.0.0.0 --port 8000
 # 建议用 systemd/pm2/screen 常驻；并放行安全组 8000 端口
 ```
@@ -57,13 +72,19 @@ python remote/relay/main.py --host 0.0.0.0 --port 8000
 
 ```bash
 # 路由器 SSH 上
-cd /tmp && tar xzf mahjong-extractor-bundle.tar.gz && cd mahjong-extractor
+cd /tmp && tar xzf mahjong-extractor-no-hotspot.tar.gz && cd mahjong-extractor
 sh install_openwrt.sh
 ```
 
 脚本会：`opkg` 装 `python3-light python3-yaml python3-requests tcpdump` → 交互填
 `relay_url / api_token / interface(默认 br-lan) / 安装目录` → 装 procd 服务
 `/etc/init.d/mahjong-extractor` → enable + start。
+
+也可以免交互安装（适合复制粘贴到路由器）：
+
+```bash
+RELAY_URL=http://<云服务器公网IP>:8000 API_TOKEN=<脚本打印的API_TOKEN> IFACE=br-lan sh install_openwrt.sh
+```
 
 常用：
 ```bash
@@ -74,12 +95,18 @@ logread -e mahjong-extractor -f
 ## 2B. 安装到 x86 Linux 软路由 / NAS / Docker 宿主
 
 ```bash
-sudo tar xzf mahjong-extractor-bundle.tar.gz -C /opt && cd /opt/mahjong-extractor
+sudo tar xzf mahjong-extractor-no-hotspot.tar.gz -C /opt && cd /opt/mahjong-extractor
 sudo sh install_linux.sh
 ```
 
 脚本会：`pip` 装 `requests pyyaml`（确认有 tcpdump）→ 交互填配置 → 装 systemd 服务
 `mahjong-extractor.service` → enable + start。
+
+也可以免交互安装：
+
+```bash
+sudo env RELAY_URL=http://<云服务器公网IP>:8000 API_TOKEN=<脚本打印的API_TOKEN> IFACE=br-lan sh install_linux.sh
+```
 
 常用：
 ```bash

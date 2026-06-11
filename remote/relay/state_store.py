@@ -5,8 +5,11 @@ state_store.py — 内存状态存储
 """
 from __future__ import annotations
 
+import logging
 import time
 import threading
+
+_LOGGER = logging.getLogger("remote.relay.state_store")
 
 
 class StateStore:
@@ -51,7 +54,14 @@ class StateStore:
         返回 True 当且仅当超过 PUSH_TIMEOUT 秒未收到 extractor 推送。
         """
         with self._lock:
-            return self._is_extractor_offline_unlocked()
+            result = self._is_extractor_offline_unlocked()
+            if self.last_push_time == 0.0:
+                _LOGGER.debug("[模式判断] extractor 从未推送 → 离线, use_game_client=%s", result)
+            elif result:
+                elapsed = time.time() - self.last_push_time
+                _LOGGER.debug("[模式判断] 距上次推送 %.1fs (> %.1fs) → 离线, use_game_client=%s",
+                             elapsed, self.PUSH_TIMEOUT, result)
+            return result
 
     def get_snapshot(self):
         """获取当前最新 snapshot，无数据时返回 idle 状态"""

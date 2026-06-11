@@ -53,6 +53,9 @@ python main.py --mode npcap
 
 ## OpenWRT 软路由安装说明
 
+> 普通 WiFi 模式的关键不是“换一个 PC 网卡抓包”，而是让 extractor 跑在手机流量真实经过的设备上。
+> 手机不连 PC 热点时，PC 上的 Npcap 通常看不到手机到游戏服务器的单播流量。
+
 ### 前置要求
 
 - Python 3.6+（`opkg install python3`）
@@ -61,13 +64,25 @@ python main.py --mode npcap
 
 ### 部署步骤
 
-1. 将项目根目录（含 `stable/`、`game/`、`battle/` 等）上传到软路由，例如 `/opt/mahjongai/`
+1. 在开发机生成软路由 bundle：
 
-2. 将 `remote/extractor/` 目录上传到同一位置
+```sh
+python remote/extractor/package_extractor.py \
+  --relay-url http://<云服务器公网IP>:8000 \
+  --write-relay-config remote/relay/config.no-hotspot.yaml \
+  -o mahjong-extractor-no-hotspot.tar.gz
+```
 
-3. 配置 `config.yaml`
+2. 将 bundle 上传到软路由，例如 `/tmp/mahjong-extractor-no-hotspot.tar.gz`
 
-4. 运行：
+3. 解包并安装：
+
+```sh
+cd /tmp && tar xzf mahjong-extractor-no-hotspot.tar.gz && cd mahjong-extractor
+RELAY_URL=http://<云服务器公网IP>:8000 API_TOKEN=<脚本打印的API_TOKEN> IFACE=br-lan sh install_openwrt.sh
+```
+
+也可以手动运行：
 
 ```sh
 # 自动检测模式（Linux 自动使用 tcpdump）
@@ -106,3 +121,6 @@ A: 以管理员身份运行 cmd/PowerShell
 
 **Q: 抓不到包**
 A: 检查游戏是否走经过本机的流量；确认 Npcap/tcpdump 已正确安装；确认监听的网卡接口正确
+
+**Q: 为什么手机断开 PC 热点、连家里 WiFi 后就抓不到？**
+A: 因为手机到游戏服务器的流量不再经过 PC。解决方案是把 extractor 部署到主路由/旁路由/NAS 等承载手机流量的设备上，并推送到云端 relay；单靠 PC 上的本机抓包无法跨普通 WiFi 抓到手机流量。

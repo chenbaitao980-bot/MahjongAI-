@@ -30,7 +30,7 @@ echo.
 echo Verify: curl http://127.0.0.1:8001/mode
 echo State:  curl "http://127.0.0.1:8001/state?token=8f2e7c91b4d53a6f10e9c827"
 echo.
-python remote\relay\main.py --mode vpn
+python remote\vpn\main.py
 
 pause
 endlocal

@@ -29,7 +29,7 @@ echo.
 echo Verify: curl http://127.0.0.1:8002/mode
 echo State:  curl "http://127.0.0.1:8002/state?token=d4a8e1f29c6b7305e8d1f264"
 echo.
-python remote\relay\main.py --mode noconfig
+python remote\noconfig\main.py
 
 pause
 endlocal

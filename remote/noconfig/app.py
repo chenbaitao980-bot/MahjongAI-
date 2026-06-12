@@ -178,7 +178,7 @@ def _ensure_spectator_running():
         return
 
     if not srs_sid or len(srs_sid) < 32:
-        _LOGGER.debug("[NOCONFIG] extractor 离线但无 srs_sessionid，无法启动 spectator")
+        _LOGGER.warning("[NOCONFIG] extractor 离线但无 srs_sessionid（需先运行热点/VPN模式提取凭证），无法启动 spectator")
         return
 
     # 健康检查：如果进程已退出，清理旧进程
@@ -222,15 +222,8 @@ def _start_srs_spectator(handshake_hex: str, srs_sid: str):
 
     auth_hex = _cfg.get("auth_token_12b", "")
     api_token = _cfg.get("api_token", "")
-    spectator_url = _cfg.get("spectator_url", "")
-    bind_port_str = "8003"
-    if spectator_url:
-        # 从 spectator_url 提取端口（如 http://localhost:8003 → 8003）
-        try:
-            bind_port_str = spectator_url.rstrip("/").rsplit(":", 1)[-1]
-        except Exception:
-            bind_port_str = "8003"
     relay_url = f"http://127.0.0.1:{_cfg.get('port', 8002)}"
+    bind_port_str = "8003"  # spectator 固定监听 8003，与 srs_spectator/main.py BIND_PORT 一致
     userid = _cfg.get("userid", "newpt1084306678")
 
     env = os.environ.copy()

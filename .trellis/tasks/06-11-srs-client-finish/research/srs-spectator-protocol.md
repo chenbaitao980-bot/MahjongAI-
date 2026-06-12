@@ -6,6 +6,58 @@
 
 ---
 
+## ★ 2026-06-12 更新：§0 与 §7 的两大未知点已被实测推翻/解决
+
+> 这两条改变实现方向，先读。证据：本 session 的 live 实连 + `spectator_forensic.jsonl` 帧头取证。
+
+### (1) §0「纯 Python 跑不通 SRS 握手」——**已推翻**
+`scripts/diag_srs_live.py` / `diag_srs_watch.py` 实连 `47.96.0.227:7777`，纯 Python 走通
+EncryptVer→ReqKey→HandshakeRsp→PlayerConnect→**PlayerData flag=0 SUCCESS**→ReqPlusData→
+RespPlusData(m_key)。加密=AES-256-CFB128+静态默认key+会话key线缆下发（见 [srs-fully-solved.md]）。
+**SRS 层（processid=0）可纯 Python 独立驱动。** §0、§5(c)、Caveat 1 的「放弃纯 Python」结论作废。
+
+### (2) §7「sub_type/extra↔processid 映射未逆出」——**已解决：sub_type = processid**
+拿 `spectator_forensic.jsonl` 里已知 processid 的真实帧反推，钉死：
+
+| wire `sub_type` | = processid | 协议层 | 证据 msg_type |
+|---|---|---|---|
+| `0x0000` | 0 | SRS 握手层 | 1,3,4,5,6（EncryptVer..PlusData） |
+| `0x0054` | 84 | RoomProtocol/GameProcess | 0x000f,0x0010,0x0018,0x0019 |
+| `0x0001` | 1 | GameProcess 牌局帧 | 0x2bc0/0x2bc1（游戏事件主流） |
+| `0x047b` | 1147 | **大厅登录层** | 0x0001(真握手),0x0002,0x0007,0x000a |
+| `0x03ee` | 1006 | MatchLinkProtocol | 0x620c/0x620d |
+| `0x003e` | 62 | （未命名） | 0x2f1d/0x2f1e |
+| `0x0074` | 116 | （未命名） | 0x06a7/0x06a8/0x06ea |
+| `0x0093` | 147 | （auth 层） | C->S 0x0006（auth_token_12b！） |
+
+→ **`pack_frame` 要加 `sub_type=processid` 参数。旁观请求 IMProtocol(3000) 帧 = `sub_type=0x0064`(100)；MatchLink 用 `0x03ee`(1006)。**
+→ `extra`(4B) = 登录后分配的会话/组 id（实测 `38564c05` 在登录后所有帧上恒定；SRS 握手帧 extra=0）；部分 S->C 帧 extra 带 askid/appid 回显。**旁观请求的 extra 取值待实测（疑似该会话的 srsgroupid）。**
+
+### (3) 由此得到的真实分层（比 §0 认识更深一层）
+`47.96.0.227:7777` 单条 TCP 上多层复用，靠 sub_type=processid 区分：
+1. **SRS 层**(pid=0)：EncryptVer..PlusData → 已通(flag=0)。
+2. **大厅登录层**(pid=1147,msg=0x0001 sub=0x047b)：用 extractor 抓的 `handshake_blob`(C->S 0x0001) + `auth_token_12b`(C->S 0x0006 sub=0x0093) → **可重放性待实测**（旧 [[gameclient-scenario-b-constraints]] 说不可重放，但那是把 SRS 握手误读成 nonce 质询，SRS 已证可重放；大厅层是否另有 nonce 未知）。
+3. **房间/游戏层**(pid=84/1)：牌局帧 0x2bc0。
+4. **旁观层**(pid=100/1006)：ReqRealtimeGameRecord(3000)。
+
+**剩余真未知（按依赖排序）**：① 大厅登录层(pid=1147)能否用抓到的 blob 重放 ② 登录后服务器是否告知「你当前在 room X」(返回牌局机制，给 roomid) ③ 旁观记录(zlib payload)**是否含自己手牌**（最大风险，可能只公开视角）④ 重连(ReqJoinTable reconnect=1)会踢手机。
+
+### ★★ 2026-06-12 终判：active 路阻断于大厅 auth 的 native 密钥墙 ★★
+
+对 `data/phone_srs.pcap`/`phone_full.pcap` 做了穷尽实验（脚本逻辑见本 session）：
+
+1. **加密模型 = 每帧 fresh-CFB-from-IV**（非连续流、非帧序计数器）。证据：连续解密时第2个 PlayerConnect 头16B乱码后 CFB 自同步回正确明文 → 即每帧独立从 IV 起；同明文→同密文（`c28b5b18…` 反复一致）→ 无序列计数器。
+2. **SRS 层(pid=0) 全破**：PlayerConnect(0x0005)/PlayerData(0x0006)/PlusData(0x0018) 用 session_key fresh-from-IV 完美解出明文。
+3. **RespPlusData(0x18) 实测 `keylen=0`**：按 SRSProtocol.lua:383 精确布局解析（5串+sex+8×int32+keylen），keylen 字节=0 → **服务端没下发 m_key**。`parse_resp_plus_data` 用 2字节长度前缀是错的（实际 1字节）。
+4. **大厅 auth 帧(0x0001/0x0016 sub=0x047b, pid=1147)密钥候选全灭**：default / session_key / pwd(sessionid) / PlayerData尾16B —— fresh-from-IV 解全是乱码。密钥**只在 native .so 内存**。
+5. **牌局数据帧 0x2bc0 是明文**（`02001000c07600000c21…` 结构化）→ stable 被动模式读的就是它；牌局本身不在加密墙后。
+
+**结论**：云端独立连接能过 SRS 认证(flag=0)，但**过不了其上的大厅登录层**——其密钥 native 管理、被动抓包导不出。过不了大厅 = 进不了桌 = 收不到（明文的）牌局。**active「连一次热点之后任意网络云端读牌」被此墙阻断**，绕过只剩 Frida hook native（需手机跑游戏，违背初衷）。**满足目标的可行架构 = [[vpn-readhand-deployed]] VPN 隧穿**（手机 always-on VPN，流量经云端，被动嗅明文牌局）。
+
+诊断脚本：`scripts/diag_srs_{sample,live,watch}.py` + `capture_srs_sessionid.py`（均 throwaway）。
+
+---
+
 ## 0. 关键前置结论（先读这条，会改变实现方向）
 
 > ⚠️ **`srs_spectator/handshake.py` 当前假设的 SRS 握手序列（EncryptVer→ReqKey→HandshakeRsp→PlayerConnect→PlayerData→ReqPlusData）在 Lua 源里根本不存在。**

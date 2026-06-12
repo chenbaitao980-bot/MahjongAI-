@@ -83,6 +83,134 @@
 
 ---
 
+## 1.5 三模式架构（2026-06-12）
+
+三种手牌读取模式独立运行，各自监听不同端口，拥有独立的 StateStore 和 FastAPI app。
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                    ECS 云服务器 (8.136.37.136)                 │
+│                                                              │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │
+│  │ 热点 relay   │  │ VPN relay   │  │ 无配置 relay │          │
+│  │  :8000       │  │  :8001       │  │  :8002       │          │
+│  │ StateStore A │  │ StateStore B │  │ StateStore C │          │
+│  └──┬──────────┘  └──┬──────────┘  └──┬──────────┘          │
+│     │ (外部推)        │ (本地推)       │ (spectator推)        │
+│     │                 │               │                      │
+│     │            ┌────▼────┐    ┌─────▼──────┐               │
+│     │            │tcpdump   │    │ spectator   │               │
+│     │            │(vpn接口) │    │ :8003       │               │
+│     │            └─────────┘    └────────────┘               │
+└─────┼───────────────────────────────────────────────────────┘
+      │
+      │ HTTP POST /push
+      │
+┌─────▼──────────────────────────────────┐
+│        用户 PC (Windows)                │
+│  ┌──────────────────────────────────┐  │
+│  │ extractor (npcap/tcpdump)        │  │
+│  │ 嗅探共享热点流量                  │  │
+│  └──────────────────────────────────┘  │
+│              ▲ 热点共享                │
+│     ┌────────┴───────┐                │
+│     │   手机(游戏App)  │                │
+│     └────────────────┘                │
+└────────────────────────────────────────┘
+```
+
+### 端口分配
+
+| 模式 | 端口 | API Token 配置 | 配置文件 | 说明 |
+|------|------|----------------|----------|------|
+| hotspot | 8000 | `config_hotspot.yaml` | `acec67bfa9e518b5906d3e6a` | 手机连PC热点 → PC抓包推送 |
+| vpn | 8001 | `config_vpn.yaml` | `8f2e7c91b4d53a6f10e9c827` | 手机VPN → ECS抓包推送 |
+| noconfig | 8002 | `config_noconfig.yaml` | `d4a8e1f29c6b7305e8d1f264` | SRS spectator直连游戏服务器 |
+| spectator | 8003 | (noconfig模式子进程) | 同noconfig token | 无配置模式的旁观服务 |
+
+### 启动命令
+
+```bash
+# 单模式
+python remote/relay/main.py --mode hotspot          # :8000
+python remote/relay/main.py --mode vpn              # :8001
+python remote/relay/main.py --mode noconfig         # :8002
+
+# 三模式同时
+python remote/relay/main.py --all                   # :8000/:8001/:8002
+
+# 自定义端口
+python remote/relay/main.py --mode hotspot --port 9000
+```
+
+### 本地 bat 快捷启动
+
+| Bat 文件 | 功能 | 端口 |
+|----------|------|------|
+| `1_relay_hotspot.bat` | 热点模式 relay | :8000 |
+| `2_relay_vpn.bat` | VPN模式 relay | :8001 |
+| `3_relay_noconfig.bat` | 无配置模式 relay + spectator | :8002/:8003 |
+| `4_relay_all.bat` | 三模式同时启动 | :8000-8002 |
+| `5_extractor_hotspot.bat` | 热点模式 extractor (Npcap, 需管理员) | → :8000 |
+| `6_extractor_vpn_ecs.bat` | VPN模式 extractor → ECS | → :8001 |
+| `hotspot_one_click.bat` | 热点一键启动 relay+extractor | :8000 |
+| `0_three_mode_e2e.bat` | 三模式E2E总控(启动+验证) | :8000-8002 |
+| `deploy_ecs_local.bat` | 打包→上传→SSH到ECS一键部署 | - |
+
+### 隔离性保证
+
+- 每个模式拥有独立的 `RelayApp` 实例 → 独立 `StateStore`、`FastAPI app`、配置
+- api_token 各不相同 → 跨模式 token 自动被 401 拒绝
+- 凭证持久化到各自配置文件 → 互不干扰
+- `--all` 模式使用 `multiprocessing.Process` → 进程级隔离
+
+### extractor 多目标推送
+
+`relay_urls` 支持列表，可同时推送到多个模式：
+
+```yaml
+# remote/extractor/config.yaml
+relay_urls:
+  - http://8.136.37.136:8000   # 热点模式
+  - http://8.136.37.136:8001   # VPN模式
+```
+
+向后兼容：`relay_url`（单字符串）仍可用，`relay_urls` 优先。
+
+### ECS 云端部署
+
+`deploy_ecs.sh` 一键部署 5 个 systemd 服务：
+
+| 服务名 | 说明 | 自动重启 |
+|--------|------|----------|
+| `mahjong-relay-hotspot` | 热点模式 :8000 | always, 5s |
+| `mahjong-relay-vpn` | VPN模式 :8001 | always, 5s |
+| `mahjong-relay-noconfig` | 无配置模式 :8002 | always, 5s |
+| `mahjong-spectator` | SRS旁观 :8003 | always, 10s |
+| `mahjong-extractor-vpn` | VPN抓包(需VPN连接) | always, 5s |
+
+安全组需放行：TCP 8000/8001/8002/8003，UDP 500/4500（IPSec）。
+
+### E2E 测试
+
+```bash
+python e2e_test.py --temp         # 临时启动relay验证（不依赖已运行服务）
+python e2e_test.py --local        # 测试已运行的本地relay
+python e2e_test.py --cloud        # 验证云端ECS连通性
+python e2e_test.py --cloud-only   # 仅验证云端
+python e2e_test.py --ecs-ip X.X.X.X  # 指定ECS IP
+```
+
+覆盖 6 个测试套件：
+1. **RelayStartup** — 三模式 /mode + /state 鉴权
+2. **ModeIsolation** — 推送到A不影响B，跨模式token被拒绝
+3. **ExtractorLink** — 模拟推送 + 凭证注册 + 房间注册
+4. **CloudConnectivity** — ECS 三模式 + spectator 可达
+5. **SpectatorCheck** — spectator /status + /watch 鉴权
+6. **LocalRelayTemp** — 临时启动三模式relay完整集成测试
+
+---
+
 ## 2. API 契约（relay/）
 
 ### POST /register

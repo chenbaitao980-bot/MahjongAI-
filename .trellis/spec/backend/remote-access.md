@@ -157,12 +157,112 @@ python remote/relay/main.py --mode hotspot --port 9000
 | `0_three_mode_e2e.bat` | 三模式E2E总控(启动+验证) | :8000-8002 |
 | `deploy_ecs_local.bat` | 打包→上传→SSH到ECS一键部署 | - |
 
+### 模块化目录结构（2026-06-12）
+
+每个模式已抽成独立 Python 包，**不要把三个模式的代码写在一起**：
+
+```
+remote/
+├── hotspot/           # 热点模式独立包（已稳定，不要修改）
+│   ├── __init__.py
+│   ├── app.py         # FastAPI app + configure()，仅含 hotspot 路由
+│   └── main.py        # argparse 入口，default port 8000
+├── vpn/               # VPN模式独立包
+│   ├── __init__.py
+│   ├── app.py         # FastAPI app + configure()，含 /vpn-setup /ca.crt /mahjong-vpn.p12
+│   └── main.py        # argparse 入口，default port 8001
+├── noconfig/          # 无配置模式独立包
+│   ├── __init__.py
+│   ├── app.py         # FastAPI app + configure()，含 /register-room /watch-info + spectator 管理
+│   └── main.py        # argparse 入口，default port 8002
+├── relay/             # 多模式兼容入口（保留，勿删）
+│   ├── main.py        # --mode hotspot/vpn/noconfig/--all，使用 RelayApp from core.py
+│   ├── core.py        # RelayApp 类（--all 模式的子进程 worker 用）
+│   ├── state_store.py # StateStore（三个模块共用）
+│   └── ...
+├── srs_spectator/     # SRS旁观协议实现（不含 relay 逻辑）
+└── extractor/         # 抓包工具
+```
+
+> **黄金规则**：新增功能找对目录再动手。热点专属改 `remote/hotspot/`，VPN 专属改 `remote/vpn/`，noconfig/spectator 改 `remote/noconfig/`，多模式兼容改 `remote/relay/`。
+
+### sys.path 规范
+
+每个模块的 `app.py` 和 `main.py` 都必须在文件头设置三条 sys.path：
+
+```python
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_ROOT = os.path.abspath(os.path.join(_HERE, "..", ".."))
+_RELAY_DIR = os.path.join(_ROOT, "remote", "relay")
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
+if _RELAY_DIR not in sys.path:
+    sys.path.insert(0, _RELAY_DIR)
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+```
+
+原因：`from state_store import StateStore` 需要 `_RELAY_DIR` 在 path 里；`from app import app, configure` 需要 `_HERE` 在 path 里。
+
+### app.py 模板规范
+
+每个模式的 `app.py` 必须遵循：
+
+```python
+# 全局运行时状态（线程不安全，uvicorn 单进程单线程 OK）
+_cfg: dict = {}
+_cfg_path: str = ""
+_state_store: StateStore = StateStore()
+
+def configure(cfg: dict, cfg_path: str = ""):
+    """main.py 启动时调用一次，注入配置"""
+    global _cfg, _cfg_path, _state_store
+    _cfg = dict(cfg)
+    _cfg_path = cfg_path
+    push_timeout = float(cfg.get("push_timeout", 10.0))
+    _state_store = StateStore(push_timeout=push_timeout)
+
+app = FastAPI(title="MahjongAI <Mode> Relay")
+```
+
+### noconfig 模块 spectator 子进程契约
+
+```python
+# 模块级状态
+_srs_spectator_proc: subprocess.Popen | None = None
+_spectator_restart_count: int = 0
+_SPECTATOR_MAX_RESTARTS: int = 5
+
+# 必须注入的环境变量（缺一不可）
+env["AUTH_TOKEN_12B"]  = cfg["auth_token_12b"]   # hex
+env["HANDSHAKE_BLOB"]  = cfg["handshake_blob"]    # hex
+env["SRS_SESSIONID"]   = cfg["srs_sessionid"]     # hex, 32+ chars
+env["RELAY_URL"]       = "http://127.0.0.1:8002"  # noconfig 端口
+env["API_TOKEN"]       = cfg["api_token"]
+env["USERID"]          = cfg.get("userid", "newpt1084306678")
+env["BIND_PORT"]       = "8003"                    # spectator 监听端口，固定
+env["PYTHONPATH"]      = f"{_ROOT}:{_ROOT}/remote/srs_spectator"
+```
+
+健康检查逻辑：每次 `/state` 调用 `_ensure_spectator_running()`，用 `proc.poll() is not None` 检测进程退出，超过 `_SPECTATOR_MAX_RESTARTS` 后停止重启。`/push` 端点收到推送时调用 `_stop_spectator()`（extractor 上线，不需要 spectator）。
+
+### VPN 模块证书服务端点
+
+VPN 模块的 `app.py` 包含以下额外端点（不属于 hotspot 和 noconfig）：
+
+| 端点 | 文件来源 | 说明 |
+|------|----------|------|
+| `GET /vpn-setup` | `static/vpn-setup.html` → inline fallback | 手机端 VPN 配置向导页 |
+| `GET /mahjong-vpn.p12` | `/opt/mahjong-extractor/mahjong-vpn.p12` | PKCS12 客户端证书 |
+| `GET /ca.crt` | `/etc/ipsec.d/cacerts/ca.crt` | strongSwan CA 证书 |
+
 ### 隔离性保证
 
-- 每个模式拥有独立的 `RelayApp` 实例 → 独立 `StateStore`、`FastAPI app`、配置
+- 每个模式有独立 Python 包 → 互不导入、互不依赖
+- 每个模块的 `_cfg`/`_state_store` 是模块级私有 → 无跨模式状态污染
 - api_token 各不相同 → 跨模式 token 自动被 401 拒绝
 - 凭证持久化到各自配置文件 → 互不干扰
-- `--all` 模式使用 `multiprocessing.Process` → 进程级隔离
+- `relay/main.py --all` 使用 `multiprocessing.Process` → 进程级隔离
 
 ### extractor 多目标推送
 

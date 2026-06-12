@@ -42,6 +42,8 @@ RELAY_URL = os.environ.get("RELAY_URL", "http://127.0.0.1:8000")
 API_TOKEN = os.environ.get("API_TOKEN", "")
 AUTH_TOKEN = os.environ.get("AUTH_TOKEN_12B", "")
 HANDSHAKE_BLOB = os.environ.get("HANDSHAKE_BLOB", "")
+SRS_SESSIONID = os.environ.get("SRS_SESSIONID", "")  # SRS PlayerConnect pwd (16B hex)
+USERID = os.environ.get("USERID", "newpt1084306678")  # SRS PlayerConnect userid
 BIND_HOST = os.environ.get("BIND_HOST", "0.0.0.0")
 BIND_PORT = int(os.environ.get("BIND_PORT", "8001"))
 
@@ -76,7 +78,8 @@ class WatchState:
             logger.info(f"Starting watch: roomid={roomid} gameid={gameid}")
             client = SRSClient(
                 GAME_SERVER_IP, GAME_SERVER_PORT,
-                AUTH_TOKEN, HANDSHAKE_BLOB,
+                AUTH_TOKEN, HANDSHAKE_BLOB, SRS_SESSIONID,
+                userid=USERID,
             )
 
             def on_record(data: bytes):

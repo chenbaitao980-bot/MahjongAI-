@@ -41,13 +41,16 @@ echo.
 :: [2/6] venv + dependencies
 :: =============================================
 echo [2/6] Activating venv and installing dependencies...
-if exist "venv\Scripts\python.exe" (
+if exist ".venv\Scripts\python.exe" (
+    call ".venv\Scripts\activate.bat"
+    echo    Activated project .venv.
+) else if exist "venv\Scripts\python.exe" (
     call "venv\Scripts\activate.bat"
     echo    Activated project venv.
 ) else (
     echo    [NOTE] venv not found, using system Python.
 )
-pip install requests pyyaml fastapi uvicorn scapy -q
+pip install requests pyyaml fastapi uvicorn scapy cryptography -q
 if %errorlevel% neq 0 (
     echo    [NOTE] Dependency install had problems; continuing.
 )

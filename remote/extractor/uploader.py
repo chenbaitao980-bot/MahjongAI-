@@ -33,7 +33,7 @@ def _post(url, data, timeout=10):
         return False, 0
 
 
-def register(relay_url, api_token, handshake_blob, auth_token_12b):
+def register(relay_url, api_token, handshake_blob, auth_token_12b, srs_sessionid=None):
     """
     向 relay 注册认证凭证。
 
@@ -41,6 +41,7 @@ def register(relay_url, api_token, handshake_blob, auth_token_12b):
     api_token: str，鉴权密钥
     handshake_blob: bytes
     auth_token_12b: bytes
+    srs_sessionid: bytes or None，SRS 层 sessionid (16B)
     返回 True 表示成功
     """
     url = relay_url.rstrip("/") + "/register"
@@ -49,6 +50,8 @@ def register(relay_url, api_token, handshake_blob, auth_token_12b):
         "auth_token_12b": auth_token_12b.hex(),
         "api_token": api_token,
     }
+    if srs_sessionid:
+        data["srs_sessionid"] = srs_sessionid.hex()
     success, code = _post(url, data)
     if success:
         print("[Uploader] Token 已注册到 relay ({})".format(url))

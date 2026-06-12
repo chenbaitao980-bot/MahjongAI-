@@ -26,6 +26,12 @@ import os
 import sys
 import struct
 
+# SRS default key for HandshakeRsp decryption (from libcocos2dlua.so .rodata)
+_SRS_DEFAULT_KEY = bytes.fromhex(
+    "f362120513e389ff2311d7360123100705a210007acc023c3901da2ecb12448b"
+)
+_SRS_IV = bytes.fromhex("15ff010034ab4cd355fea122084f1307")
+
 _ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
@@ -332,3 +338,104 @@ class TokenExtractor:
     def close(self):
         """关闭取证文件句柄。"""
         self._forensic.close()
+
+
+class SRSSessionExtractor:
+    """从 SRS 协议流中提取 sessionid（用作 PlayerConnect 的 pwd）。
+
+    SRS 帧在 TCP 流中与 MJ 帧共享同一个 0x4001 帧格式。
+    提取流程：
+      1. 捕获 HandshakeRsp (S->C, msg=4) → AES 解密得 session_key
+      2. 捕获 PlayerConnect (C->S, msg=5) → AES 解密得 pwd
+      3. pwd 即为跨会话可复用的 SRS sessionid
+
+    使用 _SRS_DEFAULT_KEY（32B AES-256）解密 HandshakeRsp。
+    """
+
+    def __init__(self, on_sessionid=None):
+        self._session_key = None
+        self._sessionid = None
+        self._identify = None
+        self._captured = False
+        self._on_sessionid = on_sessionid
+        self._hs_buf = {}   # track TCP streams: fd_or_stream_id -> state
+
+    @property
+    def sessionid(self):
+        return self._sessionid
+
+    @property
+    def identify(self):
+        return self._identify
+
+    @property
+    def is_complete(self):
+        return self._captured
+
+    def feed(self, message):
+        """处理一个 ProtocolMessage，尝试提取 SRS sessionid。"""
+        if self._captured:
+            return
+
+        msg_type = getattr(message, "msg_type", 0)
+        direction = getattr(message, "direction", None)
+        raw_hex = getattr(message, "raw_hex", "") or ""
+        if not raw_hex:
+            return
+
+        try:
+            payload = bytes.fromhex(raw_hex)[12:]  # skip 12B MJ/SRS header
+        except ValueError:
+            return
+
+        # HandshakeRsp (S->C, msg=4) → decrypt with default key → session key
+        if msg_type == 4 and direction == "S->C" and self._session_key is None:
+            if len(payload) >= 2:
+                try:
+                    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms
+                    from cryptography.hazmat.decrepit.ciphers.modes import CFB
+                    dec = Cipher(algorithms.AES(_SRS_DEFAULT_KEY), CFB(_SRS_IV)).decryptor()
+                    hs_plain = dec.update(payload)
+                    key_len = hs_plain[0]
+                    if key_len in (16, 24, 32) and 1 + key_len <= len(hs_plain):
+                        self._session_key = hs_plain[1:1 + key_len]
+                        _LOGGER.info("SRS session_key 已提取 (%d bytes, AES-%d)",
+                                     key_len, key_len * 8)
+                except ImportError:
+                    _LOGGER.warning("cryptography 库不可用，无法解密 SRS HandshakeRsp")
+                except Exception as exc:
+                    _LOGGER.debug("SRS HandshakeRsp 解密失败: %s", exc)
+
+        # PlayerConnect (C->S, msg=5) → decrypt with session key → pwd (= sessionid)
+        elif msg_type == 5 and direction == "C->S" and self._session_key is not None:
+            try:
+                from cryptography.hazmat.primitives.ciphers import Cipher, algorithms
+                from cryptography.hazmat.decrepit.ciphers.modes import CFB
+                dec = Cipher(algorithms.AES(self._session_key), CFB(_SRS_IV)).decryptor()
+                pc_plain = dec.update(payload)
+                # pwd is at offset after uid (variable-length string)
+                # Format: [1B clienttype][1B usertype][4B areaid][1B uid_len][uid][16B pwd]...
+                # NO padding byte after areaid (confirmed 2026-06-12)
+                if len(pc_plain) >= 7:
+                    uid_len = pc_plain[6]
+                    pwd_start = 7 + uid_len
+                    if pwd_start + 16 <= len(pc_plain):
+                        pwd = pc_plain[pwd_start:pwd_start + 16]
+                        self._sessionid = pwd
+                        # Also extract identify (after pwd, 1B len + data)
+                        id_len_offset = pwd_start + 16
+                        if id_len_offset + 1 <= len(pc_plain):
+                            id_len = pc_plain[id_len_offset]
+                            id_start = id_len_offset + 1
+                            if id_start + id_len <= len(pc_plain):
+                                self._identify = pc_plain[id_start:id_start + id_len]
+                        self._captured = True
+                        _LOGGER.info("SRS sessionid 已提取: %s (%d bytes), identify: %s",
+                                     pwd.hex(), len(pwd),
+                                     self._identify.hex() if self._identify else "N/A")
+                        if self._on_sessionid:
+                            self._on_sessionid(pwd)
+            except ImportError:
+                pass
+            except Exception as exc:
+                _LOGGER.debug("SRS PlayerConnect 解密失败: %s", exc)

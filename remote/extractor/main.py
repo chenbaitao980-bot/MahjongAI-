@@ -27,7 +27,7 @@ from stable.tracker import PacketStateTracker
 from stable.mapping import MappingStore
 
 from remote.extractor.capture import create_capture
-from remote.extractor.token_extractor import TokenExtractor
+from remote.extractor.token_extractor import TokenExtractor, SRSSessionExtractor
 from remote.extractor.uploader import register, push
 
 _LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
@@ -93,11 +93,14 @@ class ExtractorApp:
         # 旁观帧取证开关（默认开启全量帧头取证，用于逆 sub_type/extra ↔ processid 映射）
         self._capture_all_heads = bool(cfg.get("spectator_forensic_all_heads", True))
 
-        # token 提取 + 旁观帧取证
+        # token 提取 + 旁观帧取证 + SRS sessionid 提取
         self._extractor = TokenExtractor(
             on_registered=self._on_token_registered,
             on_room_info=self._on_room_info,
             capture_all_heads=self._capture_all_heads,
+        )
+        self._srs_extractor = SRSSessionExtractor(
+            on_sessionid=self._on_srs_sessionid
         )
 
         # 凭证提取提醒（每 120 秒最多提醒一次）
@@ -108,9 +111,24 @@ class ExtractorApp:
     def _on_token_registered(self, handshake_blob, auth_token_12b):
         """两个凭证都提取到时的回调"""
         _LOGGER.info("提取到认证凭证，正在注册到 relay...")
-        ok = register(self.relay_url, self.api_token, handshake_blob, auth_token_12b)
+        srs_sid = self._srs_extractor.sessionid
+        ok = register(self.relay_url, self.api_token, handshake_blob, auth_token_12b, srs_sid)
         if not ok:
             _LOGGER.warning("注册失败，将在下次启动时重试")
+        elif srs_sid:
+            _LOGGER.info("SRS sessionid 也已一并注册")
+
+    def _on_srs_sessionid(self, sessionid):
+        """SRS sessionid 提取到时的回调"""
+        _LOGGER.info("SRS sessionid 已提取: %s", sessionid.hex())
+        # 如果 MJ 凭证也已就绪，立即注册
+        if self._extractor.is_complete:
+            ok = register(self.relay_url, self.api_token,
+                         self._extractor.handshake_blob,
+                         self._extractor.auth_token_12b,
+                         sessionid)
+            if ok:
+                _LOGGER.info("凭证（含 SRS sessionid）已注册到 relay")
 
     def _on_room_info(self, room_id, game_id):
         """房间信息提取到时的回调"""
@@ -151,6 +169,8 @@ class ExtractorApp:
 
             # 向 token 提取器喂消息
             self._extractor.feed(msg)
+            # 同时向 SRS session 提取器喂消息
+            self._srs_extractor.feed(msg)
 
             # 凭证缺失提醒：首包后超过 60 秒仍无凭证，每 120 秒提醒一次
             if not self._extractor.is_complete and self._first_packet_ts is not None:

@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import subprocess
 import sys
 import threading
 import time
@@ -18,6 +19,11 @@ import time
 _ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
+
+# Ensure relay directory is importable for bare imports like 'from state_store'
+_RELAY_DIR = os.path.dirname(os.path.abspath(__file__))
+if _RELAY_DIR not in sys.path:
+    sys.path.insert(0, _RELAY_DIR)
 
 import yaml
 
@@ -40,6 +46,7 @@ _cfg = {}           # relay 配置字典
 _cfg_path = ""      # 配置文件路径（用于凭证持久化）
 _state_store = StateStore()
 _game_client = None  # GameClient 实例（懒启动）
+_srs_spectator_proc = None  # SRS spectator 子进程（懒启动）
 
 app = FastAPI(title="MahjongAI Remote Relay")
 
@@ -206,8 +213,9 @@ async def ca_cert():
 
 
 class RegisterRequest(BaseModel):
-    handshake_blob: str    # hex 字符串
-    auth_token_12b: str    # hex 字符串
+    handshake_blob: str    # hex 字符串，MJ 层握手 blob
+    auth_token_12b: str    # hex 字符串，MJ 层认证 token (12B)
+    srs_sessionid: str = ""  # hex 字符串，SRS 层 sessionid (16B)，用于旁观客户端直连
     api_token: str
 
 
@@ -234,103 +242,137 @@ def _check_api_token(token: str):
 
 def _ensure_game_client_running():
     """
-    如果 extractor 离线且 GameClient 未运行，则启动它。
-    需要 handshake_blob（必需）+ auth_token_12b（强烈建议，用于 0x0006 认证）。
-    缺少 auth_token_12b 时 GameClient 仍会启动但无法完成服务端认证。
+    extractor 离线时的降级策略。
+
+    优先使用 SRS spectator（新方案，需要 srs_sessionid）。
+    兜底使用 GameClient（旧方案，已知不可行，仅保留兼容）。
     """
     global _game_client
 
     use_gc = _state_store.should_use_game_client()
     handshake_hex = _cfg.get("handshake_blob", "")
+    srs_sid = _cfg.get("srs_sessionid", "")
     last_push = _state_store.last_push_time
 
     if not use_gc:
-        _LOGGER.debug("[模式] extractor 在线 (last_push=%.1fs前), 不需要 GameClient",
-                      time.time() - last_push if last_push else float('inf'))
+        _LOGGER.debug("[模式] extractor 在线，不需要降级连接")
         return
 
     if not handshake_hex:
-        _LOGGER.info("[模式] extractor 离线 (last_push=%s), 但无 handshake_blob, 跳过 GameClient",
-                     "从未推送" if last_push == 0.0 else f"{time.time() - last_push:.1f}s前")
         return
 
+    # ── 新方案：SRS spectator（需要 srs_sessionid）──
+    if srs_sid and len(srs_sid) >= 32:  # 16B hex = 32 chars
+        _LOGGER.info("[模式] extractor 离线但 srs_sessionid 可用，启用 SRS spectator...")
+        _start_srs_spectator(handshake_hex, srs_sid)
+        return
+
+    # ── 旧方案：GameClient（兜底，已知不可行）──
     auth_hex = _cfg.get("auth_token_12b", "")
     if not auth_hex:
-        now = time.time()
-        if now - getattr(_ensure_game_client_running, '_last_auth_warn', 0) > 30.0:
-            _LOGGER.warning("[模式] extractor 离线, 有 handshake_blob 但缺少 auth_token_12b。"
-                            "GameClient 不会启动（缺少 0x0006 认证包 = 服务端立即断开连接）。"
-                            "请确保 extractor 部署在手机流量经过的路由器/NAS/旁路由上。")
-            _ensure_game_client_running._last_auth_warn = now
+        _LOGGER.info("[模式] extractor 离线，缺少 srs_sessionid 和 auth_token，无法降级")
         return
 
     if _game_client is not None and not _game_client._running:
-        _LOGGER.info("[模式] 旧 GameClient 已停止，准备重建")
-        _game_client = None  # 旧客户端已停止，重建
-
+        _game_client = None
     if _game_client is not None:
-        _LOGGER.debug("[模式] GameClient 已在运行中, running=%s", _game_client._running)
         return
 
-    _LOGGER.info("[模式] extractor 离线 (last_push=%s), 有 handshake_blob (%d bytes), 启动 GameClient",
-                 "从未推送" if last_push == 0.0 else f"{time.time() - last_push:.1f}s前",
-                 len(handshake_hex) // 2)
-
+    _LOGGER.info("[模式] extractor 离线，启动 GameClient（旧方案，可能无法认证）")
     try:
         handshake_blob = bytes.fromhex(handshake_hex)
         auth_token = bytes.fromhex(auth_hex) if auth_hex else None
-        if auth_token and len(auth_token) != 12:
-            _LOGGER.warning("[模式] auth_token_12b 长度异常 (%d bytes, 期望 12)，忽略", len(auth_token))
-            auth_token = None
     except ValueError:
-        _LOGGER.error("[模式] handshake_blob hex 格式错误，无法启动 GameClient")
+        _LOGGER.error("[模式] 凭证 hex 格式错误")
         return
 
     server_ip = _cfg.get("game_server_ip", "47.96.0.227")
     server_port = int(_cfg.get("game_server_port", 7777))
-
     _game_client = GameClient(
-        server_ip=server_ip,
-        server_port=server_port,
-        handshake_blob=handshake_blob,
-        auth_token_12b=auth_token,
+        server_ip=server_ip, server_port=server_port,
+        handshake_blob=handshake_blob, auth_token_12b=auth_token,
         state_store=_state_store,
     )
     try:
         loop = asyncio.get_event_loop()
         _game_client.start(loop=loop)
-        _LOGGER.info("[模式] GameClient 已启动（场景B：extractor 离线）→ 连接 %s:%d", server_ip, server_port)
     except RuntimeError:
-        _LOGGER.warning("[模式] 无法获取事件循环，GameClient 未启动")
+        _LOGGER.warning("[模式] GameClient 启动失败")
+
+
+def _start_srs_spectator(handshake_hex, srs_sid):
+    """启动 SRS spectator 子进程，通过环境变量传递凭证。"""
+    global _srs_spectator_proc
+    
+    if _srs_spectator_proc is not None and _srs_spectator_proc.poll() is None:
+        _LOGGER.debug("[模式] SRS spectator 已在运行中 (pid=%d)", _srs_spectator_proc.pid)
+        return
+    
+    auth_hex = _cfg.get("auth_token_12b", "")
+    api_token = _cfg.get("api_token", "")
+    relay_url = f"http://127.0.0.1:{_cfg.get('port', 8000)}"
+    userid = _cfg.get("userid", "newpt1084306678")
+
+    env = os.environ.copy()
+    env["AUTH_TOKEN_12B"] = auth_hex
+    env["HANDSHAKE_BLOB"] = handshake_hex
+    env["SRS_SESSIONID"] = srs_sid
+    env["RELAY_URL"] = relay_url
+    env["API_TOKEN"] = api_token
+    env["USERID"] = userid
+    env["PYTHONPATH"] = os.pathsep.join([_ROOT, os.path.join(_ROOT, "remote", "srs_spectator")])
+
+    spectator_main = os.path.join(_ROOT, "remote", "srs_spectator", "main.py")
+    log_path = os.path.join(_ROOT, "logs", "srs_spectator.log")
+    try:
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        log_file = open(log_path, "a", encoding="utf-8")
+        _srs_spectator_proc = subprocess.Popen(
+            [sys.executable, spectator_main],
+            env=env,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            cwd=_ROOT,
+        )
+        _LOGGER.info("[模式] SRS spectator 子进程已启动 (pid=%d, log=%s)", _srs_spectator_proc.pid, log_path)
+    except Exception as exc:
+        _LOGGER.error("[模式] 启动 SRS spectator 失败: %s", exc)
 
 
 def _stop_game_client():
-    """停止 GameClient（extractor 上线时可选调用）"""
-    global _game_client
+    """停止 GameClient 和 SRS spectator（extractor 上线时可选调用）"""
+    global _game_client, _srs_spectator_proc
     if _game_client is not None:
         _game_client.stop()
         _game_client = None
         _LOGGER.info("[模式] GameClient 已停止（extractor 上线，切换到被动模式）")
+    if _srs_spectator_proc is not None and _srs_spectator_proc.poll() is None:
+        _srs_spectator_proc.terminate()
+        try:
+            _srs_spectator_proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            _srs_spectator_proc.kill()
+        _srs_spectator_proc = None
+        _LOGGER.info("[模式] SRS spectator 已停止")
 
 
-def _persist_credentials(handshake_hex: str, auth_hex: str):
+def _persist_credentials(handshake_hex: str, auth_hex: str, srs_sid: str = ""):
     """将凭证持久化到 config.yaml，relay 重启后仍可用"""
     global _cfg_path
     if not _cfg_path:
         _LOGGER.warning("[持久化] 未设置配置文件路径，无法持久化凭证")
         return
     try:
-        # 读取当前配置文件
         cfg_on_disk = {}
         if os.path.isfile(_cfg_path):
             with open(_cfg_path, "r", encoding="utf-8") as f:
                 cfg_on_disk = yaml.safe_load(f) or {}
 
-        # 只更新凭证字段
         cfg_on_disk["handshake_blob"] = handshake_hex
         cfg_on_disk["auth_token_12b"] = auth_hex
+        if srs_sid:
+            cfg_on_disk["srs_sessionid"] = srs_sid
 
-        # 写回
         with open(_cfg_path, "w", encoding="utf-8") as f:
             yaml.safe_dump(cfg_on_disk, f, allow_unicode=True, default_flow_style=False)
 
@@ -353,17 +395,22 @@ async def register(req: RegisterRequest):
     try:
         bytes.fromhex(req.handshake_blob)
         bytes.fromhex(req.auth_token_12b)
+        if req.srs_sessionid:
+            bytes.fromhex(req.srs_sessionid)
     except ValueError:
         raise HTTPException(status_code=400, detail="凭证格式错误（需要十六进制字符串）")
 
     _cfg["handshake_blob"] = req.handshake_blob
     _cfg["auth_token_12b"] = req.auth_token_12b
-    _LOGGER.info("已注册凭证: handshake_blob=%d bytes(%s...), auth_token_12b=%d bytes(%s...)",
+    if req.srs_sessionid:
+        _cfg["srs_sessionid"] = req.srs_sessionid
+    _LOGGER.info("已注册凭证: handshake_blob=%d bytes(%s...), auth_token_12b=%d bytes(%s...), srs_sid=%s",
                  len(req.handshake_blob) // 2, req.handshake_blob[:8],
-                 len(req.auth_token_12b) // 2, req.auth_token_12b[:8])
+                 len(req.auth_token_12b) // 2, req.auth_token_12b[:8],
+                 "present" if req.srs_sessionid else "absent")
 
     # 持久化凭证到 config.yaml
-    _persist_credentials(req.handshake_blob, req.auth_token_12b)
+    _persist_credentials(req.handshake_blob, req.auth_token_12b, req.srs_sessionid)
 
     # 注意：不在此处启动 GameClient。GameClient 已确认不可行
     # （缺少 SRS 认证层，服务端立即关闭连接）。

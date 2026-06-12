@@ -19,7 +19,7 @@ import secrets
 import sys
 
 _PLACEHOLDER = "change-me-shared-secret"
-_RELAY_URL = "http://127.0.0.1:8000"
+_RELAY_URL = "http://8.136.37.136:8000"
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _RELAY_CFG = os.path.join(_HERE, "remote", "relay", "config.yaml")

@@ -267,37 +267,12 @@ def _ensure_game_client_running():
         _start_srs_spectator(handshake_hex, srs_sid)
         return
 
-    # ── 旧方案：GameClient（兜底，已知不可行）──
-    auth_hex = _cfg.get("auth_token_12b", "")
-    if not auth_hex:
-        _LOGGER.info("[模式] extractor 离线，缺少 srs_sessionid 和 auth_token，无法降级")
-        return
-
-    if _game_client is not None and not _game_client._running:
-        _game_client = None
-    if _game_client is not None:
-        return
-
-    _LOGGER.info("[模式] extractor 离线，启动 GameClient（旧方案，可能无法认证）")
-    try:
-        handshake_blob = bytes.fromhex(handshake_hex)
-        auth_token = bytes.fromhex(auth_hex) if auth_hex else None
-    except ValueError:
-        _LOGGER.error("[模式] 凭证 hex 格式错误")
-        return
-
-    server_ip = _cfg.get("game_server_ip", "47.96.0.227")
-    server_port = int(_cfg.get("game_server_port", 7777))
-    _game_client = GameClient(
-        server_ip=server_ip, server_port=server_port,
-        handshake_blob=handshake_blob, auth_token_12b=auth_token,
-        state_store=_state_store,
-    )
-    try:
-        loop = asyncio.get_event_loop()
-        _game_client.start(loop=loop)
-    except RuntimeError:
-        _LOGGER.warning("[模式] GameClient 启动失败")
+    # ── 旧方案：GameClient（已确认不可行，不再自动启动）──
+    # SRS 认证层在 native libcocos2dlua.so 中，纯 Python 无法复现。
+    # 服务端立即关闭连接（存活 0.0 秒）。详见 spec/backend/remote-access.md。
+    _LOGGER.info("[模式] extractor 离线，GameClient 已禁用（SRS 认证不可复制）。"
+                 "需要 extractor 在线或使用 SRS spectator（需 srs_sessionid）")
+    return
 
 
 def _start_srs_spectator(handshake_hex, srs_sid):

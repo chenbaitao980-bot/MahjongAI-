@@ -520,3 +520,275 @@ msg = FakeMsg(
 - 有失败：`exit(1)`（SKIP 不算失败）
 
 可在 CI 中直接用 `python test_remote.py && echo OK` 检查。
+
+---
+
+## 9. 热点模式独立部署（ECS 云端）
+
+### 部署拓扑
+
+```
+手机(游戏App) ──WiFi──▶ PC(Windows 移动热点, 192.168.137.1) ──▶ 互联网
+                            │ NpcapCapture 嗅探热点网卡
+                            │ extractor → POST /register + /push
+                            ↓ HTTP
+                     ECS 云服务器 (8.136.37.136)
+                     relay :8000 (hotspot mode)
+                     GET / → 手牌展示页 (static/index.html)
+                     GET /state?token=... → JSON 牌局数据
+```
+
+### ECS 部署步骤（已验证 2026-06-12）
+
+```bash
+# 1. 上传代码到 ECS
+tar -cf ecs-update.tar --exclude=".git" --exclude=".venv" --exclude="__pycache__" \
+    --exclude="*.pyc" --exclude="logs" --exclude="dist" --exclude=".obsidian" \
+    --exclude=".trellis" --exclude=".claude" --exclude="*.spec" \
+    remote/ stable/ game/ config/ deploy_ecs.sh e2e_test.py
+scp ecs-update.tar root@8.136.37.136:/tmp/mahjong-update.tar
+
+# 2. SSH 登录 ECS
+ssh root@8.136.37.136
+
+# 3. 解压代码
+mkdir -p /opt/mahjong-remote
+cd /opt/mahjong-remote
+tar -xf /tmp/mahjong-update.tar
+
+# 4. 停掉旧版 relay (如果存在)
+pkill -f "remote/relay/app.py" 2>/dev/null || true
+pkill -f "remote/relay/main.py" 2>/dev/null || true
+
+# 5. 安装 Python deps
+pip3 install fastapi uvicorn pyyaml requests cryptography -q
+
+# 6. 创建 systemd 服务
+cat > /etc/systemd/system/mahjong-relay-hotspot.service << 'SERVICE'
+[Unit]
+Description=MahjongAI Relay - Hotspot Mode (Port 8000)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/mahjong-remote
+ExecStart=/usr/bin/python3 remote/relay/main.py --mode hotspot --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+
+# 7. 启动
+systemctl daemon-reload
+systemctl enable mahjong-relay-hotspot
+systemctl start mahjong-relay-hotspot
+
+# 8. 验证
+sleep 3
+curl -s http://localhost:8000/mode
+# 期望: {"mode":"hotspot","port":8000,"credential_ready":true,...}
+curl -s "http://localhost:8000/state?token=acec67bfa9e518b5906d3e6a"
+# 期望: {"phase":"idle","credential_ready":true,...}
+```
+
+### ECS 配置文件
+
+热点模式配置文件路径：`remote/relay/config_hotspot.yaml`
+
+```yaml
+mode: hotspot
+port: 8000
+api_token: acec67bfa9e518b5906d3e6a  # 与 extractor/config.yaml 中的 api_token 一致
+game_server_ip: 47.96.0.227
+game_server_port: 7777
+handshake_blob: 459937d169da1ecda3c63f5a89a70b94e55d92  # 已提取（extractor 注册后自动填充）
+auth_token_12b: 846a29fd572fbbdf89af0fb4  # 已提取
+srs_sessionid: ''  # 待提取
+push_timeout: 10
+spectator_url: ''
+```
+
+> **关键约束**：`api_token` 必须与 `remote/extractor/config.yaml` 中的 `api_token` 一致。
+> 不一致会导致 `/push` 返回 401，relay 永远 idle。这是一个重复踩坑的高频错误。
+
+### extractor 配置（PC 本地）
+
+```yaml
+# remote/extractor/config.yaml
+api_token: acec67bfa9e518b5906d3e6a  # 必须与 relay config_hotspot.yaml 一致
+relay_url: http://8.136.37.136:8000   # ECS 公网 IP + 端口
+game_port: 7777
+spectator_forensic_all_heads: true
+```
+
+### 阿里云 ECS 安全组
+
+| 端口 | 协议 | 授权对象 | 说明 |
+|------|------|----------|------|
+| 8000 | TCP | 0.0.0.0/0 | 热点模式 relay (已开放) |
+| 8001 | TCP | 0.0.0.0/0 | VPN 模式 relay (待开放) |
+| 8002 | TCP | 0.0.0.0/0 | 无配置模式 relay (待开放) |
+| 8003 | TCP | 0.0.0.0/0 | SRS spectator (待开放) |
+| 500 | UDP | 0.0.0.0/0 | IPSec IKE (VPN) |
+| 4500 | UDP | 0.0.0.0/0 | IPSec NAT-T (VPN) |
+
+> **高频坑**：只开了 TCP 不开 UDP 500/4500，VPN 握手包根本到不了，
+> 报错很安静（strongSwan 日志才能看到）。
+
+---
+
+## 10. 本地 bat 快捷启动文件
+
+所有 bat 必须遵守以下规则：
+
+### bat 编码规则（2026-06-12 踩坑沉淀）
+
+> **⚠️ Critical**: Windows CMD 默认编码 GBK（cp936），bat 文件中的中文会乱码，
+> 导致 `echo 中文` 和 `:: 中文注释` 执行时报错 `'帹閫佸埌relay' 不是内部或外部命令`。
+> 这是 CMD 对 UTF-8 bat 的解析 bug。
+
+**规则**：
+1. 每个 bat 开头必须加 `chcp 65001 >nul 2>&1` 切换到 UTF-8
+2. `::` 注释中不使用中文（CMD 会把 `::` 后的中文字符当作命令执行）
+3. `echo` 中文在 `chcp 65001` 后可正常显示，但推荐用英文更可靠
+4. `REM` 中文注释比 `::` 更安全（`REM` 不会被当作命令），但仍需 `chcp 65001`
+
+**Wrong vs Correct**:
+```bat
+:: Wrong - 中文注释被 CMD 当命令执行，乱码报错
+:: 热点模式 Extractor — 需管理员权限
+echo [启动] 热点模式 extractor ...
+
+:: Correct - chcp 65001 + 英文注释 + 英文 echo
+@echo off
+setlocal
+chcp 65001 >nul 2>&1
+REM Hotspot Mode Extractor - needs admin
+echo [Start] Hotspot extractor (Npcap) ...
+```
+
+### bat 文件索引
+
+| Bat | 功能 | 关键点 |
+|-----|------|--------|
+| `1_relay_hotspot.bat` | 热点 relay :8000 | 纯 relay，无 extractor |
+| `2_relay_vpn.bat` | VPN relay :8001 | 通常在 ECS 上运行 |
+| `3_relay_noconfig.bat` | 无配置 relay :8002 | 含 spectator :8003 |
+| `4_relay_all.bat` | 三模式同时启动 | multiprocessing |
+| `5_extractor_hotspot.bat` | 热点 extractor (Npcap) | 自动 UAC 提权 + 自动检测热点网卡 |
+| `6_extractor_vpn_ecs.bat` | VPN extractor → ECS | 本地调试用 |
+| `hotspot_one_click.bat` | 热点一键: relay+extractor | 最常用的 bat |
+| `0_three_mode_e2e.bat` | E2E 总控: 启动+验证 | 含 e2e_test.py |
+| `deploy_ecs_local.bat` | 打包→scp→SSH 部署 | 需要 SSH key 免密 |
+
+---
+
+## 11. 热点模式已踩坑记录
+
+### Common Mistake: `--interface WLAN` 导致抓不到包
+
+**Symptom**: extractor 启动后日志显示 `抓包网卡（显式指定）: WLAN`，但之后零帧日志，relay `phase: idle`。
+
+**Cause**: 手机连 PC 热点时，流量走的是 `Microsoft Wi-Fi Direct Virtual Adapter`（IP 192.168.137.1），不是 WLAN 物理网卡。WLAN 是 PC 连外网的网卡，手机流量不在上面。
+
+**Fix**: 不传 `--interface`，让 extractor 自动检测。`find_hotspot_iface()` 会找 IP==192.168.137.1 的适配器。
+
+**Prevention**: bat 文件中不要硬编码 `--interface WLAN`。`5_extractor_hotspot.bat` 只用 `python remote\extractor\main.py --mode npcap`（不带 --interface）。
+
+### Common Mistake: core.py `/` 路由返回 API 端点页而非手牌页
+
+**Symptom**: `http://ECS:8000/` 显示模式信息页（API 端点列表），看不到手牌数据。
+
+**Cause**: `RelayApp._build_mode_page()` 生成的 HTML 是模式诊断页（/mode 端点列表），旧版 `app.py` 的 `/` 路由用的是 `static/index.html`（实时手牌展示页 + JS 轮询 /state）。三模式 `core.py` 复制路由时用了模式页替代了手牌页。
+
+**Fix**: `core.py` 的 `/` 路由改为 `_build_hand_display_page()`，读取 `static/index.html`；模式诊断页保留在 `/mode` GET 端点。
+
+```python
+# core.py _register_routes() — Correct
+@self.app.get("/")
+async def index():
+    return HTMLResponse(content=self._build_hand_display_page())
+
+# _build_hand_display_page() reads static/index.html
+# _build_mode_page() only shown at GET /mode
+```
+
+**Prevention**: 任何新增 relay 模式的首页路由必须返回手牌展示页，不是模式信息页。模式信息通过 `/mode` API 端点获取。
+
+### Common Mistake: extractor api_token 与 relay 不一致 → push 401
+
+**Symptom**: extractor 日志有帧数据但 `POST /push` 返回 401，relay `phase` 永远 idle。
+
+**Cause**: `remote/extractor/config.yaml` 的 `api_token` 与 `remote/relay/config_hotspot.yaml` 的 `api_token` 不同。
+
+**Fix**: 确保两端配置文件的 `api_token` 值完全一致。
+
+**Prevention**: 部署时先检查两个文件的 api_token 是否一致。或者用 `bootstrap_remote_config.py` 同步生成。
+
+### Gotcha: NpcapCapture L2 sniff 静默失败
+
+> **Warning**: scapy `sniff(filter="tcp port 7777")` 在某些虚拟网卡上可能静默失败
+> （不抓任何包也不报错，`_running` 仍为 True）。
+> `NpcapCapture.sniff()` 有 L2→L3 回退逻辑，但如果 L2 正常返回且 `_running` 仍 True，
+> 会被误判为"L2 成功但无数据"而非"L2 失败需回退"。
+>
+> 当前实测：热点网卡上 `scapy sniff(iface=hot, filter="tcp port 7777")` **正常工作**
+> （抓到 10 个包），但 extractor 运行时可能因其他进程占用 Npcap 或 scapy 全局状态
+> 导致静默失败。**解决方法：关闭所有占用 Npcap 的进程后重新启动 extractor**。
+
+### Gotcha: ECS 安全组只开 8000 不开 8001/8002
+
+> **Warning**: 阿里云 ECS 默认安全组只开放了 :8000（热点模式）。
+> :8001（VPN）、:8002（无配置）、:8003（spectator）需要手动添加入方向规则。
+> 不开的症状：ECS 内网 `curl localhost:8001/mode` 正常，外网 `curl ECS_IP:8001/mode` 超时。
+> 需在阿里云控制台添加 TCP 8001/8002/8003 入方向规则。
+
+---
+
+## 12. 热点模式独立开发约定
+
+热点模式是当前**唯一已上线验证的模式**。后续修改热点模式时，只需关注以下文件：
+
+| 文件 | 作用 | 改动频率 |
+|------|------|----------|
+| `remote/relay/main.py` | relay 入口 + `--mode hotspot` | 低 |
+| `remote/relay/core.py` | RelayApp 路由 + spectator 管理 | 中（首页、推送逻辑） |
+| `remote/relay/config_hotspot.yaml` | 热点模式配置 | 低（凭证更新时改） |
+| `remote/relay/state_store.py` | StateStore 数据管理 | 低 |
+| `remote/relay/static/index.html` | 手牌展示页 | 中（UI 调整） |
+| `remote/extractor/main.py` | extractor 入口 | 低 |
+| `remote/extractor/capture.py` | 网卡检测 + NpcapCapture 适配 | 低 |
+| `remote/extractor/uploader.py` | HTTP 推送客户端 | 低 |
+| `remote/extractor/config.yaml` | extractor 配置（relay_url + api_token） | 低 |
+| `5_extractor_hotspot.bat` | 本地一键启动 extractor | 低 |
+| `1_relay_hotspot.bat` | 本地一键启动 relay | 低 |
+| `hotspot_one_click.bat` | 热点一键: relay + extractor | 低 |
+
+> **约定**：修改热点模式时，不需要考虑 VPN/无配置模式的代码。
+> 三模式在 `core.py` 中通过 `self._mode` 完全隔离，各自独立 StateStore。
+> 热点模式 `spectator_url` 为空，不启动 spectator 子进程。
+
+### 验证链路（每次修改后必做）
+
+```bash
+# 1. 本地单元测试
+python test_remote.py           # 13/13 必须全 pass
+
+# 2. 本地 E2E 临时测试
+python e2e_test.py --temp       # 3/3 必须全 pass
+
+# 3. ECS 部署验证
+scp 修改的文件 root@8.136.37.136:/opt/mahjong-remote/对应路径/
+ssh root@8.136.37.136 "systemctl restart mahjong-relay-hotspot"
+sleep 2
+curl -s http://8.136.37.136:8000/mode    # {"mode":"hotspot"}
+curl -s http://8.136.37.136:8000/ | head -5  # 手牌展示页 HTML
+
+# 4. 实机验证
+# 手机连热点 → 双击 5_extractor_hotspot.bat → 手机进游戏打牌
+# 看 http://8.136.37.136:8000/ 是否有手牌数据
+```

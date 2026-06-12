@@ -1,17 +1,15 @@
 @echo off
 setlocal
+chcp 65001 >nul 2>&1
 
 :: =============================================
-::  三模式 E2E 测试 — 一键启动 + 验证
-::  1. 启动三模式 relay (:8000/:8001/:8002)
-::  2. 启动热点模式 extractor (Npcap)
-::  3. 运行 E2E 验证脚本
+::  Three-Mode E2E Test - Launch + Verify
 :: =============================================
 
-:: --- UAC self-elevation (extractor needs admin) ---
+:: UAC self-elevation (extractor needs admin)
 net session >nul 2>&1
 if %errorlevel% neq 0 (
-    echo 需要管理员权限运行 (Npcap抓包需要), 正在请求提权...
+    echo Requesting admin privileges for Npcap capture...
     powershell -Command "Start-Process '%~f0' -Verb RunAs"
     exit /b
 )
@@ -19,27 +17,25 @@ if %errorlevel% neq 0 (
 cd /d "%~dp0"
 
 echo ============================================
-echo   MahjongAI 三模式 E2E 测试
-echo   热点(:8000) + VPN(:8001) + 无配置(:8002)
+echo   MahjongAI Three-Mode E2E Test
+echo   Hotspot(:8000) + VPN(:8001) + No-Config(:8002)
 echo ============================================
 echo.
 
-:: 激活 venv
+:: Activate venv
 if exist ".venv\Scripts\python.exe" (
     call ".venv\Scripts\activate.bat"
 ) else if exist "venv\Scripts\python.exe" (
     call "venv\Scripts\activate.bat"
 )
 
-:: 安装依赖
+:: Install deps
 pip install fastapi uvicorn pyyaml requests cryptography scapy -q 2>nul
 
-:: =============================================
-:: [1/4] 启动三模式 relay
-:: =============================================
-echo [1/4] 启动三模式 relay ...
+:: [1/4] Start three-mode relay
+echo [1/4] Starting three-mode relay ...
 start "Relay-All" cmd /k python remote\relay\main.py --all
-echo    等待 relay 就绪...
+echo    Waiting for relay ...
 
 set RELAY_OK=0
 for /l %%i in (1,1,30) do (
@@ -52,56 +48,48 @@ for /l %%i in (1,1,30) do (
 )
 :relay_ready
 if "%RELAY_OK%"=="1" (
-    echo    [OK] 三模式 relay 已就绪
+    echo    [OK] Three-mode relay ready
 ) else (
-    echo    [WARN] relay 未就绪, 请检查 Relay-All 窗口
+    echo    [WARN] Relay not ready, check Relay-All window
 )
 echo.
 
-:: =============================================
-:: [2/4] 启动热点模式 extractor
-:: =============================================
-echo [2/4] 启动热点模式 extractor ...
-echo    [提示] 请确保手机已连PC共享热点
+:: [2/4] Start hotspot extractor
+echo [2/4] Starting hotspot extractor ...
+echo    [Tip] Make sure phone connected to PC hotspot
 start "Extractor-Hotspot" cmd /k python remote\extractor\main.py --mode npcap
-echo    extractor 已在新窗口启动
+echo    Extractor started in new window
 echo.
 
-:: =============================================
-:: [3/4] 运行 E2E 验证
-:: =============================================
-echo [3/4] 运行 E2E 验证脚本 ...
+:: [3/4] Run E2E verify
+echo [3/4] Running E2E verification ...
 echo --------------------------------------------
 python e2e_test.py
 set E2E_RC=%errorlevel%
 echo --------------------------------------------
 echo.
 
-:: =============================================
-:: [4/4] 打开浏览器查看
-:: =============================================
-echo [4/4] 打开浏览器查看各模式状态...
+:: [4/4] Open browser
+echo [4/4] Opening browser ...
 start http://127.0.0.1:8000/
 echo.
 
-:: =============================================
-:: 汇总
-:: =============================================
+:: Summary
 echo ============================================
-echo   三模式 E2E 测试结果
+echo   Three-Mode E2E Test Result
 echo ============================================
 if "%E2E_RC%"=="0" (
-    echo   E2E 验证: PASS
+    echo   E2E Verify: PASS
 ) else (
-    echo   E2E 验证: FAIL ^(rc=%E2E_RC%^)
+    echo   E2E Verify: FAIL ^(rc=%E2E_RC%^)
 )
 echo.
-echo   热点模式:  http://127.0.0.1:8000/
-echo   VPN模式:   http://127.0.0.1:8001/
-echo   无配置模式: http://127.0.0.1:8002/
+echo   Hotspot:   http://127.0.0.1:8000/
+echo   VPN:       http://127.0.0.1:8001/
+echo   No-Config: http://127.0.0.1:8002/
 echo.
-echo   relay和extractor仍在独立窗口运行.
-echo   关闭那些窗口即可停止.
+echo   Relay and extractor still running in separate windows.
+echo   Close those windows to stop.
 echo ============================================
 echo.
 

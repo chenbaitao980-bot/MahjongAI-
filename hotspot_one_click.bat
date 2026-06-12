@@ -1,16 +1,16 @@
 @echo off
 setlocal
-cd /d "%~dp0"
+chcp 65001 >nul 2>&1
 
 :: =============================================
-::  热点模式一键启动 — relay + extractor 联动
-::  手机连PC共享热点 → PC抓包 → relay :8000
+::  Hotspot One-Click - relay + extractor
+::  Phone -> PC hotspot -> capture -> relay :8000
 :: =============================================
 
-:: --- UAC self-elevation (Npcap needs admin) ---
+:: UAC self-elevation (Npcap needs admin)
 net session >nul 2>&1
 if %errorlevel% neq 0 (
-    echo 需要管理员权限运行 (Npcap抓包需要), 正在请求提权...
+    echo Requesting admin privileges for Npcap capture...
     powershell -Command "Start-Process '%~f0' -Verb RunAs"
     exit /b
 )
@@ -18,27 +18,25 @@ if %errorlevel% neq 0 (
 cd /d "%~dp0"
 
 echo ============================================
-echo   MahjongAI 热点模式一键启动
-::   relay :8000 + extractor (Npcap)
+echo   MahjongAI Hotspot One-Click
+echo   relay :8000 + extractor (Npcap)
 echo ============================================
 echo.
 
-:: 激活 venv
+:: Activate venv
 if exist ".venv\Scripts\python.exe" (
     call ".venv\Scripts\activate.bat"
 ) else if exist "venv\Scripts\python.exe" (
     call "venv\Scripts\activate.bat"
 )
 
-:: 安装依赖
+:: Install deps
 pip install fastapi uvicorn pyyaml requests cryptography scapy -q 2>nul
 
-:: =============================================
-:: [1/2] 启动 relay
-:: =============================================
-echo [1/2] 启动热点模式 relay :8000 ...
+:: [1/2] Start relay
+echo [1/2] Starting hotspot relay :8000 ...
 start "Relay-Hotspot" cmd /k python remote\relay\main.py --mode hotspot
-echo    等待 relay 就绪...
+echo    Waiting for relay ...
 
 set RELAY_OK=0
 for /l %%i in (1,1,20) do (
@@ -51,30 +49,29 @@ for /l %%i in (1,1,20) do (
 )
 :relay_done
 if "%RELAY_OK%"=="1" (
-    echo    [OK] relay 已就绪
+    echo    [OK] Relay ready
 ) else (
-    echo    [WARN] relay 未就绪, 请检查 Relay-Hotspot 窗口
+    echo    [WARN] Relay not ready, check Relay-Hotspot window
 )
 echo.
 
-:: =============================================
-:: [2/2] 启动 extractor
-:: =============================================
-echo [2/2] 启动热点模式 extractor (Npcap) ...
+:: [2/2] Start extractor
+echo [2/2] Starting hotspot extractor (Npcap) ...
 echo.
 echo =============================================
-echo   手机连PC共享热点, 打开游戏, 清除App数据后重新登录
-echo   数据将显示在: http://127.0.0.1:8000/
+echo   Connect phone to PC hotspot, open game,
+echo   clear app data then re-login.
+echo   Data will appear at: http://127.0.0.1:8000/
 echo =============================================
 echo.
 start "Extractor-Hotspot" cmd /k python remote\extractor\main.py --mode npcap
 
-:: 打开浏览器
+:: Open browser
 start http://127.0.0.1:8000/
 
 echo.
-echo   relay和extractor已在新窗口启动.
-echo   关闭那些窗口即可停止.
+echo   Relay and extractor started in separate windows.
+echo   Close those windows to stop.
 echo.
 pause
 endlocal

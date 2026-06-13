@@ -311,6 +311,84 @@ python e2e_test.py --ecs-ip X.X.X.X  # 指定ECS IP
 
 ---
 
+## 1.6 SRS 协议层实测结论（2026-06-13）
+
+### SRS 保活/重连机制
+
+| 结论 | 来源 | 细节 |
+|------|------|------|
+| **msgid=3 (ReqKey) 是握手消息，不是心跳** | 实测 + forensic 分析 | msgid=3 总是跟在 msgid=1 (EncryptVer) 后面出现，是三步握手的第二步 (EncryptVer→ReqKey→HandshakeRsp)。握手完成后发 msgid=3 → 服务端立即断连 |
+| **服务端 idle timeout = 120s** | 实测验证 | 握手完成后不发任何数据，服务端精确在 120s 后主动关闭 TCP 连接 |
+| **srs_sessionid 可在多条连接间复用** | 实测 4+ 小时 | 同一个 16B sessionid 在断线后立即用于新连接，flag=0（成功）；4+ 小时后仍有效；3 轮测试全部 flag=0 |
+| **解法：断线后自动重连，不是心跳** | 架构决策 | 检测 on_disconnect → 2s 延迟 → 重新执行完整 SRS 握手 + PlayerConnect，无限循环到 stop_watch() |
+
+### SRSSessionExtractor 断连重置 Bug（已修复）
+
+**问题**：`SRSSessionExtractor` 第一次见到 HandshakeRsp 时设置了 `_session_key`，但若该连接未完成 PlayerConnect 提取（extractor 重启等情况），`_session_key` 非 None，下次新连接的 HandshakeRsp 被 `if self._session_key is None` 过滤掉，导致永远提取不到 srs_sessionid。
+
+**修复**（`remote/extractor/token_extractor.py`）：
+```python
+# Wrong：首次提取后 session_key 永不重置，新连接 HandshakeRsp 被忽略
+if msg_type == 4 and direction == "S->C" and self._session_key is None:
+    ...
+
+# Correct：每次新 HandshakeRsp 都重置，保证新连接能重新提取
+if msg_type == 4 and direction == "S->C":
+    self._session_key = None   # 重置旧 session_key，保证下一步能成功
+    self._sessionid = None
+    ...
+```
+
+### WatchState 自动重连模式
+
+```python
+RECONNECT_DELAY = 2.0  # 断线后等 2s 再重连
+
+class WatchState:
+    def _connect_once(self, roomid, gameid) -> bool:
+        client = SRSClient(...)
+
+        def on_disconnect():
+            if self._stop_requested: return
+            if self.active_roomid != roomid: return   # 房间已切换，不重连
+            logger.info("SRS disconnected, reconnecting in 2s...")
+            self.watching = False
+            time.sleep(RECONNECT_DELAY)
+            if not self._stop_requested and self.active_roomid == roomid:
+                self.watching = True
+                if not self._connect_once(roomid, gameid):
+                    logger.error("Auto-reconnect failed, giving up")
+                    self.watching = False
+
+        client.on_disconnect(on_disconnect)
+        ...
+```
+
+> **Gotcha**: `on_disconnect` 在 recv 线程调用，`time.sleep` 会阻塞 recv 线程直到下次重连完成。`_connect_once` 是递归调用——每次断线会新建 SRSClient，新线程。不会因递归栈溢出（每次 sleep 2s，服务端 idle timeout 120s，最多每 122s 一次递归）。
+
+### PlayerData flag 含义（实测）
+
+| flag | 含义 |
+|------|------|
+| 0 | 认证成功，sessionid 有效 |
+| 22 | sessionid 完全无效（格式错误/全零） |
+| 38 | 解密失败（乱码），密钥不匹配 |
+| 41 | PlayerConnect 格式 bug（已修复后不再出现） |
+| 72 | sessionid 过期/服务端不认识 |
+
+### SRS 旁观局限性（关键）
+
+**旁观协议（ReqRealtimeGameRecord, msgid=3000, sub_type=100）只能看到公开信息（打出的牌、弃牌、鸣牌），手牌显示为"牌背"，无法获取隐藏手牌。**
+
+这是服务端协议设计决定的——服务端只向旁观者发送公开事件，不发送手牌内容。
+
+若目标是获取完整手牌（含隐藏牌），旁观模式走不通，唯一可行路径：
+- **VPN 被动嗅探**（已上线 2026-06-13）：手机流量过 ECS，被动抓 7777 端口
+- **Frida siphon**（手机进程 hook）：hook recv，拦截发给手机的数据包并转发云端（另立任务）
+- **云端以玩家身份登录**（未探索）：理论上能收到手牌，但会踢掉手机
+
+---
+
 ## 2. API 契约（relay/）
 
 ### POST /register

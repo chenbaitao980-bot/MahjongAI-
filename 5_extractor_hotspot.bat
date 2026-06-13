@@ -39,6 +39,11 @@ echo   2. Relay running on :8000 (run 1_relay_hotspot.bat)
 echo   3. Clear game app data then re-login (first time for credentials)
 echo.
 
+:: Open remote ECS web page
+echo [Web] Opening remote ECS page http://8.136.37.136:8000/ ...
+start "" http://8.136.37.136:8000/
+echo.
+
 :: Start extractor
 echo [Start] Hotspot extractor (Npcap) ...
 echo.

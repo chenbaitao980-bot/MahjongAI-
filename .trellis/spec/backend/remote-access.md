@@ -849,9 +849,86 @@ async def index():
 
 ---
 
-## 12. 热点模式独立开发约定
+## 12. VPN 模式真机验证记录（2026-06-13）
 
-热点模式是当前**唯一已上线验证的模式**。后续修改热点模式时，只需关注以下文件：
+VPN 模式已真机测试通过：手机连 IKEv2/IPSec PSK VPN → ECS strongSwan 解密 → mjx-vpn extractor 抓包 → :8001 relay → 浏览器实时手牌。
+
+### ECS VPN extractor 部署约定
+
+```bash
+# VPN extractor 必须从 /opt/mahjong-extractor 运行（完整模块集含 battle/）
+# /opt/mahjong-remote 缺少 battle 模块，会报 ModuleNotFoundError: No module named 'battle'
+cd /opt/mahjong-extractor
+
+# config_vpn_ecs.yaml 需手动创建（/opt/mahjong-extractor/remote/extractor/ 目录下）
+cat > remote/extractor/config_vpn_ecs.yaml <<'YAML'
+relay_url: http://127.0.0.1:8001
+api_token: 8f2e7c91b4d53a6f10e9c827
+game_port: 7777
+YAML
+
+# 常驻启动（必须 systemd-run，裸 nohup 经 SSH 断连会被 HUP 收掉）
+systemd-run --unit=mjx-vpn \
+  --working-directory=/opt/mahjong-extractor \
+  /usr/bin/python3 remote/extractor/main.py --mode tcpdump \
+  --config remote/extractor/config_vpn_ecs.yaml
+
+# 验证
+systemctl is-active mjx-vpn   # → active
+journalctl -u mjx-vpn -n 5    # 应有 "extractor 启动，监听 port 7777 → relay http://127.0.0.1:8001"
+```
+
+### Common Mistake: `--interface ipsec0` 导致 extractor 启动失败
+
+**Symptom**: extractor 报错 `No such device: ipsec0` 或卡住不抓包。
+
+**Cause**: `config_vpn_ecs.yaml` 文件头注释写了 `--interface ipsec0`，但 strongSwan 走内核 xfrm 解密，**没有独立的 ipsec0 网络接口**。xfrm 的解密结果直接进入内核 netfilter，tcpdump `-i any` 可以看到，`-i ipsec0` 找不到接口。
+
+**Fix**: 不传 `--interface`，extractor 默认 `any`（代码中 `default="any"`）。
+
+**Prevention**: `config_vpn_ecs.yaml` 里的 `vpn_interface: ipsec0` 字段**从未被代码读取**（`ExtractorApp.__init__` 只读命令行参数，忽略 config 里的 `vpn_interface`）。不要把 `vpn_interface` 当作有效配置使用。
+
+### Common Mistake: 改 `app.py` 的路由无效，真正的路由在 `core.py`
+
+**Symptom**: 修改 `remote/relay/app.py` 的 `index()` 路由后，ECS 上的行为没有变化。
+
+**Cause**: `main.py` 启动的是 `from core import RelayApp`，`RelayApp` 在 `core.py` 里定义，有自己的 `self._cfg`。`app.py` 的模块级 `_cfg = {}` 是孤立的占位符，没有被 `main.py` 注入，也没有被实际路由使用。
+
+**Fix**: 修改路由必须改 `remote/relay/core.py` 的 `_register_routes()` 方法，不是 `app.py`。
+
+```python
+# core.py _register_routes() — Correct 修改位置
+@self.app.get("/")
+async def index(token: str = Query(default="")):
+    if not token:
+        api_token = self._cfg.get("api_token", "")
+        if api_token:
+            return RedirectResponse(url=f"/?token={api_token}")
+    return HTMLResponse(content=self._build_hand_display_page())
+```
+
+**Prevention**: 任何 relay 路由改动都在 `remote/relay/core.py` 的 `RelayApp._register_routes()` 里做。`app.py` 已废弃（被 `core.py` 的 RelayApp 替代），不要再往里加路由。
+
+### 自动 token redirect（2026-06-13 新增）
+
+访问 `http://ECS_IP:<port>/`（无 token 参数）→ 307 重定向到 `/?token=<config.api_token>`，浏览器自动跟随，前端 JS 从 URL 读取 token 填入轮询请求，不再需要手动填写。
+
+实现在 `core.py` 的 `index()` 路由（见上方代码），需要在 imports 里加 `RedirectResponse`：
+
+```python
+from fastapi.responses import HTMLResponse, RedirectResponse
+```
+
+三个模式各自的自动跳转 URL：
+- `:8000/` → `/?token=acec67bfa9e518b5906d3e6a`（热点）
+- `:8001/` → `/?token=8f2e7c91b4d53a6f10e9c827`（VPN）
+- `:8002/` → `/?token=d4a8e1f29c6b7305e8d1f264`（无配置）
+
+---
+
+## 13. 热点 / VPN 模式独立开发约定
+
+热点模式和 VPN 模式均已真机验证通过（热点 2026-06-12，VPN 2026-06-13）。后续修改热点模式时，只需关注以下文件：
 
 | 文件 | 作用 | 改动频率 |
 |------|------|----------|

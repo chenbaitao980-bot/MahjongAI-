@@ -28,7 +28,7 @@ if _RELAY_DIR not in sys.path:
 import yaml
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 from typing import Any, Dict, Optional
 
@@ -52,8 +52,14 @@ app = FastAPI(title="MahjongAI Remote Relay")
 
 
 @app.get("/", response_class=HTMLResponse)
-async def index():
-    """实时手牌展示页。页面内 JS 轮询 /state 渲染手牌。"""
+async def index(token: str = Query(default="")):
+    """实时手牌展示页。页面内 JS 轮询 /state 渲染手牌。
+    无 token 时自动重定向到带 token 的 URL，前端 JS 直接读取即可。
+    """
+    if not token:
+        api_token = _cfg.get("api_token", "")
+        if api_token:
+            return RedirectResponse(url=f"/?token={api_token}")
     try:
         with open(_INDEX_HTML_PATH, "r", encoding="utf-8") as f:
             return HTMLResponse(content=f.read())
@@ -461,7 +467,7 @@ async def get_state(token: str = Query(..., description="鉴权 token")):
 
 # ─── 旁观通知（通道B）────────────────────────────────────────
 
-# srs_spectator 服务地址（同机部署默认 localhost:8001）
+# srs_spectator 服务地址（同机部署默认 localhost:8003）
 _SPECTATOR_URL = ""
 
 
@@ -475,7 +481,7 @@ def _notify_spectator(room_id: int, game_id: int):
     """通知 srs_spectator 服务开始旁观（异步，不阻塞）"""
     global _SPECTATOR_URL
     if not _SPECTATOR_URL:
-        _SPECTATOR_URL = _cfg.get("spectator_url", "http://localhost:8001")
+        _SPECTATOR_URL = _cfg.get("spectator_url", "http://localhost:8003")
     if not _SPECTATOR_URL:
         return
 
@@ -513,7 +519,7 @@ def configure(cfg: dict, cfg_path: str = ""):
     _state_store.push_timeout = push_timeout
     _LOGGER.info("push_timeout=%.1fs (超过此时间无 /push 即启动 GameClient)", push_timeout)
     # 设置 srs_spectator 地址
-    spec_url = cfg.get("spectator_url", "http://localhost:8001")
+    spec_url = cfg.get("spectator_url", "http://localhost:8003")
     if spec_url:
         _set_spectator_url(spec_url)
         _LOGGER.info("srs_spectator URL: %s", spec_url)

@@ -28,7 +28,7 @@ if _RELAY_DIR not in sys.path:
 import requests
 import yaml
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 
 from state_store import StateStore
@@ -135,7 +135,11 @@ class RelayApp:
 
         # ── 首页（手牌展示） ──
         @self.app.get("/")
-        async def index():
+        async def index(token: str = Query(default="")):
+            if not token:
+                api_token = self._cfg.get("api_token", "")
+                if api_token:
+                    return RedirectResponse(url=f"/?token={api_token}")
             return HTMLResponse(content=self._build_hand_display_page())
 
         # ── 状态查询 ──

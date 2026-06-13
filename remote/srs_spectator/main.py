@@ -54,8 +54,13 @@ class WatchRequest(BaseModel):
     api_token: str
 
 
+# 服务端 idle timeout = 120s（实测）。同一 srs_sessionid 可在断线后立即重连（flag=0 实测3轮）。
+# 解法：断线后延迟 2s 自动重连，无需保活心跳。
+RECONNECT_DELAY = 2.0
+
+
 class WatchState:
-    """Tracks active watch sessions."""
+    """Tracks active watch sessions with auto-reconnect."""
 
     def __init__(self):
         self.active_roomid: Optional[int] = None
@@ -63,51 +68,77 @@ class WatchState:
         self.client: Optional[SRSClient] = None
         self.watching = False
         self.lock = threading.Lock()
+        self._stop_requested = False
 
     def start_watch(self, roomid: int, gameid: int) -> bool:
         with self.lock:
             if self.watching and self.active_roomid == roomid and self.active_gameid == gameid:
                 return True
-
             self.stop_watch()
+            self._stop_requested = False
 
             if not AUTH_TOKEN or not HANDSHAKE_BLOB:
                 logger.error("Missing AUTH_TOKEN_12B or HANDSHAKE_BLOB")
                 return False
 
-            logger.info(f"Starting watch: roomid={roomid} gameid={gameid}")
-            client = SRSClient(
-                GAME_SERVER_IP, GAME_SERVER_PORT,
-                AUTH_TOKEN, HANDSHAKE_BLOB, SRS_SESSIONID,
-                userid=USERID,
-            )
-
-            def on_record(data: bytes):
-                """Called when a complete game record arrives."""
-                logger.info(f"Game record: {len(data)} bytes")
-                try:
-                    self._push_to_relay(data)
-                except Exception as e:
-                    logger.error(f"Push failed: {e}")
-
-            def on_handshake_done():
-                logger.info("Handshake done, requesting spectator data...")
-                client.request_spectator(roomid, gameid)
-
-            client.on_spectator_record(on_record)
-            client.on_handshake_done(on_handshake_done)
-
-            if not client.connect(timeout=10.0):
-                logger.error("Failed to connect to game server")
-                return False
-
-            self.client = client
             self.active_roomid = roomid
             self.active_gameid = gameid
             self.watching = True
+            ok = self._connect_once(roomid, gameid)
+            if not ok:
+                self.watching = False
+                return False
             return True
 
+    def _connect_once(self, roomid: int, gameid: int) -> bool:
+        """Build one SRSClient, connect, register callbacks. Returns True if connect succeeded."""
+        logger.info(f"Connecting SRS: roomid={roomid} gameid={gameid}")
+        client = SRSClient(
+            GAME_SERVER_IP, GAME_SERVER_PORT,
+            AUTH_TOKEN, HANDSHAKE_BLOB, SRS_SESSIONID,
+            userid=USERID,
+        )
+
+        def on_record(data: bytes):
+            logger.info(f"Game record: {len(data)} bytes")
+            try:
+                self._push_to_relay(data)
+            except Exception as e:
+                logger.error(f"Push failed: {e}")
+
+        def on_handshake_done():
+            logger.info("Handshake done, requesting spectator data...")
+            client.request_spectator(roomid, gameid)
+
+        def on_disconnect():
+            # 服务端踢我们（idle timeout 120s）→ 延迟后自动重连
+            if self._stop_requested:
+                return
+            if self.active_roomid != roomid or self.active_gameid != gameid:
+                return
+            logger.info(f"SRS disconnected (room={roomid}), reconnecting in {RECONNECT_DELAY}s...")
+            self.watching = False
+            time.sleep(RECONNECT_DELAY)
+            if not self._stop_requested and self.active_roomid == roomid:
+                self.watching = True
+                if not self._connect_once(roomid, gameid):
+                    logger.error("Auto-reconnect failed, giving up")
+                    self.watching = False
+
+        client.on_spectator_record(on_record)
+        client.on_handshake_done(on_handshake_done)
+        client.on_disconnect(on_disconnect)
+
+        if not client.connect(timeout=10.0):
+            logger.error("Failed to connect to game server")
+            return False
+
+        with self.lock:
+            self.client = client
+        return True
+
     def stop_watch(self):
+        self._stop_requested = True
         if self.client:
             self.client.disconnect()
             self.client = None

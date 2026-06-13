@@ -42,6 +42,10 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# 已证实：msgid=3 (ReqKey) 是握手消息，不是保活。
+# 服务端 idle timeout = 120s，解法是自动重连而非心跳。
+# 见 research: forensic 里所有 msgid=3 都紧跟 msgid=1(EncryptVer)，是握手步骤。
+
 
 class SRSClient:
     """SRS protocol client with handshake and spectator support."""
@@ -61,6 +65,7 @@ class SRSClient:
         self._recv_thread: threading.Thread | None = None
         self._on_frame: Callable | None = None
         self._on_handshake_done: Callable | None = None
+        self._on_disconnect: Callable | None = None
         self._spectator: SpectatorClient | None = None
         self.sessionid = b""
         self.m_key = b""
@@ -73,6 +78,10 @@ class SRSClient:
     def on_handshake_done(self, callback: Callable):
         """Set callback for handshake completion."""
         self._on_handshake_done = callback
+
+    def on_disconnect(self, callback: Callable):
+        """Set callback for connection loss: callback() called from recv thread."""
+        self._on_disconnect = callback
 
     def connect(self, timeout: float = 10.0) -> bool:
         """Connect to game server and complete SRS handshake."""
@@ -149,6 +158,11 @@ class SRSClient:
                     logger.error(f"Recv error: {e}")
                 self._running = False
                 break
+        if self._on_disconnect:
+            try:
+                self._on_disconnect()
+            except Exception:
+                pass
 
     def _process_buffer(self) -> None:
         """Process accumulated receive buffer for complete frames."""
@@ -210,9 +224,11 @@ class SRSClient:
             rp_dec = self._crypto.decrypt_payload(payload)
             result = parse_resp_plus_data(rp_dec)
             self.m_key = result.get("key", b"")
-            if self.m_key:
+            if self.m_key and len(self.m_key) in (16, 24, 32):
                 logger.info(f"Got m_key: {len(self.m_key)} bytes")
                 self._crypto.set_key(self.m_key)
+            elif self.m_key:
+                logger.warning(f"m_key length {len(self.m_key)} invalid (not 16/24/32), skipping key switch")
             self.is_authenticated = True
             logger.info("=== Handshake complete! ===")
             if self._on_handshake_done:

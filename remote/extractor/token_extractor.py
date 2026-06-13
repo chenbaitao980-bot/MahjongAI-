@@ -389,7 +389,12 @@ class SRSSessionExtractor:
             return
 
         # HandshakeRsp (S->C, msg=4) → decrypt with default key → session key
-        if msg_type == 4 and direction == "S->C" and self._session_key is None:
+        # 每次新握手都重置状态：phone 重新进游戏时会发新 HandshakeRsp，
+        # 此时旧 session_key 已失效，必须重新提取（去掉 is None 条件）。
+        if msg_type == 4 and direction == "S->C":
+            # 新连接握手：重置旧 session_key，防止用过期 key 解密新 PlayerConnect
+            self._session_key = None
+            self._sessionid = None
             if len(payload) >= 2:
                 try:
                     from cryptography.hazmat.primitives.ciphers import Cipher, algorithms

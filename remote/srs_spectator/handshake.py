@@ -86,12 +86,17 @@ def parse_player_data(payload: bytes) -> dict:
     numid = struct.unpack_from("<i", payload, offset)[0]; offset += 4
 
     nick_len = struct.unpack_from("<H", payload, offset)[0]; offset += 2
-    nickname = payload[offset:offset+nick_len].decode("utf-8", errors="replace")
-    offset += nick_len
+    nick_end = min(offset + nick_len, len(payload))
+    nickname = payload[offset:nick_end].decode("utf-8", errors="replace")
+    offset = min(offset + nick_len, len(payload))
 
+    if offset + 2 > len(payload):
+        return {"flag": flag, "areaid": areaid, "numid": numid, "nickname": nickname,
+                "protecturl": "", "msg": "", "sessionid": b""}
     url_len = struct.unpack_from("<H", payload, offset)[0]; offset += 2
-    protecturl = payload[offset:offset+url_len].decode("utf-8", errors="replace")
-    offset += url_len
+    url_end = min(offset + url_len, len(payload))
+    protecturl = payload[offset:url_end].decode("utf-8", errors="replace")
+    offset = min(offset + url_len, len(payload))
 
     msg = ""
     if flag == 1 and offset + 2 <= len(payload):

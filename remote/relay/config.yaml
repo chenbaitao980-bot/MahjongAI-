@@ -3,6 +3,6 @@ auth_token_12b: 846a29fd572fbbdf89af0fb4
 game_server_ip: 47.96.0.227
 game_server_port: 7777
 handshake_blob: 459937d169da1ecda3c63f5a89a70b94e55d92
-srs_sessionid: ''
+srs_sessionid: ae87a919015641c1b57324c6bc88556b
 push_timeout: 10
 spectator_url: http://localhost:8003

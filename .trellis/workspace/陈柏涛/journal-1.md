@@ -73,3 +73,41 @@ Implemented dual-mode remote game data access system. extractor/ (Python 3.6-com
 ### Next Steps
 
 - None - task complete
+
+
+## Session 3: 三模式E2E测试：热点+VPN验证通过，relay自动token redirect
+
+**Date**: 2026-06-13
+**Task**: 三模式E2E测试：热点+VPN验证通过，relay自动token redirect
+**Branch**: `master`
+
+### Summary
+
+完成热点模式和VPN模式真机E2E测试。修复relay首页自动token redirect(core.py)、bat自动打开ECS网页、VPN extractor部署路径(/opt/mahjong-extractor)和tcpdump接口(any非ipsec0)三个关键坑。沉淀spec：core.py是路由实体不是app.py。无配置模式待下一任务研究。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e02e23b` | (see git log) |
+| `ea3149d` | (see git log) |
+| `8ca0d87` | (see git log) |
+| `39cf2bc` | (see git log) |
+| `9ea6947` | (see git log) |
+| `8b71043` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

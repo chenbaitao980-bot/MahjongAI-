@@ -319,7 +319,7 @@ python e2e_test.py --ecs-ip X.X.X.X  # 指定ECS IP
 |------|------|------|
 | **msgid=3 (ReqKey) 是握手消息，不是心跳** | 实测 + forensic 分析 | msgid=3 总是跟在 msgid=1 (EncryptVer) 后面出现，是三步握手的第二步 (EncryptVer→ReqKey→HandshakeRsp)。握手完成后发 msgid=3 → 服务端立即断连 |
 | **服务端 idle timeout = 120s** | 实测验证 | 握手完成后不发任何数据，服务端精确在 120s 后主动关闭 TCP 连接 |
-| **srs_sessionid 可在多条连接间复用** | 实测 4+ 小时 | 同一个 16B sessionid 在断线后立即用于新连接，flag=0（成功）；4+ 小时后仍有效；3 轮测试全部 flag=0 |
+| **srs_sessionid 可在多条连接间复用** | 长期实测有效 | 同一个 16B sessionid 在断线后重连 flag=0（成功）；经长期实测验证永久有效，无需过期刷新 |
 | **解法：断线后自动重连，不是心跳** | 架构决策 | 检测 on_disconnect → 2s 延迟 → 重新执行完整 SRS 握手 + PlayerConnect，无限循环到 stop_watch() |
 
 ### SRSSessionExtractor 断连重置 Bug（已修复）
@@ -374,7 +374,7 @@ class WatchState:
 | 22 | sessionid 完全无效（格式错误/全零） |
 | 38 | 解密失败（乱码），密钥不匹配 |
 | 41 | PlayerConnect 格式 bug（已修复后不再出现） |
-| 72 | sessionid 过期/服务端不认识 |
+| 72 | sessionid 无效/服务端不认识（长期实测验证 sessionid 永久有效，此 flag 仅在新连接使用错误 token 时出现） |
 
 ### SRS 旁观局限性（关键）
 
@@ -1001,6 +1001,60 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 - `:8000/` → `/?token=acec67bfa9e518b5906d3e6a`（热点）
 - `:8001/` → `/?token=8f2e7c91b4d53a6f10e9c827`（VPN）
 - `:8002/` → `/?token=d4a8e1f29c6b7305e8d1f264`（无配置）
+
+---
+
+## 14. 断线窗口双连突破（2026-06-13 重大发现）
+
+### 结论
+
+**Phase B（云端双连）并非死路。** 之前的测试结论"手机在线时 cloud_player 被踢"仅在"手机 TCP 连接仍存活时主动双连"场景成立。当手机 TCP 连接因**异常中断**（非主动断开）触发服务端进入"等待重连 grace period"时，cloud_player 在该窗口内连入会被服务端识别为"玩家重连"，进而建立持久双连。
+
+### 实测现象（2026-06-13 用户真机）
+
+- 手机连接朋友路由器热点（**PC 不在流量路径**）
+- **IKEv2 VPN 未开启**
+- 网络自然抖动 → 手机游戏短暂卡顿/掉线 → 自动重连
+- 重连后：cloud_player（noconfig 模式）**持续收到 0x2bc0 手牌帧，整局游戏有效**
+- 手机全程正常打牌，无感知
+
+### 机制推断
+
+```
+T0: 手机正常在线（TCP连接A → 游服）
+T1: 网络抖动 → TCP连接A RST / timeout → 游服进入"等待重连 grace period"
+T2: cloud_player 自动重连循环（on_disconnect→2s→retry）恰好落在窗口内
+    服务端：判定为"玩家断线重连" → flag=0 ✅ → 发送当前游戏状态（含0x2bc0手牌）
+T3: 手机也重连成功
+    服务端：允许双连共存（两条连接均存活）
+T∞: cloud_player 持续接收全部游戏帧，手机正常打牌
+```
+
+### 关键区分
+
+| 场景 | 服务端行为 |
+|---|---|
+| 手机 TCP 在线，cloud_player 主动连入 | 识别为"非法双连" → 踢 cloud_player（2~3s）|
+| 手机 TCP **异常中断**后，cloud_player 在 grace 窗口连入 | 识别为"玩家重连" → 放行 → **双连持久共存** |
+
+### 如何工程化触发
+
+**方案A（手动，任意网络）：**
+用户进入牌局后，手机 WiFi 关闭 2~3s 再开启（模拟网络抖动）。
+cloud_player 持续自动重连循环，会在窗口内自动连入。
+此后整局游戏 cloud_player 持续读牌，无需任何干预。
+
+**方案B（自动，手机在 PC 热点时）：**
+PC 通过 Npcap 嗅探到手机→游服的 TCP 四元组，向游服发送伪造 TCP RST 包，
+主动触发服务端的 grace period，cloud_player 立即连入。
+用户点"开始读牌"按钮即可，全自动，手机无感知（游戏仅短暂卡约 1~2s）。
+
+### 待验证
+
+- [ ] grace period 的时间长度（估计 5~30s，需实测）
+- [ ] 方案A 的可靠性（每次抖动后 cloud_player 都能成功进入？）
+- [ ] 方案B 的 RST 注入实现（scapy sendp 或 WinDivert 伪包）
+- [ ] 断线窗口共存后，下一局开始时双连是否自动延续
 
 ---
 

@@ -1,178 +1,209 @@
-# 永久手牌读取：可行路径深度分析
+# 云端以玩家身份读取手牌（Path C 实现）
 
 ## Goal
 
-用户目标：**"连一次热点后，之后任何网络都可以在云端看到自己的手牌"**。
+**用户目标**："连一次热点拿到凭证，之后任意网络在云端实时看到自己的手牌（无 VPN、原装 APK、手机正常打牌）"。
 
-本任务在不写代码的前提下，把所有已知约束和可行路径梳理清楚，给出一条推荐路径，并回答两个核心问题：
-1. 旁观模式能否实现这个目标？
-2. 如果旁观不行，直接以玩家身份登录是否可行？
+实现路径：云端用玩家本人的 srs_sessionid 以玩家身份连接游戏服，持续接收 0x2bc0 手牌帧，解码后展示在网页。
 
 ---
 
-## 已证明的硬约束（不可绕过）
+## 核心假设（待实测验证）
 
-### 约束 1：手牌是"会话私有"的
-服务端只向**该玩家本人的那条 TCP 会话**发送隐藏手牌。  
-- 旁观（ReqRealtimeGameRecord, msgid=3000）：用户肉眼实机确认 → **只能看到牌背**，服务器不发隐藏手牌。
-- 牌局帧（0x2bc0）在 7777 端口明文传输，但只流向"在桌的那条会话"。
+**假设：服务端允许同账号双连接共存，不踢手机**。
 
-### 约束 2：同账号同桌单连接（接管语义）
-第二条连接以同账号"重连"进同一桌，服务器把座位给新连接、**踢掉旧连接**（手机掉线）。
-
-### 约束 3：持续读牌需要持续数据通道
-实时手牌每巡都变 → 需要**持续**的数据访问，一次性凭证不够。
-
-### 逻辑推论
-∴ **"连一次热点 + 之后任何端不挂任何东西 + 云端实时读手牌"在物理上不可能**——要持续手牌，必有一个持续数据通道。
+- 现有研究结论是"重连=接管"，但该结论来自同一座位重连场景
+- 本方案用不同 usertype / 连接方式，需要 live 实测验证是否真的踢线
+- **如果踢线**：退回到"连热点期间短暂双连"或其他方案，本 PRD 需要修订
 
 ---
 
-## 问题一：旁观模式能否实现目标？
-
-**结论：不能。**
-
-旁观模式可以做到：
-- ✅ 云端维持长期旁观连接（已实现 auto-reconnect，srs_sessionid 4h+ 有效）
-- ✅ 看到公开信息（他家弃牌、鸣牌、剩余牌数、对局房间信息）
-- ✅ 不需要用户连接任何东西（无配置模式）
-
-旁观模式做不到：
-- ❌ 自己的隐藏手牌（服务器设计决定，牌背是协议层面的限制，不可绕过）
-- ❌ 摸到了什么牌（摸牌事件对旁观者不可见）
-
-旁观模式适合的场景：辅助看别人打牌、记录对局公开信息，**不适合"看自己手牌给自己 AI 建议"这个核心场景**。
-
----
-
-## 问题二：直接以玩家身份登录能否实现目标？
-
-**结论：技术上能看到手牌，但会踢掉手机（手机无法同时打牌）。**
-
-如果云端以用户的账号身份完成 SRS 握手 + PlayerConnect（usertype=7，flag=0），进入同一牌桌：
-- ✅ 云端持有玩家本人的会话 → 天然接收到隐藏手牌（0x2bc0 帧）
-- ✅ 本轮所有 SRS 加密破解成果可复用（flag=0 已实现）
-- ❌ 服务端"重连=接管"语义 → 手机被踢出局、无法继续玩牌
-- ❌ 用户体验断裂：必须选择"手机玩"或"云端AI看手牌"，不能同时
-
-**适用条件**：云端彻底接管游戏会话（"在云端/网页上玩麻将"），手机只是显示/操作的输入终端。这是一个大架构重构，不是"辅助工具"而是"云端麻将客户端"。
-
----
-
-## 三条可行路径对比
-
-| 路径 | 手机能玩 | 任意网络 | "连一次"代价 | 工程量 | 状态 |
-|------|--------|---------|------------|--------|------|
-| **A. VPN 隧穿（已上线）** | ✅ 正常玩 | ✅（VPN always-on 透明） | 一次性装 VPN 配置 | 已完成 | **已上线** |
-| **B. Frida Siphon（推荐下一步）** | ✅ 正常玩 | ✅（HTTP POST 用手机自身网络） | 一次性装重打包 APK | 中等 | 未开始 |
-| **C. 云端当玩家** | ❌ 手机被踢 | ✅ | 一次性提取凭证 | 大 | 未开始 |
-
-### 路径 A 现状与局限
-
-**已上线（2026-06-13 真机验证通过）。**
-
-- 手机装 IKEv2/IPSec PSK VPN，once configured，forever on
-- 所有游戏流量经云端 → ECS 被动嗅 7777 明文帧 → stable 解码 → 手牌
-- "任意网络"通过 always-on VPN 实现（4G/5G/WiFi 透明切换）
-- 唯一用户代价：手机需保持 VPN 常连（Android 支持 always-on，丢失时自动重连）
-- 局限：VPN 会把**全部手机流量**路由到云端（全量隧道，split tunnel 不支持）
-
-**对用户来说**："连一次热点" → 改成 → "装一次 VPN" — 其实已经满足目标精神了，只是"连接方式"从热点改成了 VPN。
-
-### 路径 B — Frida Siphon（最接近目标精神）
-
-**真正做到：任意网络 + 手机正常玩 + 无 VPN 负担。**
-
-架构：
-```
-手机（任意网络，正常玩，不踢线）:
-  游戏进程（重打包 APK + Frida gadget[script 模式]）
-    └─ siphon.js（gadget 自动加载）:
-        - hook libc recv/read（抓游戏服连接的入向帧）
-        - 识别 0x2bc0 牌局帧 → HTTP POST 到云端 relay
-        - 走手机自己的 4G/WiFi → 对游戏服完全透明
-
-云端 ECS:
-    POST /ingest 收原始帧
-      → stable 解码 MJProtocol/PacketStateTracker
-      → BattleState（手牌/弃牌/建议）
-      → 网页展示
-```
-
-"一次性代价"：用户安装一次重打包 APK（有 Frida gadget）。
-
-**已有基础**：
-- 重打包 APK 已有（gadget 内置）
-- hook_hand.js 原型已有（能拿到入向帧）
-- stable 解码器完整可用
-- relay + 网页展示完整可用
-
-**缺失**：
-- siphon.js：在 hook 内发 HTTP POST（Frida Socket/NativeFunction）
-- relay `/ingest` 端点：收帧 → 喂解码器（把 extractor 解码逻辑移入 relay）
-- gadget script 模式自治：脱离 PC Frida server，游戏启动即自动加载 siphon.js
-- live 手牌捕获验证（上次只到心跳，无活跃牌局）
-
-### 路径 C — 云端当玩家（大工程，暂不考虑）
-
-需要实现完整的云端麻将游戏客户端（大厅登录、游戏流程、操作回传），用户 UX 变成在网页上玩麻将，不是"手机原生玩 + AI 辅助"。工程量大，偏离原始场景，暂排除。
-
----
-
-## 推荐路径
+## 方案架构
 
 ```
-现在   ──────── 路径 A（VPN）已上线，满足大部分需求
-                ↓ 如果用户不想挂 VPN
-下一步 ──────── 路径 B（Frida Siphon）——唯一同时满足"任意网络+手机正常玩+看自己手牌+无VPN"
-```
+Phase A — 凭证提取（连一次热点，约1分钟）:
+  手机连 PC 热点
+    → ECS 被动嗅 7777 + SRS 握手包
+    → 提取 srs_sessionid（SRS 握手中明文或可解密）
+    → 提取当前桌号 / room_id（PlayerConnect 帧）
+    → 存入云端 credential store
 
-**路径 B 里程碑（参考 siphon-final-goal.md）**：
-- M1：live 验证手牌捕获（hook_hand.js sticky game-fd，在活跃牌局抓 0x2bc0 → stable 解码 → 打印手牌）
-- M2：siphon.js 自推（hook 内 HTTP POST 帧到云端 relay）
-- M3：relay /ingest 解码 + 网页（云端收帧 → 解码 → 展示）
-- M4：gadget 自治（script 模式，拔掉 PC，手机换网验证云端仍更新）
-- M5：稳健性（断线重连、批量节流、隐私）
+Phase B — 云端双连（断开热点，任意网络）:
+  ECS 用存储的 srs_sessionid
+    → SRS 握手（auth_token_12b + handshake_blob，已知推导方式）
+    → PlayerConnect（usertype=7，flag 目标=0）
+    → 进入同一牌桌
+    → 接收 0x2bc0 手牌帧
+    → stable/MJProtocol + PacketStateTracker 解码
+    → BattleState → 网页展示
+
+Phase C — 凭证刷新:
+  srs_sessionid 4h+ 有效
+  → 过期后再连一次热点重新提取
+```
 
 ---
 
-## 核心问题的答案（供用户决策）
+## 里程碑
 
-**Q：旁观模式能否实现目标（看自己手牌）？**  
-A：**不能。** 协议层面，旁观者只收到牌背，这是服务端设计决定的，无法绕过。
+| # | 里程碑 | 交付 | 验收 |
+|---|--------|------|------|
+| M1 | 凭证提取自动化 | 热点连接时自动抓 srs_sessionid + room_id 存云端 | 控制台打印 `sessionid=xxx room=yyy` |
+| M2 | 云端 PlayerConnect flag=0 | 用存储凭证完成 SRS 握手，flag=0 | 日志显示 `flag=0 connected` |
+| M3 | 双连不踢手机（实测）| 云端连线后手机继续收到游戏帧 | 手机正常出牌，无断线提示 |
+| M4 | 实时手牌接收 | 云端收到 0x2bc0 帧并解码 BattleState | 打印出本人手牌 |
+| M5 | 网页展示 | relay `/ingest` + 网页更新 | 浏览器实时显示手牌 + AI 建议 |
+| M6 | 稳健性 | 断线重连、凭证过期提示 | 断网 30s 后自动重连，过期时网页提示"请重连热点" |
 
-**Q：直接登录以玩家身份可以看手牌吗？**  
-A：**技术上可以，但会踢掉手机，手机无法同时打牌。** 适用于"彻底改成云端玩麻将"的架构，不适合"手机原生玩+AI 辅助看手牌"的场景。
+---
 
-**Q：离"连一次即永久看手牌"还差多远？**  
-A：
-- 如果接受 VPN：**已经到了**（路径 A 已上线，always-on VPN 一次配置）
-- 如果不要 VPN：**中等工程量**（路径 B，Frida siphon，约 4 个里程碑，需 1~2 周）
+## 约束
+
+- **无 VPN**：Phase B 不依赖任何 VPN
+- **原装 APK**：手机侧零修改
+- **Phase A 代价**：每隔 4h 连一次热点（可接受）
+
+---
+
+## 关键技术点
+
+### 凭证提取（Phase A）
+
+现有能力：
+- ECS 已在热点网络下能嗅 7777 明文帧（VPN 上线时已验证）
+- SRS 握手加密已破（AES-256-CFB128 + 静态 default key + 会话 key 线缆下发）
+- `srs_sessionid` 在 SRS 握手中由服务器下发，可从解密后的包中提取
+
+需验证：srs_sessionid 在哪个 SRS 消息中出现（PlayerConnect response 还是 SessionInit？）
+
+### 云端 SRS 认证（Phase B）
+
+已有：
+- `auth_token_12b` 推导方式（已实现，见 srs-key-derivation.md）
+- `handshake_blob` 构造方式
+- `PlayerConnect usertype=7` 已验证 flag=0（凭证新鲜时）
+
+缺失：
+- srs_sessionid 从 pcap 中自动提取的解析器
+- 云端 SRS client（Python，复用现有握手逻辑）
+
+### 双连不踢验证（M3 关键）
+
+策略：
+1. 先用 PC Frida server 手动测试：手机在牌局中，PC 同时以相同账号 PlayerConnect
+2. 观察手机是否掉线
+3. 如果踢线：测试不同 usertype（只读/观战身份但带手牌权限？）或 连接时序优化
 
 ---
 
 ## Open Questions
 
-1. **用户接受 VPN 方案吗？**（VPN always-on 对 4G 流量/电量有轻微影响）
-2. **如果做 Frida siphon，优先做哪个里程碑（M1 验证 vs 直接 M2 推流）？**
-3. **gadget 配置方式**：APK 内嵌 siphon.js（稳定但需重打包）vs /data/local/tmp 热更新（需 root 或 ADB 每次覆盖）
+1. **srs_sessionid 精确位置**：在 SRS 握手哪条消息中？格式？（需 pcap 分析）
+2. **双连是否踢手机**：必须 live 实测才知道（M3）
+3. **room_id 来源**：从 PlayerConnect 请求帧提取，还是有专门的房间信息帧？
+
+---
+
+## 已有可复用资产
+
+| 资产 | 位置 | 用途 |
+|------|------|------|
+| SRS 握手破解 | `srs-key-derivation.md`, `srs-fully-solved.md` | Phase B 认证 |
+| stable 解码器 | `stable/protocol.py`, `stable/tracker.py` | 解码手牌帧 |
+| relay + 网页 | `remote/relay/` | 网页展示 |
+| pcap 解密工具 | `srs-pcap-decrypt-attempt.md` | Phase A 凭证提取 |
+| Npcap 嗅探 | `stable/capture.py` | 热点嗅探 |
+
+---
 
 ## Out of Scope
 
-- 旁观模式的进一步研究（已证死路）
-- 云端当玩家方案（工程量太大，偏离场景）
-- 视觉模式（截图识别）
+- 旁观模式（死路，协议层无手牌）
+- Frida Siphon / APK 修改
+- VPN 方案
 
-## Technical Notes
+---
 
-**已有可复用资产**：
-- `frida/hook_wire.js`, `hook_wire2.js` — recv hook 框架
-- `apk/` — 重打包 APK（含 gadget）
-- `stable/` — MJProtocol + PacketStateTracker（完整解码器）
-- `remote/relay/` — relay 服务 + 网页展示
-- SRS 认证破解（flag=0 已实现，auth_token_12b + handshake_blob + srs_sessionid）
+## 实测结论（2026-06-13）
 
-**关键研究档案**：
-- `.trellis/tasks/archive/06-11-srs-client-finish/research/siphon-final-goal.md` — Frida siphon 完整方案设计
-- `.trellis/tasks/archive/06-11-srs-client-finish/research/final-architecture-plan.md` — 三路径排除逻辑（证据级）
-- `.trellis/spec/backend/remote-access.md` §1.6 — SRS 实测结论（idle timeout/reconnect/旁观局限）
+### Phase B（云端双连）已宣告死亡
+
+**实测现象**：
+- cloud_player 连接 47.96.0.227:7777，auth flag=0 ✅
+- 服务端 **2~3 秒内主动关闭连接**，手牌帧 = 0
+- 多次重试，结论一致
+- 唯一例外：20:52 那次收到 8 帧，但均为 `phase=idle, hand=[]`（手机已离局）
+
+**根因**：服务端强制单连接。同一 srs_sessionid 只允许一条 TCP 连接存活：
+- 手机在线 → cloud_player 被踢（2~3s 内关闭）
+- 手机离线 → cloud_player 能连但无手牌（游戏已结束）
+- 下局手机重连 → cloud_player 再次被踢
+
+**M3 假设已证伪**：服务端踢新连接（不踢手机），Phase B 架构根本无法运行。
+
+---
+
+## 新方案：热点实时解码（Hotspot Live Decode）
+
+### 核心洞察
+
+PC 热点本来就能看到手机和游戏服务器之间的所有 TCP 流量。0x2BC0 手牌帧经过 PC，`NpcapCaptureAdapter` 已经在捕获，`MJProtocol` 已能解码，`PacketStateTracker` 已能转成手牌列表。
+
+**完全不需要第二条连接到游戏服务器。**
+
+### 新架构
+
+```
+手机 ↔ PC热点(NpcapCapture, port 7777) ↔ 游戏服务器
+              ↓ 被动嗅探（无第二连接）
+       MJProtocol.process_packet()  → 已有
+              ↓
+       PacketStateTracker.on_message() → 已有
+              ↓
+       BattleState.snapshot()
+              ↓
+       POST http://8.136.37.136:8003/push
+              ↓
+       浏览器实时显示手牌 ✅
+```
+
+### 优势
+
+| 对比项 | Phase B（云端双连）| 热点实时解码 |
+|--------|------------------|-------------|
+| 服务端单连接限制 | 致命阻塞 | 完全绕开（被动嗅探）|
+| 检测风险 | 有（异地 IP 连接同账号）| 零（纯被动）|
+| 代码复用 | 需要新建 cloud_player | 100% 复用 stable/ 现有解码器 |
+| 约束 | 任意网络（但被服务端踢）| 手机必须在 PC 热点 |
+
+### 实现要点
+
+仅需修改 `remote/capture_credentials.py` 的 Phase 2：
+
+```python
+# Phase 2: 从热点流量直接解码手牌（无需 cloud_player）
+from stable.tracker import PacketStateTracker
+from stable.mapping import MappingStore
+
+self._tracker = PacketStateTracker(MappingStore())  # init时
+
+# _on_packet Phase 2 block:
+changed = self._tracker.on_message(msg)
+if changed and self._has_hand_tiles():
+    self._push_state_to_relay()  # POST /push 到 ECS
+```
+
+### 新里程碑
+
+| # | 里程碑 | 验收 |
+|---|--------|------|
+| M1 ✅ | 凭证提取 + 云端上传 | 已完成 |
+| M2 ✅ | flag=0 认证 | 已完成（但 Phase B 死路）|
+| M3 ❌ | 双连不踢 | **已证伪，Phase B 放弃**|
+| M4-new | 热点实时解码 → POST /push | 浏览器显示手牌 |
+| M5 | 网页展示（relay 已有 /push）| 已有，无需改 |
+
+### 约束更新
+
+- **必须保持热点连接**：手机打牌期间需连着 PC 热点（已是现有前提）
+- **Phase B 删除**：cloud_player 不再用于手牌接收（凭证上传仍保留）

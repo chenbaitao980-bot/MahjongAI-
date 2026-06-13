@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/remote-access.md", "reason": "验证实测结论与代码行为一致，特别是 §14 断线窗口机制和 §1.6 SRS协议约束"}
+{"file": "remote/cloud_player.py", "reason": "检查测试脚本/改动后的重连循环逻辑，确保不产生异常流量或破坏手机连接"}

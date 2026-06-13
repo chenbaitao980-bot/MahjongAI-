@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/remote-access.md", "reason": "断线窗口双连机制 §14，SRS协议实测结论 §1.6，PlayerData flag 含义，SRS握手流程"}
+{"file": "remote/cloud_player.py", "reason": "SRSPlayerClient._run()/_connect_once()/_decode_and_feed_frame()/push_to_relay() — 测试脚本直接复用或参考"}
+{"file": "remote/srs_spectator/client.py", "reason": "SRSClient 底层握手实现，on_disconnect/on_handshake_done 回调接口"}
+{"file": "stable/protocol.py", "reason": "MJProtocol 解码 0x2bc0 帧的协议细节"}
+{"file": "stable/tracker.py", "reason": "PacketStateTracker 解码手牌帧 → BattleState"}

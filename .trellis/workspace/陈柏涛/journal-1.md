@@ -111,3 +111,37 @@ Implemented dual-mode remote game data access system. extractor/ (Python 3.6-com
 ### Next Steps
 
 - None - task complete
+
+
+## Session 4: SRS 保活误判排除 + 自动重连实现
+
+**Date**: 2026-06-13
+**Task**: SRS 保活误判排除 + 自动重连实现
+**Branch**: `master`
+
+### Summary
+
+证伪 msgid=3 心跳假设（它是握手步骤，发了立即被踢）；实测服务端 idle timeout=120s；srs_sessionid 跨连接复用 4h+ 有效；实现 on_disconnect→2s→reconnect 自动重连替代心跳；修复 SRSSessionExtractor _session_key 不重置 bug；更新 remote-access spec。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e82f123` | (see git log) |
+| `009247f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

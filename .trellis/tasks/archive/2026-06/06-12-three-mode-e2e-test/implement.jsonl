@@ -1,0 +1,5 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/backend/remote-access.md", "reason": "三模式 relay 架构、API 契约、凭证流转、端口映射"}
+{"file": ".trellis/spec/backend/game-protocol.md", "reason": "SRS 协议帧格式、握手序列、旁观 msgid 3000/3001"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "日志规范"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "错误处理模式"}

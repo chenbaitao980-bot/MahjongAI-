@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=simple
 # __INSTALL_DIR__ 与 __IFACE__ 由 install_linux.sh 替换
 WorkingDirectory=__INSTALL_DIR__
-ExecStart=/usr/bin/env python3 __INSTALL_DIR__/run.py --mode tcpdump --interface __IFACE__ --config __INSTALL_DIR__/remote/extractor/config.yaml
+ExecStart=/usr/bin/env python3 __INSTALL_DIR__/remote/extractor/main.py --mode tcpdump --interface __IFACE__ --config __INSTALL_DIR__/remote/extractor/config.yaml
 Restart=always
 RestartSec=5
 # tcpdump 需要抓包权限；多数发行版以 root 运行最简单

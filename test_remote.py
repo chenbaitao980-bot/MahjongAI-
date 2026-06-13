@@ -384,6 +384,7 @@ def _suite_relay_api():
             expected = dict(snapshot)
             expected["data_source"] = "extractor"
             expected["credential_ready"] = True  # test_register_valid 已注册凭证
+            expected["mode"] = "hotspot"  # 默认模式
             assert data == expected, f"expected {expected}, got {data}"
 
         _run(suite, "test_push_and_state", test_push_and_state)

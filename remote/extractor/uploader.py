@@ -2,8 +2,11 @@
 uploader.py — HTTP 客户端，向 relay 推送数据
 
 提供：
-- register(relay_url, api_token, handshake_blob, auth_token_12b) -> bool
-- push(relay_url, api_token, snapshot) -> bool
+- register(relay_urls, api_token, handshake_blob, auth_token_12b) -> bool
+- push(relay_urls, api_token, snapshot) -> bool
+
+支持多目标推送：relay_urls 可以是 str 或 list[str]，
+列表时会向所有目标依次推送，任一成功即返回 True。
 """
 import logging
 
@@ -14,6 +17,20 @@ except ImportError:
     _HAS_REQUESTS = False
 
 _LOGGER = logging.getLogger("remote.extractor.uploader")
+
+
+def _normalize_urls(relay_urls) -> list:
+    """将 relay_urls 统一为列表形式。
+
+    支持输入：
+    - str: "http://1.2.3.4:8000" → ["http://1.2.3.4:8000"]
+    - list[str]: ["http://1.2.3.4:8000", "http://1.2.3.4:8001"] → 不变
+    """
+    if isinstance(relay_urls, str):
+        return [relay_urls]
+    if isinstance(relay_urls, (list, tuple)):
+        return list(relay_urls)
+    return [str(relay_urls)]
 
 
 def _post(url, data, timeout=10):
@@ -33,64 +50,83 @@ def _post(url, data, timeout=10):
         return False, 0
 
 
-def register(relay_url, api_token, handshake_blob, auth_token_12b, srs_sessionid=None):
+def register(relay_urls, api_token, handshake_blob, auth_token_12b, srs_sessionid=None):
     """
     向 relay 注册认证凭证。
 
-    relay_url: str，如 "http://1.2.3.4:8000"
+    relay_urls: str 或 list[str]，如 "http://1.2.3.4:8000" 或
+                ["http://1.2.3.4:8000", "http://1.2.3.4:8001"]
     api_token: str，鉴权密钥
     handshake_blob: bytes
     auth_token_12b: bytes
     srs_sessionid: bytes or None，SRS 层 sessionid (16B)
-    返回 True 表示成功
+    返回 True 表示至少一个目标成功
     """
-    url = relay_url.rstrip("/") + "/register"
-    data = {
-        "handshake_blob": handshake_blob.hex(),
-        "auth_token_12b": auth_token_12b.hex(),
-        "api_token": api_token,
-    }
-    if srs_sessionid:
-        data["srs_sessionid"] = srs_sessionid.hex()
-    success, code = _post(url, data)
-    if success:
-        print("[Uploader] Token 已注册到 relay ({})".format(url))
-    return success
+    urls = _normalize_urls(relay_urls)
+    any_success = False
+    for relay_url in urls:
+        url = relay_url.rstrip("/") + "/register"
+        data = {
+            "handshake_blob": handshake_blob.hex(),
+            "auth_token_12b": auth_token_12b.hex(),
+            "api_token": api_token,
+        }
+        if srs_sessionid:
+            data["srs_sessionid"] = srs_sessionid.hex()
+        success, code = _post(url, data)
+        if success:
+            print("[Uploader] Token 已注册到 relay ({})".format(url))
+            any_success = True
+        else:
+            _LOGGER.warning("注册失败: %s", url)
+    return any_success
 
 
-def register_room(relay_url, api_token, room_id, game_id):
+def register_room(relay_urls, api_token, room_id, game_id):
     """
     向 relay 上报房间信息（通道B：零配置旁观）。
 
-    relay_url: str，如 "http://1.2.3.4:8000"
+    relay_urls: str 或 list[str]
     api_token: str，鉴权密钥
     room_id: int
     game_id: int
-    返回 True 表示成功
+    返回 True 表示至少一个目标成功
     """
-    url = relay_url.rstrip("/") + "/register-room"
-    data = {
-        "room_id": room_id,
-        "game_id": game_id,
-        "api_token": api_token,
-    }
-    success, code = _post(url, data)
-    if success:
-        print("[Uploader] 房间信息已上报到 relay (roomid={}, gameid={})".format(room_id, game_id))
-    return success
+    urls = _normalize_urls(relay_urls)
+    any_success = False
+    for relay_url in urls:
+        url = relay_url.rstrip("/") + "/register-room"
+        data = {
+            "room_id": room_id,
+            "game_id": game_id,
+            "api_token": api_token,
+        }
+        success, code = _post(url, data)
+        if success:
+            print("[Uploader] 房间信息已上报到 relay (roomid={}, gameid={})".format(room_id, game_id))
+            any_success = True
+        else:
+            _LOGGER.warning("房间信息上报失败: %s", url)
+    return any_success
 
 
-def push(relay_url, api_token, snapshot):
+def push(relay_urls, api_token, snapshot):
     """
     向 relay 推送当前游戏状态快照。
 
+    relay_urls: str 或 list[str]
     snapshot: dict，来自 PacketStateTracker.snapshot()
-    返回 True 表示成功
+    返回 True 表示至少一个目标成功
     """
-    url = relay_url.rstrip("/") + "/push"
-    data = {
-        "snapshot": snapshot,
-        "api_token": api_token,
-    }
-    success, _code = _post(url, data, timeout=5)
-    return success
+    urls = _normalize_urls(relay_urls)
+    any_success = False
+    for relay_url in urls:
+        url = relay_url.rstrip("/") + "/push"
+        data = {
+            "snapshot": snapshot,
+            "api_token": api_token,
+        }
+        success, _code = _post(url, data, timeout=5)
+        if success:
+            any_success = True
+    return any_success

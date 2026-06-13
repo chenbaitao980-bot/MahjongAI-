@@ -76,7 +76,12 @@ class ExtractorApp:
     """extractor 主应用"""
 
     def __init__(self, cfg, mode=None, interface="any"):
-        self.relay_url = cfg.get("relay_url", "http://localhost:8000")
+        # relay_urls 支持 str 和 list[str]，兼容旧 config 中单 relay_url
+        relay_urls = cfg.get("relay_urls")
+        if relay_urls:
+            self.relay_url = relay_urls  # list[str] 或 str
+        else:
+            self.relay_url = cfg.get("relay_url", "http://localhost:8000")
         self.api_token = cfg.get("api_token", "")
         self.game_port = int(cfg.get("game_port", 7777))
 
@@ -203,7 +208,7 @@ class ExtractorApp:
 
     def run(self):
         """阻塞运行主循环"""
-        _LOGGER.info("extractor 启动，监听 port %d → relay %s", self.game_port, self.relay_url)
+        _LOGGER.info("extractor 启动，监听 port %d → relay %s", self.game_port, self.relay_url if isinstance(self.relay_url, str) else ", ".join(self.relay_url))
         _LOGGER.info(
             "提示：如需提取认证凭证（断热点后 relay 自动接管），需要在 extractor 运行期间，"
             "清除游戏 App 数据后重新登录（Android: 设置→应用→清除数据；iOS: 删除重装）。"

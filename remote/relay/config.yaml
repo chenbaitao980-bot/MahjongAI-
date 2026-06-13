@@ -5,4 +5,4 @@ game_server_port: 7777
 handshake_blob: 459937d169da1ecda3c63f5a89a70b94e55d92
 srs_sessionid: ''
 push_timeout: 10
-spectator_url: http://localhost:8001
+spectator_url: http://localhost:8003

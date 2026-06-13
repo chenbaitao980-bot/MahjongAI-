@@ -1,4 +1,9 @@
 api_token: acec67bfa9e518b5906d3e6a
 game_port: 7777
+# 单目标（向后兼容）
 relay_url: http://8.136.37.136:8000
+# 多目标推送（可选，覆盖 relay_url）
+# relay_urls:
+#   - http://8.136.37.136:8000
+#   - http://8.136.37.136:8001
 spectator_forensic_all_heads: true

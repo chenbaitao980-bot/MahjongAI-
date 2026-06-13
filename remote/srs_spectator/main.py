@@ -1,6 +1,6 @@
 """srs_spectator service — listens for roomid/gameid and watches games.
 
-Runs on the cloud ECS (port 8001). Receives roomid/gameid from the relay
+Runs on the cloud ECS (port 8003). Receives roomid/gameid from the relay
 (which got them from the local extractor). Then connects to the game server,
 completes SRS handshake, and begins watching.
 
@@ -45,7 +45,7 @@ HANDSHAKE_BLOB = os.environ.get("HANDSHAKE_BLOB", "")
 SRS_SESSIONID = os.environ.get("SRS_SESSIONID", "")  # SRS PlayerConnect pwd (16B hex)
 USERID = os.environ.get("USERID", "newpt1084306678")  # SRS PlayerConnect userid
 BIND_HOST = os.environ.get("BIND_HOST", "0.0.0.0")
-BIND_PORT = int(os.environ.get("BIND_PORT", "8001"))
+BIND_PORT = int(os.environ.get("BIND_PORT", "8003"))
 
 
 class WatchRequest(BaseModel):

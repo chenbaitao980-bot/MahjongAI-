@@ -178,3 +178,36 @@ Implemented dual-mode remote game data access system. extractor/ (Python 3.6-com
 ### Next Steps
 
 - None - task complete
+
+
+## Session 6: 防火墙封锁手机重连 — 为 ECS 双连让路
+
+**Date**: 2026-06-14
+**Task**: 防火墙封锁手机重连 — 为 ECS 双连让路
+**Branch**: `master`
+
+### Summary
+
+发现 ECS flag=0 后 1s 被踢根因：手机 TCP 立刻重连与 ECS 争 session 槽。方案：RST 注入前先加 Windows 防火墙出站规则封锁 phone→47.96.0.227:7777，5s 后解封。check 修复关键 bug：localip=phone_ip 在热点 NAT 场景无效，改为只匹配 remoteip/remoteport。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2883e6f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

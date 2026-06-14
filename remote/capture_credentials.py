@@ -15,6 +15,7 @@ import datetime
 import json
 import logging
 import os
+import subprocess
 import sys
 import time
 import threading
@@ -157,13 +158,38 @@ class CredentialCapture:
             except Exception:
                 pass
 
+        # Wait for ECS SRSPlayerClient to initialize before injecting RST.
+        # /api/creds starts the player async; RST must arrive AFTER the player
+        # has entered its retry loop, otherwise grace period expires before first connect.
+        if self._ecs_relay and creds.get("srs_sessionid"):
+            print("[Wait] Giving ECS player 3s to initialize before RST injection...")
+            time.sleep(3)
+
+        # Temporarily block phone reconnect so ECS can claim the session slot first
+        phone_state = None
+        if self._capture_adapter and hasattr(self._capture_adapter, "get_tcp_state"):
+            phone_state = self._capture_adapter.get_tcp_state()
+
+        blocked = False
+        if phone_state:
+            print("[FW] Blocking phone reconnect during dual-connect window...")
+            blocked = self._block_phone_traffic(phone_state["phone_ip"])
+
         # Trigger grace period via TCP RST (so cloud_player can connect without manual WiFi toggle)
         print("[Next] Triggering server disconnect window via RST injection...")
         rst_ok = self._inject_rst_if_possible()
         if rst_ok:
             print("[OK] RST sent. Game will briefly stall then auto-recover.")
-            print("[Wait] ECS dual-connect establishing, please wait...")
+            if blocked:
+                print("[Wait] Holding phone reconnect for 5s while ECS connects...")
+                time.sleep(5)
+                self._unblock_phone_traffic()
+                print("[FW] Phone reconnect unblocked. Dual-connect should now be established.")
+            else:
+                print("[Wait] ECS dual-connect establishing, please wait...")
         else:
+            if blocked:
+                self._unblock_phone_traffic()
             print("[Next] Please manually switch phone WiFi from PC hotspot to own network to trigger dual-connect.")
 
         print("")
@@ -236,6 +262,38 @@ class CredentialCapture:
             print("[WARN] ECS upload failed: {}".format(exc))
             return False
 
+    def _block_phone_traffic(self, phone_ip: str) -> bool:
+        """Block phone -> game server traffic via Windows firewall (requires admin).
+
+        NOTE: In hotspot NAT mode the PC rewrites the phone's source IP to its
+        own WAN IP before forwarding, so 'localip=phone_ip' would never match the
+        outbound packet.  Matching only on remoteip+remoteport is sufficient and
+        correct for this scenario (the only device routing through this hotspot to
+        47.96.0.227:7777 is the phone).
+        """
+        try:
+            subprocess.run([
+                "netsh", "advfirewall", "firewall", "add", "rule",
+                "name=MahjongBlockPhone",
+                "dir=out", "action=block",
+                "remoteip=47.96.0.227", "remoteport=7777",
+                "protocol=TCP", "enable=yes",
+            ], check=True, capture_output=True)
+            return True
+        except Exception as exc:
+            print("[WARN] firewall block failed: {}".format(exc))
+            return False
+
+    def _unblock_phone_traffic(self) -> None:
+        """Remove the MahjongBlockPhone firewall rule (idempotent)."""
+        try:
+            subprocess.run([
+                "netsh", "advfirewall", "firewall", "delete", "rule",
+                "name=MahjongBlockPhone",
+            ], capture_output=True)
+        except Exception:
+            pass
+
     def _inject_rst_if_possible(self) -> bool:
         """Attempt TCP RST injection using the most recently observed phone->server TCP state."""
         state = None
@@ -285,6 +343,7 @@ class CredentialCapture:
                 _LOGGER.error("Capture error: %s", exc)
         finally:
             self._token_ext.close()
+            self._unblock_phone_traffic()  # ensure firewall rule is removed on exit
 
         print("[INFO] Capture stopped.")
 

@@ -120,14 +120,19 @@ class NpcapCaptureAdapter:
             if pkt is not None:
                 pkt["ts"] = 0.0
                 # Track TCP state: phone -> game server direction
-                dst_ip = pkt.get("dst")
+                # pkt["dst"] is "ip:port" format, pkt["dst_port"] is int
                 dst_port = pkt.get("dst_port")
-                if dst_ip == _GAME_SERVER_IP and dst_port == self.port:
-                    self._tcp_state = {
-                        "phone_ip": pkt.get("src"),
-                        "phone_port": pkt.get("src_port"),
-                        "phone_seq": pkt.get("seq"),
-                    }
+                if dst_port == self.port:
+                    dst_combined = pkt.get("dst", "")
+                    dst_ip = dst_combined.rsplit(":", 1)[0] if ":" in dst_combined else dst_combined
+                    if dst_ip == _GAME_SERVER_IP:
+                        src_combined = pkt.get("src", "")
+                        src_ip = src_combined.rsplit(":", 1)[0] if ":" in src_combined else src_combined
+                        self._tcp_state = {
+                            "phone_ip": src_ip,
+                            "phone_port": pkt.get("src_port"),
+                            "phone_seq": pkt.get("seq"),
+                        }
                 packet_callback(pkt)
 
         self._capture.sniff(on_raw_ip, port_filter=self.port)

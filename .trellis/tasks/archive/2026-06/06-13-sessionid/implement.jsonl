@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/backend/remote-access.md", "reason": "验收基准：SRS 保活/重连/旁观局限性实测结论，srs_sessionid 4h+ 有效期、idle timeout 行为，方向 C 抢帧可行性评估依据"}
+{"file": ".trellis/spec/backend/game-protocol.md", "reason": "验收基准：PlayerConnect 格式、auth_token_12b 位置、flag 含义，方向 B 测试验收依据"}
+{"file": ".trellis/tasks/archive/06-11-srs-client-finish/research/srs-fully-solved.md", "reason": "验收基准：flag=0/41/72 含义、PlayerConnect 格式 bug 修复记录，方向 A/B/C 测试 flag 解读依据"}
+{"file": ".trellis/tasks/archive/06-11-srs-client-finish/research/srs-spectator-protocol.md", "reason": "验收基准：大厅登录明文、processid 映射、sub_type/extra 魔数，方向 A 不同 sessionid 共存测试参考"}
+{"file": "remote/srs_spectator/client.py", "reason": "实现方向 A/B/C 测试的核心文件，需修改支持自定义 sessionid/auth_token/高频重连"}
+{"file": "remote/srs_spectator/player_connect.py", "reason": "实现方向 B 测试的核心文件，需修改支持 auth_token_12b 作为 pwd"}
+{"file": "scripts/diag_srs_live.py", "reason": "已有诊断脚本，方向 A/B/C 测试的基础模板"}

@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/remote-access.md", "reason": "验收基准：SRS 实测结论中 flag 含义（flag=0=成功，flag=72=token错误，flag=41=格式错误），方向 A/B/C 测试 flag 解读依据"}
+{"file": ".trellis/spec/backend/game-protocol.md", "reason": "验收基准：PlayerConnect payload 格式、auth_token_12b 位置（0x0006 payload bytes 4-15），方向 B 测试验收依据"}
+{"file": ".trellis/tasks/archive/06-11-srs-client-finish/research/srs-fully-solved.md", "reason": "验收基准：已知 flag=0 的条件、PlayerConnect 80B 格式、sessionid 16B 定长，方向 A/B 回归对照"}
+{"file": "remote/srs_spectator/client.py", "reason": "验收基准：SRSClient 连接流程、自动重连机制、on_disconnect 回调，方向 C 高频重连测试参考"}
+{"file": "remote/srs_spectator/player_connect.py", "reason": "验收基准：build_player_connect_raw 字段顺序、pwd 字段位置，方向 B auth_token 替换测试参考"}

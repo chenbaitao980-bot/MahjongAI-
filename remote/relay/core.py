@@ -78,6 +78,8 @@ class RelayApp:
         self._spectator_restart_count = 0
         self._SPECTATOR_MAX_RESTARTS = 5
         self._spectator_url = cfg.get("spectator_url", "")
+        # Inline cloud player (used when systemd is unavailable)
+        self._player_client = None  # SRSPlayerClient | None
 
         # 设置 push_timeout
         push_timeout = float(cfg.get("push_timeout", 10.0))
@@ -110,11 +112,13 @@ class RelayApp:
         "hotspot": "热点模式 (Hotspot)",
         "vpn": "VPN模式 (Phone VPN)",
         "noconfig": "无配置模式 (No-Config / SRS Spectator)",
+        "cloud": "云端玩家模式 (Cloud Player)",
     }
     MODE_DESCRIPTIONS = {
         "hotspot": "手机连PC共享热点，PC抓包推送到云端。端口 8000",
         "vpn": "手机配置IPSec VPN连云端，云端抓包。端口 8001",
         "noconfig": "利用SRS旁观协议直连游戏服务器，手机无需任何配置。端口 8002",
+        "cloud": "连一次热点抓凭证，之后任意网络云端以玩家身份接收手牌。端口 8003",
     }
 
     def _mode_title(self):
@@ -216,6 +220,185 @@ class RelayApp:
                 "has_srs_sessionid": bool(self._cfg.get("srs_sessionid")),
             }
 
+        # ── 凭证上传 + 监控控制（cloud 模式专用）──────────────────────────────
+        if self._mode == "cloud":
+            @self.app.post("/api/creds")
+            async def upload_creds(body: dict):
+                """Receive srs_sessionid from grab_credentials.bat.
+                Saves credentials only — does NOT start cloud_player.
+                User must click Start Monitor in the web UI after entering a game."""
+                api_token = body.get("api_token", "")
+                self._check_api_token(api_token)
+
+                sessionid = body.get("srs_sessionid", "")
+                if not sessionid or len(sessionid) < 32:
+                    raise HTTPException(status_code=400, detail="srs_sessionid missing or too short")
+
+                import json as _json, datetime as _dt, subprocess as _sp
+                creds_dir = os.path.join(
+                    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")),
+                    "data",
+                )
+                os.makedirs(creds_dir, exist_ok=True)
+                creds_path = os.path.join(creds_dir, "cloud_credentials.json")
+                creds = {k: v for k, v in body.items() if k != "api_token"}
+                creds["uploaded_at"] = _dt.datetime.utcnow().isoformat() + "Z"
+                with open(creds_path, "w", encoding="utf-8") as f:
+                    _json.dump(creds, f, indent=2, ensure_ascii=False)
+                _LOGGER.info("[cloud] Credentials saved (sessionid=%s...)", sessionid[:8])
+
+                # Stop any running cloud_player so stale session doesn't block phone
+                self._stop_inline_player()
+                try:
+                    import subprocess as _sp2
+                    _sp2.run(["systemctl", "stop", "mahjong-cloud-player"],
+                             timeout=5, capture_output=True)
+                    _LOGGER.info("[cloud] mahjong-cloud-player stopped (fresh creds ready)")
+                except Exception as exc:
+                    _LOGGER.debug("[cloud] systemctl stop (non-fatal): %s", exc)
+
+                return {"status": "ok", "message": "Credentials saved. Enter game on phone, then click Start Monitor."}
+
+            @self.app.post("/api/start-player")
+            async def start_player(body: dict):
+                """Start cloud_player (call AFTER you are in a game on the phone).
+
+                Tries systemd first (Linux production).  Falls back to inline
+                SRSPlayerClient(continuous=True) for dev / ECS environments
+                where systemd is unavailable.
+
+                Body fields (all optional):
+                    api_token  str   — required for auth
+                    continuous bool  — default True; only used in inline mode
+                """
+                self._check_api_token(body.get("api_token", ""))
+                continuous = bool(body.get("continuous", True))
+
+                # ── try systemd first ──────────────────────────────────────
+                systemd_ok = False
+                if sys.platform.startswith("linux"):
+                    import subprocess as _sp
+                    try:
+                        r = _sp.run(["systemctl", "start", "mahjong-cloud-player"],
+                                    timeout=8, capture_output=True)
+                        if r.returncode == 0:
+                            systemd_ok = True
+                            _LOGGER.info("[cloud] mahjong-cloud-player started via systemd")
+                    except Exception as exc:
+                        _LOGGER.debug("[cloud] systemctl start failed (%s), falling back to inline", exc)
+
+                if systemd_ok:
+                    return {"status": "ok", "message": "Cloud player started (systemd)", "mode": "systemd"}
+
+                # ── inline fallback ────────────────────────────────────────
+                # Load credentials from data/cloud_credentials.json
+                _ROOT2 = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+                creds_path = os.path.join(_ROOT2, "data", "cloud_credentials.json")
+                if not os.path.isfile(creds_path):
+                    raise HTTPException(status_code=400,
+                                        detail="Credentials not found. Run grab_credentials.bat first.")
+                import json as _json2
+                try:
+                    with open(creds_path, "r", encoding="utf-8") as _f:
+                        _creds = _json2.load(_f)
+                except Exception as exc:
+                    raise HTTPException(status_code=500, detail=f"Failed to read credentials: {exc}")
+
+                sessionid = _creds.get("srs_sessionid", "")
+                if not sessionid or len(sessionid) < 32:
+                    raise HTTPException(status_code=400,
+                                        detail="srs_sessionid missing in credentials. Re-run grab_credentials.bat.")
+
+                userid = _creds.get("userid", "") or "newpt1084306678"
+
+                # Stop any existing inline player first
+                self._stop_inline_player()
+
+                # Import SRSPlayerClient (sys.path already includes repo root via relay bootstrap)
+                try:
+                    import importlib, sys as _sys
+                    # Ensure remote/ is importable
+                    _remote_dir = os.path.join(_ROOT2, "remote")
+                    if _ROOT2 not in _sys.path:
+                        _sys.path.insert(0, _ROOT2)
+                    from remote.cloud_player import SRSPlayerClient
+                except ImportError:
+                    try:
+                        from cloud_player import SRSPlayerClient  # type: ignore[no-redef]
+                    except ImportError as exc:
+                        raise HTTPException(status_code=500,
+                                            detail=f"Cannot import SRSPlayerClient: {exc}")
+
+                relay_url = f"http://127.0.0.1:{self._port}"
+                api_token_val = self._cfg.get("api_token", "")
+
+                def _on_state_update(state: dict) -> None:
+                    self._state_store.on_push(state)
+
+                client = SRSPlayerClient(
+                    srs_sessionid=sessionid,
+                    userid=userid,
+                    on_state_update=_on_state_update,
+                    continuous=continuous,
+                )
+                client.start(block=False)
+                self._player_client = client
+                _LOGGER.info("[cloud] Inline SRSPlayerClient started (continuous=%s, sessionid=%s...)",
+                             continuous, sessionid[:8])
+                return {"status": "ok",
+                        "message": f"Cloud player started (inline, continuous={continuous})",
+                        "mode": "inline"}
+
+            @self.app.post("/api/stop-player")
+            async def stop_player(body: dict):
+                """Stop cloud_player (systemd or inline)."""
+                self._check_api_token(body.get("api_token", ""))
+
+                # Stop inline client if running
+                self._stop_inline_player()
+
+                # Also attempt systemd stop (non-fatal if unavailable)
+                if sys.platform.startswith("linux"):
+                    import subprocess as _sp
+                    try:
+                        _sp.run(["systemctl", "stop", "mahjong-cloud-player"],
+                                timeout=8, capture_output=True)
+                    except Exception as exc:
+                        _LOGGER.debug("[cloud] systemctl stop (non-fatal): %s", exc)
+
+                _LOGGER.info("[cloud] mahjong-cloud-player stopped by user")
+                return {"status": "ok", "message": "Cloud player stopped"}
+
+            @self.app.get("/api/player-status")
+            async def player_status(token: str = Query(...)):
+                """Return whether cloud_player service is active (systemd or inline)."""
+                self._check_api_token(token)
+
+                # Check inline client first
+                if self._player_client is not None:
+                    inline_alive = (
+                        self._player_client._thread is not None
+                        and self._player_client._thread.is_alive()
+                    )
+                    if inline_alive:
+                        return {"active": True, "status": "active", "mode": "inline"}
+                    else:
+                        # Thread finished — clean up
+                        self._player_client = None
+
+                # Fall back to systemd check
+                if sys.platform.startswith("linux"):
+                    import subprocess as _sp
+                    try:
+                        r = _sp.run(["systemctl", "is-active", "mahjong-cloud-player"],
+                                    timeout=5, capture_output=True)
+                        active_str = r.stdout.decode("utf-8", errors="replace").strip()
+                        return {"active": active_str == "active", "status": active_str, "mode": "systemd"}
+                    except Exception:
+                        pass
+
+                return {"active": False, "status": "inactive", "mode": "none"}
+
     # ─── 内部辅助 ──────────────────────────────────────────────────
 
     def _check_api_token(self, token: str):
@@ -314,6 +497,16 @@ class RelayApp:
                          self._mode.upper(), self._srs_spectator_proc.pid, log_path)
         except Exception as exc:
             _LOGGER.error("[%s] 启动 SRS spectator 失败: %s", self._mode.upper(), exc)
+
+    def _stop_inline_player(self) -> None:
+        """Stop the inline SRSPlayerClient if one is running."""
+        if self._player_client is not None:
+            try:
+                self._player_client.stop()
+            except Exception as exc:
+                _LOGGER.debug("[cloud] inline player stop error (non-fatal): %s", exc)
+            self._player_client = None
+            _LOGGER.info("[cloud] Inline SRSPlayerClient stopped")
 
     def _stop_spectator(self):
         """停止 SRS spectator 子进程"""

@@ -72,6 +72,12 @@ MODE_CONFIGS = {
         "config": os.path.join(os.path.dirname(__file__), "config_noconfig.yaml"),
         "desc": "SRS旁观协议直连游戏服务器，手机无需任何配置",
     },
+    "cloud": {
+        "title": "云端玩家模式 (Cloud Player)",
+        "port": 8003,
+        "config": os.path.join(os.path.dirname(__file__), "config_cloud.yaml"),
+        "desc": "连一次热点抓凭证，之后任意网络云端以玩家身份接收手牌",
+    },
 }
 
 

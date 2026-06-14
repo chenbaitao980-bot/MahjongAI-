@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/backend/remote-access.md", "reason": "SRS 保活/重连/旁观局限性实测结论，srs_sessionid 4h 有效期、idle timeout 行为，Phase B 云端连接的约束基础"}
+{"file": ".trellis/spec/backend/game-protocol.md", "reason": "0x2bc0 手牌帧格式、PlayerConnect 消息结构、usertype 字段含义，实现 Phase B SRS 握手必读"}
+{"file": ".trellis/tasks/archive/06-11-srs-client-finish/research/srs-fully-solved.md", "reason": "SRS 完整破解结论：flag=0 已实现的 auth_token_12b + handshake_blob + srs_sessionid 组合，直接复用"}
+{"file": ".trellis/tasks/archive/06-11-srs-client-finish/research/srs-key-derivation.md", "reason": "AES-256-CFB128 密钥推导细节，Phase A pcap 解密 + Phase B 握手构造的算法依据"}
+{"file": ".trellis/tasks/archive/06-11-srs-client-finish/research/srs-pcap-decrypt-attempt.md", "reason": "从 pcap 解密 SRS 流的方法，Phase A 凭证提取（srs_sessionid 定位）的参考"}
+{"file": ".trellis/tasks/archive/06-11-srs-client-finish/research/final-architecture-plan.md", "reason": "三路径排除逻辑（证据级），双连踢线假设的原始来源，M3 实测需要对照"}

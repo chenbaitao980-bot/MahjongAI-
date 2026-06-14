@@ -1,0 +1,5 @@
+{"file": ".trellis/tasks/06-13-tcp-connection-hijack-handread/prd.md", "description": "验收标准：M1-M6里程碑"}
+{"file": ".trellis/tasks/06-13-sessionid/prd.md", "description": "sessionid有效期调研：flag含义、重连测试"}
+{"file": ".trellis/tasks/06-13-permanent-hand-read/prd.md", "description": "云端双连死亡记录：服务端单连接限制实测"}
+{"file": ".trellis/tasks/06-13-permanent-hand-read/research/noconfig-full-survey.md", "description": "无配置模式完整调研：sessionid提取、有效期、软路由"}
+{"file": ".trellis/tasks/06-13-permanent-hand-read/research/remote-hand-read-technical-survey.md", "description": "远程读牌技术路线全景：所有已尝试路线总结"}

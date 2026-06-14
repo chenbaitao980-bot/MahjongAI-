@@ -1,0 +1,9 @@
+{"file": ".trellis/tasks/06-13-tcp-connection-hijack-handread/prd.md", "description": "任务PRD：TCP连接状态接管方案"}
+{"file": ".trellis/spec/backend/remote-access.md", "description": "远程访问架构规范：三模式relay、SRS协议、凭证提取"}
+{"file": ".trellis/spec/backend/game-protocol.md", "description": "游戏协议规范：帧格式、握手流程、加密链"}
+{"file": "remote/srs_spectator/client.py", "description": "SRSClient：TCP连接游戏服务器、SRS握手、PlayerConnect"}
+{"file": "remote/srs_spectator/player_connect.py", "description": "PlayerConnect构建：usertype=7, pwd=sessionid"}
+{"file": "remote/srs_spectator/handshake.py", "description": "SRS握手流程：build_req_key, parse_player_data"}
+{"file": "remote/extractor/token_extractor.py", "description": "TokenExtractor：从pcap提取srs_sessionid、handshake_blob、auth_token_12b"}
+{"file": "stable/protocol.py", "description": "MJProtocol：协议解码、帧解析"}
+{"file": "stable/tracker.py", "description": "PacketStateTracker：状态追踪、手牌解码"}

@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/backend/remote-access.md", "reason": "§14 断线窗口双连机制，/api/creds 接口约定，SRS协议约束"}
+{"file": "remote/relay/core.py", "reason": "upload_creds 路由(L225-260)需调用 _start_inline_player_with_creds；该辅助方法已在 L501 附近添加"}
+{"file": "remote/capture_credentials.py", "reason": "_save_and_enter_phase2(L114-172)：移除立即 trigger，改为调用 rst_injector；_trigger_cloud_player 保留供 Phase2 复用"}
+{"file": "remote/extractor/capture.py", "reason": "NpcapCaptureAdapter 需暴露 get_tcp_state()，追踪 phone_ip/port/seq"}
+{"file": "remote/cloud_player.py", "reason": "_GAME_SERVER_HOST/_GAME_SERVER_PORT 常量，SRSPlayerClient 接口参考"}
+{"file": "stable/protocol.py", "reason": "PcapParser._parse_ip_tcp_static 字段结构（src, dst, seq, src_port, dst_port）"}

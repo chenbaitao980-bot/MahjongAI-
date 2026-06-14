@@ -257,7 +257,19 @@ class RelayApp:
                 except Exception as exc:
                     _LOGGER.debug("[cloud] systemctl stop (non-fatal): %s", exc)
 
-                return {"status": "ok", "message": "Credentials saved. Enter game on phone, then click Start Monitor."}
+                # Auto-start inline player with new credentials
+                userid = body.get("userid", "") or "newpt1084306678"
+                inline_ok = self._start_inline_player_with_creds(sessionid, userid)
+                if not inline_ok and sys.platform.startswith("linux"):
+                    try:
+                        import subprocess as _sp3
+                        _sp3.run(["systemctl", "start", "mahjong-cloud-player"],
+                                 timeout=5, capture_output=True)
+                        _LOGGER.info("[cloud] mahjong-cloud-player started via systemctl")
+                    except Exception as exc:
+                        _LOGGER.debug("[cloud] systemctl start (non-fatal): %s", exc)
+
+                return {"status": "ok", "message": "Credentials saved and monitor started. Switch phone WiFi to own network to trigger dual-connect."}
 
             @self.app.post("/api/start-player")
             async def start_player(body: dict):
@@ -507,6 +519,38 @@ class RelayApp:
                 _LOGGER.debug("[cloud] inline player stop error (non-fatal): %s", exc)
             self._player_client = None
             _LOGGER.info("[cloud] Inline SRSPlayerClient stopped")
+
+    def _start_inline_player_with_creds(self, sessionid: str, userid: str) -> bool:
+        """Start SRSPlayerClient(continuous=True) with given credentials.
+
+        Returns True on success, False if import fails.
+        Must be called after _stop_inline_player() to avoid stale sessions.
+        """
+        _ROOT2 = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        try:
+            if _ROOT2 not in sys.path:
+                sys.path.insert(0, _ROOT2)
+            from remote.cloud_player import SRSPlayerClient
+        except ImportError:
+            try:
+                from cloud_player import SRSPlayerClient  # type: ignore[no-redef]
+            except ImportError as exc:
+                _LOGGER.error("[cloud] Cannot import SRSPlayerClient: %s", exc)
+                return False
+
+        def _on_state_update(state: dict) -> None:
+            self._state_store.on_push(state)
+
+        client = SRSPlayerClient(
+            srs_sessionid=sessionid,
+            userid=userid,
+            on_state_update=_on_state_update,
+            continuous=True,
+        )
+        client.start(block=False)
+        self._player_client = client
+        _LOGGER.info("[cloud] Inline SRSPlayerClient auto-started (continuous=True, sessionid=%s...)", sessionid[:8])
+        return True
 
     def _stop_spectator(self):
         """停止 SRS spectator 子进程"""

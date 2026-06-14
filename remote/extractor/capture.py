@@ -71,6 +71,9 @@ def find_hotspot_iface(gateway=HOTSPOT_GATEWAY):
     return None
 
 
+_GAME_SERVER_IP = "47.96.0.227"
+
+
 class NpcapCaptureAdapter:
     """Windows 平台 Npcap 抓包适配器"""
 
@@ -101,6 +104,7 @@ class NpcapCaptureAdapter:
         self._capture = NpcapCapture(server_port=self.port, iface=resolved)
         self._proto = MJProtocol(server_port=self.port)
         self._parser = PcapParser()
+        self._tcp_state: dict | None = None
 
     def run(self, packet_callback):
         """
@@ -115,9 +119,22 @@ class NpcapCaptureAdapter:
             pkt = _P._parse_ip_tcp_static(raw_ip)
             if pkt is not None:
                 pkt["ts"] = 0.0
+                # Track TCP state: phone -> game server direction
+                dst_ip = pkt.get("dst")
+                dst_port = pkt.get("dst_port")
+                if dst_ip == _GAME_SERVER_IP and dst_port == self.port:
+                    self._tcp_state = {
+                        "phone_ip": pkt.get("src"),
+                        "phone_port": pkt.get("src_port"),
+                        "phone_seq": pkt.get("seq"),
+                    }
                 packet_callback(pkt)
 
         self._capture.sniff(on_raw_ip, port_filter=self.port)
+
+    def get_tcp_state(self) -> dict | None:
+        """Return the most recently observed phone->server TCP state, or None."""
+        return self._tcp_state
 
     def stop(self):
         self._capture.stop()
@@ -165,6 +182,10 @@ class TcpdumpCaptureAdapter:
                     packet_callback(pkt)
         finally:
             self._proc.kill()
+
+    def get_tcp_state(self) -> dict | None:
+        """RST injection not supported on Linux; always returns None."""
+        return None
 
     def stop(self):
         self._stop_event.set()

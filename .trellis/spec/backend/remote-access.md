@@ -1137,6 +1137,161 @@ GET /api/player-status?token=...
 - `_player_client` 引用在 relay 重启时丢失，不持久化（由 systemd/用户重启补
 - 新上传凭证（`/api/creds`）会自动调 `_stop_inline_player()` 停旧连接
 
+## 15. PC 热点 RST 注入自动化（2026-06-14 实现）
+
+### 背景与动机
+
+2026-06-14 实测验证：朋友的软路由热点通过脚本（捕凭证 + TCP RST 注入）实现了
+"进游戏自动卡一下 → 云端持续读牌"的完整自动化，手机无需安装任何东西，
+用户无需手动操作（不需要手动关/开 WiFi）。
+
+本节记录复现该效果的 PC Windows 热点实现方案。
+
+---
+
+### 完整自动化链路
+
+```
+用户：手机连 PC 热点 → 打开游戏 → 运行 grab_credentials.bat
+
+PC 端（capture_credentials.py）：
+  1. Npcap 捕包（port 7777）
+  2. 捕到 SRS 握手 → 提取 sessionid/handshake_blob/auth_token_12b
+  3. POST /api/creds → ECS（保存凭证 + 自动启动 continuous player）
+  4. rst_injector.inject_rst(phone_ip, phone_port, phone_seq)
+     → Scapy sendp(Ether()/IP(src=phone_ip)/TCP(flags="R", seq=phone_seq))
+     → 游服识别为手机异常断线 → grace period 开始
+
+ECS 端（SRSPlayerClient continuous=True）：
+  5. 在 grace period 内连入 → flag=0 → 持久双连建立
+
+手机端：
+  6. 游戏自动重连（"卡了一下"，约 1~2s）
+  7. 游服允许双连共存，手机正常打牌
+
+结果：云端网页展示实时手牌，无需任何额外操作
+```
+
+---
+
+### 关键文件与职责
+
+| 文件 | 职责 |
+|---|---|
+| `remote/extractor/capture.py` | `NpcapCaptureAdapter` 捕包 + 追踪 TCP 四元组 |
+| `remote/extractor/rst_injector.py` | 新文件：Scapy 伪造 RST 并发送 |
+| `remote/capture_credentials.py` | 捕凭证后调 RST 注入；移除了旧的手动 trigger |
+| `remote/relay/core.py` | `/api/creds` 接收凭证后自动启动 continuous player |
+
+---
+
+### API 契约变更：`/api/creds`（cloud 模式）
+
+**变更前**：只保存凭证，返回"请手动点 Start Monitor"。
+**变更后**：保存凭证后自动启动 `SRSPlayerClient(continuous=True)`。
+
+```
+POST /api/creds
+Body: {
+  "api_token":       str,         // 必须
+  "srs_sessionid":   str (hex32), // 必须
+  "userid":          str,         // 可选，缺省 "newpt1084306678"
+  "handshake_blob":  str (hex),   // 可选
+  "auth_token_12b":  str (hex)    // 可选
+}
+
+成功响应:
+{
+  "status": "ok",
+  "message": "Credentials saved and monitor started. Switch phone WiFi to own network to trigger dual-connect."
+}
+
+副作用（按顺序）:
+  1. 写 data/cloud_credentials.json
+  2. _stop_inline_player()（停旧连接）
+  3. systemctl stop mahjong-cloud-player（非致命）
+  4. _start_inline_player_with_creds(sessionid, userid)
+     → 若 inline 失败 + Linux：systemctl start mahjong-cloud-player
+```
+
+**注意**：`/api/creds` 调用后不再需要额外调 `/api/start-player`。
+`capture_credentials.py` 中已移除 Phase 1 结束时的立即 trigger，Phase 2（RespJoinTable 检测）仍保留。
+
+---
+
+### TCP 四元组追踪接口
+
+```python
+# remote/extractor/capture.py
+
+class NpcapCaptureAdapter:
+    _tcp_state: dict | None  # 追踪最新手机→游服包
+
+    def get_tcp_state(self) -> dict | None:
+        """返回最新手机→游服方向的 TCP 状态。
+        返回格式: {"phone_ip": str, "phone_port": int, "phone_seq": int}
+        手机未发包时返回 None。
+        """
+
+class TcpdumpCaptureAdapter:
+    def get_tcp_state(self) -> None:  # Linux 不支持 RST 注入，直接返回 None
+        return None
+```
+
+**更新条件**：每收到 `dst_ip == "47.96.0.227" and dst_port == 7777` 的包时更新。
+
+---
+
+### RST 注入接口
+
+```python
+# remote/extractor/rst_injector.py
+
+def inject_rst(
+    phone_ip: str,
+    phone_port: int,
+    phone_seq: int,
+    server_ip: str = "47.96.0.227",
+    server_port: int = 7777,
+    iface=None,          # scapy NetworkInterface；None 时自动调 find_hotspot_iface()
+) -> bool:
+    """
+    向游服发送伪造 RST（src=hand机IP:port），触发服务端 grace period。
+
+    返回: True 成功，False 失败（Scapy 未安装 / 权限不足 / 接口找不到）
+
+    实现细节:
+    - scapy import 延迟在函数内（避免无 Npcap 环境 ImportError）
+    - 包结构: Ether()/IP(src=phone_ip, dst=server_ip)/TCP(sport=phone_port, dport=server_port, flags="R", seq=phone_seq)
+    - sendp(pkt, iface=iface, verbose=False)
+    - 需要管理员权限（grab_credentials.bat 已 UAC 提权）
+    """
+```
+
+**seq 选取规则**：使用捕到的最新手机→游服 TCP seq（即服务端 ack 的值），确保在服务端接收窗口内。
+
+---
+
+### 错误矩阵
+
+| 条件 | 行为 |
+|---|---|
+| Scapy 未安装 / ImportError | inject_rst 返回 False，打印 warning；capture_credentials 打印"请手动切换WiFi" |
+| get_tcp_state() 返回 None（手机未发包） | _inject_rst_if_possible 返回 False，打印"请手动切换WiFi" |
+| find_hotspot_iface() 返回 None（未检测到热点网卡） | inject_rst 返回 False，打印 warning |
+| 发包失败（权限/Npcap 错误） | inject_rst 捕 Exception，返回 False，log error |
+| /api/creds inline 启动失败（ImportError） | Linux 下尝试 systemctl start；Windows 下返回 ok（启动失败不影响凭证保存） |
+
+---
+
+### 使用约束
+
+- RST 注入**仅在 Windows 热点环境**有效（Npcap 必须已安装）
+- **必须管理员权限**（bat 已包含 UAC 提权）
+- RST 注入后约 1~2s 游戏卡顿，属正常现象
+- grace period 时长估计 10~30s（待实测）；ECS continuous player 2s 重试间隔通常足够
+- Phase 2（RespJoinTable 检测 → `/api/start-player`）仍保留，用于下一局自动重触发
+
 ---
 
 ## 13. 热点 / VPN 模式独立开发约定

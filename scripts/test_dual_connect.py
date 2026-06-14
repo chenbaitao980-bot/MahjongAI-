@@ -49,7 +49,7 @@ DUAL_CONNECT_MIN_ALIVE = 10      # connection must survive at least this long
 
 # ── logging (minimal — we print human-readable lines ourselves) ───────────────
 logging.basicConfig(
-    level=logging.WARNING,  # suppress INFO from SRSClient during normal run
+    level=logging.INFO,  # DEBUG: show all frames
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 
@@ -98,11 +98,53 @@ def _format_hand(state: dict) -> str:
     return " ".join(str(t) for t in hand)
 
 
+# ── credential hot-reload (watch mode) ───────────────────────────────────────
+
+# Connections that disconnect within this many seconds WITHOUT triggering
+# on_connected are treated as flag-rejected (e.g. flag=72 sessionid expired).
+_FLAG_REJECT_MAX_ALIVE = 5.0
+
+
+def _wait_for_fresh_creds(creds_path: str, current_sessionid: str,
+                          stop_event: threading.Event) -> dict | None:
+    """Block until cloud_credentials.json is updated with a new sessionid.
+
+    Returns the new credentials dict, or None if stop_event is set.
+    """
+    _print("[等待新凭证] 请让手机连接 PC 热点并进入游戏...")
+    last_mtime = os.path.getmtime(creds_path) if os.path.exists(creds_path) else 0.0
+    while not stop_event.is_set():
+        stop_event.wait(timeout=2.0)
+        if not os.path.exists(creds_path):
+            continue
+        try:
+            mtime = os.path.getmtime(creds_path)
+        except OSError:
+            continue
+        if mtime > last_mtime:
+            try:
+                new_creds = load_credentials(creds_path)
+            except SystemExit:
+                # load_credentials calls sys.exit on bad file; treat as not-ready
+                last_mtime = mtime
+                continue
+            if new_creds.get("srs_sessionid") != current_sessionid:
+                _print("[新凭证] sessionid 已更新，重试连接...")
+                return new_creds
+            last_mtime = mtime
+    return None
+
+
 # ── main dual-connect loop ────────────────────────────────────────────────────
 
 def run(creds: dict) -> None:
     """Continuously attempt connections until a dual-connect is established,
-    then keep printing hand updates until the user presses Ctrl-C."""
+    then keep printing hand updates until the user presses Ctrl-C.
+
+    If a connection is rejected quickly (flag=72 / sessionid expired), the loop
+    enters watch mode: it polls cloud_credentials.json for an updated sessionid
+    and retries automatically once the file changes.
+    """
 
     # Import here so path is set up already
     from remote.cloud_player import SRSPlayerClient, _GAME_SERVER_HOST, _GAME_SERVER_PORT
@@ -124,6 +166,8 @@ def run(creds: dict) -> None:
     _connect_time: list[float] = [0.0]   # mutable cell so closure can write it
     _first_frame_time: list[float] = [0.0]
     _last_hand: list[str] = [""]
+    # Tracks whether on_connected fired for the current attempt (flag=0 path)
+    _got_connected: list[bool] = [False]
 
     def on_state_update(state: dict) -> None:
         nonlocal dual_connected
@@ -155,7 +199,7 @@ def run(creds: dict) -> None:
                 _last_hand[0] = hand_str
 
     def on_connected() -> None:
-        pass  # suppress — we print our own status lines
+        _got_connected[0] = True  # flag=0 path confirmed
 
     def on_disconnected() -> None:
         pass  # outer loop handles reconnect printing
@@ -165,6 +209,7 @@ def run(creds: dict) -> None:
         _print(f"Attempting connection... (attempt #{attempt})")
         _connect_time[0] = time.monotonic()
         _first_frame_time[0] = 0.0
+        _got_connected[0] = False
         dual_connected_before = dual_connected
 
         client = SRSPlayerClient(
@@ -187,6 +232,26 @@ def run(creds: dict) -> None:
 
         elapsed = time.monotonic() - _connect_time[0]
 
+        # ── flag-rejection detection ──────────────────────────────────────────
+        # If on_connected never fired AND the connection died very quickly, the
+        # server rejected us (likely flag=72: sessionid expired). Enter watch
+        # mode and wait for cloud_credentials.json to be refreshed.
+        if not _got_connected[0] and elapsed < _FLAG_REJECT_MAX_ALIVE:
+            _print(
+                f"Connection rejected after {elapsed:.1f}s (sessionid likely expired, flag=72)."
+            )
+            new_creds = _wait_for_fresh_creds(CREDS_PATH, sessionid, stop_event)
+            if new_creds is None:
+                # stop_event was set (Ctrl-C)
+                break
+            sessionid = new_creds["srs_sessionid"]
+            userid = new_creds.get("userid", "") or userid
+            _print(f"Resuming with new sessionid={sessionid[:8]}...")
+            # Reset attempt counter so numbering is intuitive after credential reload
+            attempt = 0
+            continue
+
+        # ── normal reconnect logic ────────────────────────────────────────────
         if dual_connected and not dual_connected_before:
             # We just got kicked after establishing dual connect — unusual, re-connect quickly
             _print(f"Dual connect dropped after {elapsed:.1f}s — reconnecting immediately...")

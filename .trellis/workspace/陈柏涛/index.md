@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 4
-- **Last Active**: 2026-06-13
+- **Total Sessions**: 5
+- **Last Active**: 2026-06-14
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~147 | Active |
+| `journal-1.md` | ~180 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 5 | 2026-06-14 | PC 热点 RST 注入全自动双连 | `4c19c2a` | `master` |
 | 4 | 2026-06-13 | SRS 保活误判排除 + 自动重连实现 | `e82f123`, `009247f` | `master` |
 | 3 | 2026-06-13 | 三模式E2E测试：热点+VPN验证通过，relay自动token redirect | `e02e23b`, `ea3149d`, `8ca0d87`, `39cf2bc`, `9ea6947`, `8b71043` | `master` |
 | 2 | 2026-06-11 | 远程读牌可行性调查 + 抓包诊断/握手修复 | `7a02300` | `master` |

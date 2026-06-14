@@ -145,3 +145,36 @@ Implemented dual-mode remote game data access system. extractor/ (Python 3.6-com
 ### Next Steps
 
 - None - task complete
+
+
+## Session 5: PC 热点 RST 注入全自动双连
+
+**Date**: 2026-06-14
+**Task**: PC 热点 RST 注入全自动双连
+**Branch**: `master`
+
+### Summary
+
+复现朋友软路由效果：Npcap 捕捉手机→游服 TCP 四元组（phone_ip/port/seq），Scapy 发送伪造 RST 触发游服 grace period，ECS cloud_player continuous 模式在窗口内连入建立持久双连；/api/creds 改为自动启动 player，无需手动操作
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4c19c2a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -1,0 +1,6 @@
+{"file": ".trellis/tasks/06-14-srs-addr-hijack/prd.md", "reason": "验收标准 + 隔离铁律(不碰 vpn/hotspot, noconfig 仅新增)"}
+{"file": "apk_research/decrypted-lua/app/Config/NetConf.lua", "reason": "确认 LOCAL_TCP_LIST[5045] 改写正确且不破坏其它区"}
+{"file": "apk_research/decrypted-lua/app/hotupdate/universe/hotfix/Manifest.lua", "reason": "核对伪造 manifest 字段/md5/版本号策略与 versionLessThan 一致"}
+{"file": "remote/noconfig/app.py", "reason": "确认只新增端点、未改现有端点行为"}
+{"file": "remote/vpn/__init__.py", "reason": "确认 vpn 模式未被触碰"}
+{"file": "remote/hotspot/__init__.py", "reason": "确认 hotspot 模式未被触碰"}

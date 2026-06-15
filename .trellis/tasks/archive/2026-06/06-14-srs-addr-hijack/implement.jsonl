@@ -1,0 +1,17 @@
+{"file": ".trellis/tasks/06-14-srs-addr-hijack/prd.md", "reason": "PRD: 热更 MITM 覆盖 NetConf — 一次热点永久读牌, 架构/里程碑/隔离铁律"}
+{"file": "apk_research/decrypted-lua/app/Config/NetConf.lua", "reason": "要改的硬编码表 — LOCAL_TCP_LIST[5045]=台州, 改成 ECS IP"}
+{"file": "apk_research/decrypted-lua/app/Net/NetEngine.lua", "reason": "getTcpConnectInfoByGroupId — 唯一连接咽喉, srslist 文件读写, getRandomSRS"}
+{"file": "apk_research/decrypted-lua/app/hotupdate/universe/hotfix/Manifest.lua", "reason": "manifest 结构 — file_list/md5/version/update_url/file_url, versionLessThan; 伪造依据"}
+{"file": "apk_research/decrypted-lua/app/hotupdate/universe/hotfix/LayerFS.lua", "reason": "DocLayer(可写层) 优先覆盖 PackageLayer(APK) — 覆盖落点"}
+{"file": "apk_research/decrypted-lua/app/hotupdate/universe/hotfix/HotFixProcessor.lua", "reason": "热更主流程 — 取 update_url, diff, 下载应用; 伪造 manifest 要被它接受"}
+{"file": "apk_research/decrypted-lua/app/hotupdate/lobby/LobbyHotUpdateData.lua", "reason": "Lobby/project_10001.manifest 路径, 平台号 10001"}
+{"file": "apk_research/decrypted-lua/app/Protocols/SRSProtocol.lua", "reason": "RespSRSAddr 格式(nAppID/szIP/sPort, readString 1B前缀) — 运行期改写依据"}
+{"file": "apk_research/_decrypt_lua.py", "reason": "XXTEA 解/加密 luac 参考 (key=03f1fdcbf5215b45 sign=devaguopeifei) — 重加密改过的 NetConf.luac"}
+{"file": "remote/noconfig/app.py", "reason": "noconfig FastAPI app — 仅新增端点/路由, 不改现有端点; StateStore 注入点"}
+{"file": "remote/noconfig/main.py", "reason": "noconfig 入口(:8002) — 配置加载, 新模块挂载参考"}
+{"file": "remote/srs_spectator/crypto.py", "reason": "AES-CFB128, reset_cfb, fresh-from-IV — RespSRSAddr 改写需 CFB 重加密"}
+{"file": "remote/srs_spectator/frame.py", "reason": "SRS 帧 pack/unpack, msgid 常量 — 帧长改写/0x2bc0 旁路"}
+{"file": "remote/srs_spectator/handshake.py", "reason": "readString=1B前缀, RespPlusData; 会话 key 获取"}
+{"file": "stable/protocol.py", "reason": "MJProtocol — 0x2bc0 帧解析, TCP 重组, PcapParser"}
+{"file": "stable/tracker.py", "reason": "PacketStateTracker — 协议事件→BattleState"}
+{"file": "remote/relay/state_store.py", "reason": "StateStore — 解出的 BattleState 进存储供网页(import 复用不改)"}

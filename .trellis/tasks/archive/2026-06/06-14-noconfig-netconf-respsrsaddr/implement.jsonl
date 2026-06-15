@@ -1,0 +1,6 @@
+{"file": ".trellis/tasks/06-14-noconfig-netconf-respsrsaddr/prd.md", "reason": "需求/技术方案/ADR/验收标准的唯一来源"}
+{"file": ".trellis/tasks/06-14-noconfig-netconf-respsrsaddr/research/diagnosis-2026-06-14.md", "reason": "实机诊断全证据链：根因(硬编码DNS绕过)、WinDivert方案、抓包/ECS登录复用入口、真实服务器拓扑"}
+{"file": ".trellis/spec/backend/remote-access.md", "reason": "remote/ 子项目架构契约：双模式中继与 extractor/relay/tcp_proxy 数据流，新 DNS 拦截器须符合此架构"}
+{"file": ".trellis/spec/backend/game-protocol.md", "reason": "游戏线缆协议：RespSRSAddr(msgid=15)、0x2bc0 手牌帧、SRS 加密，校准上游与改写验证需对照"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "新 DNS 拦截器日志须符合项目规范，便于真机调试观察拦截命中"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "网络层拦截器错误处理(放行兜底、不阻断手机上网)须遵循项目约定"}

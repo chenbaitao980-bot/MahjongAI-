@@ -1,0 +1,4 @@
+{"file": ".trellis/tasks/06-14-noconfig-netconf-respsrsaddr/prd.md", "reason": "验收标准(AC)与 Definition of Done 的核对依据"}
+{"file": ".trellis/tasks/06-14-noconfig-netconf-respsrsaddr/research/diagnosis-2026-06-14.md", "reason": "判定修复是否命中根因、真机验证步骤(MITM三步/ECS解牌/8002展示)的依据"}
+{"file": ".trellis/spec/backend/remote-access.md", "reason": "校验改动是否符合 remote/ 架构契约，未破坏既有双模式中继"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "代码质量基线：复用、命名、隔离(不碰其他读牌路线)"}

@@ -211,3 +211,36 @@ Implemented dual-mode remote game data access system. extractor/ (Python 3.6-com
 ### Next Steps
 
 - None - task complete
+
+
+## Session 7: 修bug：前端白板/红中显示颠倒
+
+**Date**: 2026-06-16
+**Task**: 修bug：前端白板/红中显示颠倒
+**Branch**: `master`
+
+### Summary
+
+remote/relay/static/index.html 的 JavaScript HONOR 映射 5 和 7 的值写反了，白板(7z)显示为'中'，红中(5z)显示为'白'。一字符修复，已部署到 ECS。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `442c899` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 6
-- **Last Active**: 2026-06-14
+- **Total Sessions**: 7
+- **Last Active**: 2026-06-16
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~213 | Active |
+| `journal-1.md` | ~246 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 7 | 2026-06-16 | 修bug：前端白板/红中显示颠倒 | `442c899` | `master` |
 | 6 | 2026-06-14 | 防火墙封锁手机重连 — 为 ECS 双连让路 | `2883e6f` | `master` |
 | 5 | 2026-06-14 | PC 热点 RST 注入全自动双连 | `4c19c2a` | `master` |
 | 4 | 2026-06-13 | SRS 保活误判排除 + 自动重连实现 | `e82f123`, `009247f` | `master` |

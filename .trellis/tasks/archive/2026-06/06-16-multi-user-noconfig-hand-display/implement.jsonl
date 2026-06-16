@@ -1,0 +1,5 @@
+{"file": "remote/noconfig/user_store.py", "description": "已有多用户数据模型 (User + UserStore)"}
+{"file": "remote/noconfig/app.py", "description": "当前单用户 FastAPI 端点，需要改造为多用户"}
+{"file": "remote/relay/static/index.html", "description": "当前单用户手牌展示 UI，需要支持 user_id 参数"}
+{"file": "remote/relay/state_store.py", "description": "StateStore 单用户状态存储"}
+{"file": "remote/noconfig/main.py", "description": "Noconfig 模式入口点"}

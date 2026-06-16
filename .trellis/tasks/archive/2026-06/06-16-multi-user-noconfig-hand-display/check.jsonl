@@ -1,0 +1,2 @@
+{"file": "remote/noconfig/test_dual_session.py", "description": "双会话测试（同/不同 sessionid 场景）"}
+{"file": "tests/test_stable_reader.py", "description": "现有测试套件"}

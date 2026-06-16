@@ -101,7 +101,7 @@
 </main>
 
 <script>
-const HONOR = {1:'东',2:'南',3:'西',4:'北',5:'白',6:'发',7:'中'};
+const HONOR = {1:'东',2:'南',3:'西',4:'北',5:'中',6:'发',7:'白'};
 const SUITNAME = {m:'万', p:'筒', s:'条'};
 
 function parseTile(t) {
@@ -156,8 +156,8 @@ function setText(id, v){ document.getElementById(id).textContent = (v===null||v=
 function render(snap) {
   const local = snap.local_player, opp = snap.opponent_player;
   const players = snap.players || {};
-  const me = players[local] || {};
-  const them = players[opp] || {};
+  const me = players[local] || players[String(local)] || {};
+  const them = players[opp] || players[String(opp)] || {};
 
   setText('phase', snap.phase);
   setText('turn', snap.current_turn);
@@ -170,7 +170,7 @@ function render(snap) {
   setText('note', snap.action_note || '');
 
   // 手牌：把摸到的牌单独高亮（若 drawn_tile 在手牌里，标记最后一张匹配的）
-  const hand = (me.hand || []).slice();
+  const hand = ((me.hand && me.hand.length ? me.hand : snap.hand) || []).slice();
   const drawn = snap.drawn_tile;
   const handBox = document.getElementById('hand');
   handBox.innerHTML = '';
@@ -181,7 +181,8 @@ function render(snap) {
     if (isDrawn) drawnMarked = true;
     handBox.appendChild(tileEl(t, { drawn: isDrawn }));
   });
-  setText('handcount', me.hand_count ? ('· ' + me.hand_count + ' 张') : '');
+  const handCount = hand.length || me.hand_count || snap.hand_count || 0;
+  setText('handcount', handCount ? ('· ' + handCount + ' 张') : '');
 
   renderMelds(document.getElementById('mymelds'), me.melds, false);
   renderTiles(document.getElementById('mydiscards'), me.discards, { small: true });

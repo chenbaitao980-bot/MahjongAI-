@@ -1,0 +1,4 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/guides/index.md", "reason": "Shared thinking guides before changing decryption and relay flow"}
+{"file": ".trellis/spec/backend/remote-access.md", "reason": "Remote capture and ECS noconfig diagnostics contract for 0x2bc0 task"}
+{"file": ".trellis/tasks/06-16-0x2bc0-noconfig/research/2026-06-16-ecs-log-capture.md", "reason": "Fresh ECS evidence and remaining missing diagnostics"}

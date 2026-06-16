@@ -1,0 +1,3 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/tasks/06-16-1v1-0x022b/research/live-frames-2026-06-16.md", "reason": "0x022B 真机 body 结构 + block1 唯一性验证 + 期望手牌 (1m2m5m3p3p3p5s5s5s6s6s7s9s) - 单测用"}
+{"file": ".trellis/tasks/06-16-1v1-0x022b/research/root-cause-stale-session-key.md", "reason": "TcpProxy 跨连接 session key 污染根因 + on_bytes_factory 每连接重建方案 - 已 codex 修"}

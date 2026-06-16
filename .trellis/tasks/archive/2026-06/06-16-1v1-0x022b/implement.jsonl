@@ -1,0 +1,2 @@
+{"file": ".trellis/tasks/06-16-1v1-0x022b/research/live-frames-2026-06-16.md", "reason": "真机帧+0x022b结构+block1唯一id验证+instance解码法,实现的地面真相"}
+{"file": ".trellis/tasks/06-16-1v1-0x022b/research/root-cause-stale-session-key.md", "reason": "真正阻塞根因:游服代理跨连接共用旧session key,每连接新建decryptor的修复方案"}

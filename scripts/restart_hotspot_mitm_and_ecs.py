@@ -119,6 +119,46 @@ def assert_hotspot_ip(host_ip: str) -> None:
             raise RuntimeError(f"Hotspot IP {host_ip} is not present.")
 
 
+class SSHBannedError(RuntimeError):
+    """SSH 端口可达但 server 在读 banner 前就重置连接——通常是源 IP 被
+    fail2ban / DenyHosts / hosts.deny 封禁（而非网络不通或 sshd 挂掉）。"""
+
+
+def _ssh_connect_with_retry(ssh, hostname, username, password,
+                            attempts: int = 3, base_delay: float = 2.0) -> None:
+    """带退避重试的 SSH 连接；把"读 banner 被重置"识别为 IP 封禁并给出明确指引。"""
+    last_exc = None
+    for i in range(1, attempts + 1):
+        try:
+            ssh.connect(hostname, username=username, password=password,
+                        timeout=15, banner_timeout=15, auth_timeout=15)
+            return
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            msg = str(exc)
+            banner_reset = (
+                "Error reading SSH protocol banner" in msg
+                or "reset" in msg.lower()
+                or "10054" in msg
+            )
+            print(f"  [ssh] connect attempt {i}/{attempts} failed: {type(exc).__name__}: {msg}")
+            if banner_reset:
+                # 这类错误重试通常无效（IP 被封），直接抛带指引的异常
+                raise SSHBannedError(
+                    f"ECS {hostname}:22 在握手后立刻重置连接（banner reset）。\n"
+                    f"  端口可达但 sshd 拒绝你当前公网 IP——几乎肯定被 fail2ban/DenyHosts/"
+                    f"hosts.deny 封禁。\n"
+                    f"  请用阿里云控制台 VNC 登录后执行：\n"
+                    f"    cat /etc/hosts.deny   # 删掉你的 IP 或 'sshd: ALL' 那行\n"
+                    f"    fail2ban-client set sshd unbanip <你的公网IP>   # 若装了 fail2ban\n"
+                    f"    echo 'sshd: <你的公网IP>' >> /etc/hosts.allow   # 加白名单\n"
+                    f"  原始错误：{msg}"
+                ) from exc
+            if i < attempts:
+                time.sleep(base_delay * i)
+    raise RuntimeError(f"SSH connect to {hostname} failed after {attempts} attempts: {last_exc}")
+
+
 def deploy_remote(
     repo_root: Path,
     tar_path: Path,
@@ -154,7 +194,7 @@ def deploy_remote(
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     try:
-        ssh.connect(hostname, username=username, password=ssh_password, timeout=30)
+        _ssh_connect_with_retry(ssh, hostname, username, ssh_password)
 
         # Upload tar file
         sftp = ssh.open_sftp()
@@ -184,21 +224,20 @@ req = urllib.request.Request(
     headers={{'Host': 'gxb-api.hzxuanming.com'}},
 )
 vm = json.loads(urllib.request.urlopen(req, context=ctx, timeout=10).read().decode())
-assert vm['version'] == '{bump_version}', vm
+# 下发版本现为动态捕获的真实线上版本（不再硬编码 bump）；只要返回有效版本 +
+# manifest_url，且版本 != 手机当前 1.0.0.59（确保会触发热更）即可。
+assert vm.get('version') and vm.get('manifest_url'), vm
+assert vm['version'] != '1.0.0.59', vm
 parts = urlsplit(vm['manifest_url'][0])
 local_url = 'https://127.0.0.1' + parts.path + (('?' + parts.query) if parts.query else '')
 req = urllib.request.Request(local_url, headers={{'Host': parts.hostname}})
 pm = json.loads(urllib.request.urlopen(req, context=ctx, timeout=10).read().decode())
 fl = pm['file_list']
-assert sorted(fl.keys()) == sorted([
-    'src/app/config/NetConf.luac',
-    'src/app/hotupdate/lobby/ResEnsure.luac',
-    'src/app/hotupdate/lobby/ResChecker.luac',
-]) or sorted(fl.keys()) == sorted([
-    'src/app/Config/NetConf.luac',
-    'src/app/hotupdate/lobby/ResEnsure.luac',
-    'src/app/hotupdate/lobby/ResChecker.luac',
-]), fl.keys()
+# 新行为: 保留完整 file_list, 只断言 3 个关键热更条目存在(NetConf 大小写两种都接受)
+need = ['src/app/hotupdate/lobby/ResEnsure.luac', 'src/app/hotupdate/lobby/ResChecker.luac']
+missing = [k for k in need if k not in fl]
+assert not missing, ('missing', missing)
+assert ('src/app/config/NetConf.luac' in fl) or ('src/app/Config/NetConf.luac' in fl), 'NetConf missing'
 rc = fl['src/app/hotupdate/lobby/ResChecker.luac']
 req = urllib.request.Request(
     'https://127.0.0.1/yj/files/' + rc['name'],
@@ -285,17 +324,21 @@ req = urllib.request.Request(
     headers={{'Host': 'gxb-api.hzxuanming.com'}},
 )
 vm = json.loads(urllib.request.urlopen(req, context=ctx, timeout=10).read().decode())
-assert vm['version'] == '{bump_version}', vm
+# 下发版本现为动态捕获的真实线上版本（不再硬编码 bump）；只要返回有效版本 +
+# manifest_url，且版本 != 手机当前 1.0.0.59（确保会触发热更）即可。
+assert vm.get('version') and vm.get('manifest_url'), vm
+assert vm['version'] != '1.0.0.59', vm
 parts = urlsplit(vm['manifest_url'][0])
 local_url = 'https://127.0.0.1' + parts.path + (('?' + parts.query) if parts.query else '')
 req = urllib.request.Request(local_url, headers={{'Host': parts.hostname}})
 pm = json.loads(urllib.request.urlopen(req, context=ctx, timeout=10).read().decode())
-keys = sorted(pm['file_list'].keys())
-assert keys in (
-    ['src/app/Config/NetConf.luac', 'src/app/hotupdate/lobby/ResChecker.luac', 'src/app/hotupdate/lobby/ResEnsure.luac'],
-    ['src/app/config/NetConf.luac', 'src/app/hotupdate/lobby/ResChecker.luac', 'src/app/hotupdate/lobby/ResEnsure.luac'],
-), keys
-print('LOCAL_OK', vm['version'], local_url, len(keys))
+fl = pm['file_list']
+# new behavior: keep full file_list, only assert the 3 hot-update entries exist
+need = ['src/app/hotupdate/lobby/ResEnsure.luac', 'src/app/hotupdate/lobby/ResChecker.luac']
+missing = [k for k in need if k not in fl]
+assert not missing, ('missing', missing)
+assert ('src/app/config/NetConf.luac' in fl) or ('src/app/Config/NetConf.luac' in fl), 'NetConf missing'
+print('LOCAL_OK', vm['version'], local_url, len(fl))
 """
 
     result = subprocess.run(
@@ -303,6 +346,7 @@ print('LOCAL_OK', vm['version'], local_url, len(keys))
         input=verify_script,
         capture_output=True,
         text=True,
+        encoding="utf-8",
     )
     if result.returncode != 0:
         raise RuntimeError(f"Local MITM verification failed:\n{result.stderr}")
@@ -318,6 +362,10 @@ def main() -> None:
     parser.add_argument("--bump-version", default="9.9.9.103", help="Bump version")
     parser.add_argument("--python-exe", default="python", help="Python executable")
     parser.add_argument("--no-divert", action="store_true", help="No divert mode")
+    parser.add_argument("--skip-ecs", action="store_true",
+                        help="只重启本地 MITM，完全跳过 ECS SSH 部署")
+    parser.add_argument("--ecs-required", action="store_true",
+                        help="ECS 部署失败时整体失败退出（默认：仅告警，本地 MITM 照常可用）")
     args = parser.parse_args()
 
     repo_root = Path(__file__).parent.parent.resolve()
@@ -329,24 +377,11 @@ def main() -> None:
     out_log = logs_dir / "hotspot_mitm_bg.out.log"
     err_log = logs_dir / "hotspot_mitm_bg.err.log"
 
-    # Get SSH password via GUI prompt
-    ssh_password = get_ssh_password(args.ecs_host)
-
+    # 本地 MITM 是核心、不依赖 ECS：先确保它起来；ECS 部署是可选增强、失败不连累本地。
     try:
-        # Check hotspot IP
         assert_hotspot_ip(args.host_ip)
 
-        # Deploy to remote
-        deploy_remote(
-            repo_root,
-            tar_path,
-            args.ecs_host,
-            args.ecs_ip,
-            args.bump_version,
-            ssh_password,
-        )
-
-        # Start local MITM
+        # 1) 本地 MITM（必须成功）
         start_local_mitm(
             repo_root,
             args.python_exe,
@@ -359,19 +394,48 @@ def main() -> None:
             err_log,
             pid_path,
         )
-
-        print("=" * 60)
-        print("READY Local hotspot MITM is running in background.")
-        print(f"  Local log:  {out_log}")
-        print(f"  Local err:  {err_log}")
-        print(f"  Local pid:  {pid_path}")
-        print(f"  Remote host: {args.ecs_host}")
-        print(f"  Version:    {args.bump_version}")
-        print("=" * 60)
-
     except Exception as e:
-        print(f"ERROR: {e}", file=sys.stderr)
+        print(f"ERROR (local MITM): {e}", file=sys.stderr)
         sys.exit(1)
+
+    # 2) ECS 部署（可选 + 非致命）
+    ecs_ok = None
+    if args.skip_ecs:
+        print("[ecs] --skip-ecs 指定，跳过 ECS 部署")
+    else:
+        try:
+            ssh_password = get_ssh_password(args.ecs_host)
+            deploy_remote(
+                repo_root,
+                tar_path,
+                args.ecs_host,
+                args.ecs_ip,
+                args.bump_version,
+                ssh_password,
+            )
+            ecs_ok = True
+        except Exception as e:
+            ecs_ok = False
+            print("=" * 60, file=sys.stderr)
+            print(f"WARNING: ECS 部署失败（本地 MITM 不受影响，仍在运行）：\n{e}", file=sys.stderr)
+            print("=" * 60, file=sys.stderr)
+            if args.ecs_required:
+                sys.exit(2)
+
+    print("=" * 60)
+    print("READY Local hotspot MITM is running in background.")
+    print(f"  Local log:  {out_log}")
+    print(f"  Local err:  {err_log}")
+    print(f"  Local pid:  {pid_path}")
+    print(f"  Remote host: {args.ecs_host}")
+    if ecs_ok is True:
+        print("  ECS deploy:  OK")
+    elif ecs_ok is False:
+        print("  ECS deploy:  FAILED (见上方 WARNING；本地仍可用，读牌走已在运行的 ECS 服务)")
+    else:
+        print("  ECS deploy:  SKIPPED")
+    print(f"  Version:    {args.bump_version} (实际下发为动态支配版本)")
+    print("=" * 60)
 
 
 if __name__ == "__main__":

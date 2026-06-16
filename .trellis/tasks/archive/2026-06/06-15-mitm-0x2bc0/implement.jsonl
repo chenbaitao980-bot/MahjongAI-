@@ -1,0 +1,5 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/backend/remote-access.md", "reason": "MITM代理架构、ECS部署、热更NetConf覆盖、RespSRSAddr劫持、代理 rewriter 设计模式"}
+{"file": ".trellis/spec/backend/game-protocol.md", "reason": "SRS帧格式、握手序列、CFB加密、0x2bc0手牌消息结构、auth token"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "代理日志规范、side-path隔离、结构化日志"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "remote/目录组织、代理模块布局"}

@@ -60,6 +60,7 @@
 <header>
   <h1>🀄 MahjongAI 实时手牌</h1>
   <span><span class="pulse" id="pulse"></span><span class="status" id="status">未连接</span></span>
+  <span id="user-label" style="font-size:12px;color:var(--accent);display:none"></span>
   <span style="margin-left:auto;font-size:12px;color:var(--muted)">token:</span>
   <input id="token" placeholder="粘贴 api_token" autocomplete="off">
 </header>
@@ -198,9 +199,19 @@ const statusEl = document.getElementById('status');
 const pulseEl = document.getElementById('pulse');
 
 // token 优先级：URL ?token= > localStorage
-const urlToken = new URLSearchParams(location.search).get('token');
+const urlParams = new URLSearchParams(location.search);
+const urlToken = urlParams.get('token');
+const userId = urlParams.get('user_id') || '';
+
 tokenInput.value = urlToken || localStorage.getItem('mj_token') || '';
 tokenInput.addEventListener('change', () => localStorage.setItem('mj_token', tokenInput.value.trim()));
+
+// 显示当前用户标识
+if (userId) {
+  const userLabel = document.getElementById('user-label');
+  userLabel.textContent = '用户: ' + userId;
+  userLabel.style.display = 'inline';
+}
 
 function setStatus(text, cls) {
   statusEl.textContent = text; statusEl.className = 'status ' + (cls||'');
@@ -211,7 +222,12 @@ async function poll() {
   const token = tokenInput.value.trim();
   if (!token) { setStatus('请填 token', 'err'); return; }
   try {
-    const r = await fetch('/state?token=' + encodeURIComponent(token), { cache: 'no-store' });
+    // 多用户：添加 user_id 参数
+    let url = '/state?token=' + encodeURIComponent(token);
+    if (userId) {
+      url += '&user_id=' + encodeURIComponent(userId);
+    }
+    const r = await fetch(url, { cache: 'no-store' });
     if (r.status === 401) { setStatus('token 错误 (401)', 'err'); return; }
     if (!r.ok) { setStatus('错误 ' + r.status, 'err'); return; }
     const snap = await r.json();

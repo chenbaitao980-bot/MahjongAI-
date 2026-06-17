@@ -26,8 +26,12 @@ if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 if _RELAY_DIR not in sys.path:
     sys.path.insert(0, _RELAY_DIR)
-if _HERE not in sys.path:
-    sys.path.insert(0, _HERE)
+# 强制让 noconfig 目录排在最前：noconfig 与 relay 都有 app.py / state_store.py，
+# 直接 `python main.py` 时脚本目录已在 sys.path 中，`not in` 判断会跳过插入，
+# 导致 _RELAY_DIR 抢到首位、`from app import app` 误加载 relay/app.py（单用户版）。
+while _HERE in sys.path:
+    sys.path.remove(_HERE)
+sys.path.insert(0, _HERE)
 
 # ─── 日志 ───────────────────────────────────────────────────────
 

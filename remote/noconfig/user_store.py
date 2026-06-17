@@ -17,6 +17,9 @@ from state_store import StateStore
 
 _LOGGER = logging.getLogger("remote.noconfig.user_store")
 
+# 在线判定阈值：超过该秒数没有任何新数据则视为离线（需求：10 分钟）
+ONLINE_TTL_SECONDS = 600.0
+
 
 class User:
     """单个用户的数据模型"""
@@ -30,6 +33,9 @@ class User:
         self.auth_token_12b = auth_token_12b
         self.created_at = time.time()
         self.updated_at = time.time()
+        # presence 时间戳：最近一次"活跃"信号（进大厅/进游戏），独立于实际手牌推送。
+        # 用于"进大厅即在线"——此时可能还没有任何 0x2bc0 手牌数据。
+        self.presence_ts = 0.0
         # 每个用户独立的状态存储
         self.state_store = StateStore()
         # spectator 进程（每个用户可独立启动）
@@ -38,6 +44,8 @@ class User:
 
     def to_dict(self) -> dict:
         """序列化为字典（用于 API 返回）"""
+        last_seen = self.last_seen_ts()
+        last_seen_ago = (time.time() - last_seen) if last_seen > 0 else None
         return {
             "user_id": self.user_id,
             "name": self.name,
@@ -46,14 +54,31 @@ class User:
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "is_online": self.is_online(),
+            # 最近一次收到数据的时间戳与距今秒数（前端展示"X 分钟前在线"）
+            "last_seen_ts": last_seen if last_seen > 0 else None,
+            "last_seen_ago": last_seen_ago,
         }
 
+    def touch_presence(self):
+        """标记用户活跃（进大厅/进游戏的 presence 信号）。"""
+        self.presence_ts = time.time()
+        self.updated_at = self.presence_ts
+
+    def last_seen_ts(self) -> float:
+        """最近一次活跃时间戳：取实际数据推送与 presence 信号的较大者。无则返回 0。"""
+        return max(self.state_store.last_push_time or 0.0, self.presence_ts or 0.0)
+
     def is_online(self) -> bool:
-        """判断用户是否在线（有最近推送或 spectator 运行中）"""
-        if self.state_store.last_push_time > 0:
-            elapsed = time.time() - self.state_store.last_push_time
-            if elapsed < self.state_store.push_timeout:
-                return True
+        """判断用户是否在线。
+
+        规则（需求）：用户进入大厅开始有数据即视为在线；超过 ONLINE_TTL_SECONDS
+        （10 分钟）没有任何新数据则视为离线。spectator 进程运行中也算在线。
+        注意：这里用 ONLINE_TTL_SECONDS 而非 state_store.push_timeout——后者很短
+        （5s），仅用于驱动 spectator 的启动/停止判断，不适合作为在线展示阈值。
+        """
+        last_seen = self.last_seen_ts()
+        if last_seen > 0 and (time.time() - last_seen) < ONLINE_TTL_SECONDS:
+            return True
         if self.spectator_proc is not None and self.spectator_proc.poll() is None:
             return True
         return False

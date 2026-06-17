@@ -73,6 +73,10 @@ class SRSCrypto:
             algorithms.AES(self.key), CFB(self.iv)
         ).decryptor()
 
+    def reset_cfb(self) -> None:
+        """Reset CFB state to the initial IV for a fresh SRS frame."""
+        self._reset()
+
     def set_key(self, key: bytes) -> None:
         """Install a new session key (from RespKey) and reset the CFB state.
 

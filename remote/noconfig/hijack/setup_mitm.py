@@ -298,25 +298,35 @@ class MitmAssets:
         port = "" if self.tls_port == 443 else f":{self.tls_port}"
         return f"https://{host}{port}"
 
-    # 每个分量在真实线上版本基础上加的偏移量，确保严格支配（每分量都 >= 真实版）。
-    _VERSION_DOMINATE_OFFSET = 100000
+    # 下发版本策略：4 段缓冲支配版本——在真实线上版本的每个分量上加小幅缓冲偏移，
+    # 分量数与官方一致（同为 4 段），避免 5 段方案触发手机端热更中断（见下方说明）。
+    #
+    # 为什么不用 5 段（曾经尝试过的 official_plus_segment）：5 段版本虽能靠 versionLessThan
+    # 段数短路"永久支配"，但真机实测手机热更下完文件后中断、version 写不进 harbor（界面
+    # 不显示）。回滚到 4 段 +100000 后恢复正常。5 段中断的精确机理在手机端 native/UI 层，
+    # 服务器端日志与 Lua 反编译全链路均未发现原因，故放弃 5 段，回到与官方同段数的 4 段。
+    #
+    # 4 段缓冲：每段加一个"略高于官方"的偏移，保证每段都 > 官方可预见未来的对应段
+    # （versionLessThan 逐段只判 <，每段都 >= 即永久支配），同时位数贴近官方、不像
+    # +100000 那样多一位显得像盗版。
+    #   major(+1) minor(+5) patch(+9) build(+1000)
+    _VERSION_SEGMENT_OFFSETS = (1, 5, 9, 1000)
     # 拿不到真实线上版本时的静态兜底支配版本（4 段、每段都远大于任何现实版本）。
-    _FALLBACK_DOMINATE_VERSION = "99999.99999.99999.99999"
+    _FALLBACK_DOMINATE_VERSION = "99.99.99.9999"
 
     def _served_version(self) -> str:
-        """对外下发 / 写进 harbor 的版本号：**在每个分量上都支配真实线上版本**。
+        """对外下发 / 写进 harbor 的版本号：4 段缓冲支配版本（与官方同段数，每段略高）。
 
         必须同时满足两个看似矛盾的需求：
         - 热点：手机本地版本 < 下发版本 → 触发热更并注入 NetConf（连已是线上最新版、
-          从未注入过的手机也必须触发——靠首分量远大于真实主版本号实现）。
+          从未注入过的手机也必须触发——靠首分量大于真实主版本号实现）。
         - 4G：手机切自己网络后 HotFixProcessor 用 harbor 本地版本与真服真实 version.manifest
           比较，必须判 NOUPDATE，否则会重下覆盖我们的 NetConf 或卡在"正在校验本地资源中"。
 
-        关键：游戏 `Manifest.versionLessThan` 有 bug——逐分量只检查 `a[i] < b[i]` 就返回 true，
-        不会因前面 `a[j] > b[j]` 提前判否。所以旧的伪版本 9.9.9.103 在 4G 下被误判
-        `9.9.9.103 < 1.0.1.1776`（因末段 103 < 1776）→ 误触发更新 → 4G 卡顿真因。
-        唯一可靠规避：下发版本在**每一个分量**上都 >= 真实线上版本。这里取 real[i]+100000，
-        分量数与真实版一致；拿不到真实版才回退静态支配版本。
+        关键：游戏 `Manifest.versionLessThan` 逐分量只检查 `a[i] < b[i]` 就返回 true，
+        不会因前面 `a[j] > b[j]` 提前判否。所以下发版本在**每一个分量**上都 >= 真实线上版本
+        即可永久支配。这里取每段 +小幅缓冲（(1,5,9,1000)），分量数与官方一致（4 段），
+        位数贴近官方；拿不到真实版才回退静态支配版本。
         """
         real = self.real_online_version
         if not real:
@@ -324,7 +334,14 @@ class MitmAssets:
         comps = self._parse_version_components(real)
         if not comps:
             return self._FALLBACK_DOMINATE_VERSION
-        return ".".join(str(c + self._VERSION_DOMINATE_OFFSET) for c in comps)
+        # 前 N 段叠加缓冲偏移（分量数不足时只对已有分量加偏移）
+        bumped = [
+            c + self._VERSION_SEGMENT_OFFSETS[i]
+            for i, c in enumerate(comps[:len(self._VERSION_SEGMENT_OFFSETS)])
+        ]
+        # 官方若超过 4 段（理论上不会），原样保留多余分量
+        bumped.extend(comps[len(self._VERSION_SEGMENT_OFFSETS):])
+        return ".".join(str(c) for c in bumped)
 
     @staticmethod
     def _parse_version_components(version: str) -> list[int]:
@@ -1165,8 +1182,9 @@ def _selftest() -> None:
         "zip_url": ["y"],
     }, ensure_ascii=False).encode("utf-8")
     patched_vm = json.loads(assets.patch_real_version_manifest(fake_vm).decode("utf-8"))
-    # 下发版本 = 动态捕获的真实线上版本（fake_vm 的 "1.0.0.51"），而非伪造 bump
+    # 下发版本 = 4 段缓冲支配版本：真实线上版每段 +缓冲偏移(1,5,9,1000)，段数与官方一致
     assert assets.real_online_version == "1.0.0.51", assets.real_online_version
+    assert patched_vm["version"] == "2.5.9.1051", patched_vm["version"]  # 1.0.0.51 → 2.5.9.1051
     _sv = [int(x) for x in patched_vm["version"].split(".")]
     _rv = [int(x) for x in "1.0.0.51".split(".")]
     assert len(_sv) == len(_rv) and all(a >= b for a, b in zip(_sv, _rv)) and any(a > b for a, b in zip(_sv, _rv)), patched_vm["version"]

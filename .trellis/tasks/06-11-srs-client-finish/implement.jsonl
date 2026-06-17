@@ -1,6 +1,0 @@
-{"file": ".trellis/spec/backend/game-protocol.md", "reason": "SRS wire protocol frame format (0x4001 flag, 12B header), handshake sequence, auth token structure — needed for implementing SRS spectator client correctly"}
-{"file": ".trellis/spec/backend/remote-access.md", "reason": "Relay architecture, API contracts (/register, /push, /state, /watch), credential registration flow, sys.path rules — spectator integrates with relay"}
-{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Structured logging conventions for all remote/ services"}
-{"file": ".trellis/spec/backend/error-handling.md", "reason": "Error handling patterns to follow in new code"}
-{"file": ".trellis/spec/guides/index.md", "reason": "Cross-package thinking guides for code reuse and cross-layer consistency"}
-{"file": ".trellis/tasks/06-11-srs-client-finish/research/frida-alternatives.md", "reason": "Anti-tamper analysis: 5 security libraries, 7 alternatives ranked by feasibility. Informs the Frida bypass strategy and emulator approach"}

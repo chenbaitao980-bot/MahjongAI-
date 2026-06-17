@@ -52,8 +52,8 @@ class SetupMitmManifestPatchTest(unittest.TestCase):
         )
 
         file_list = patched["file_list"]
-        # 真实版未捕获 → 下发静态兜底支配版本（每分量远大于现实版本）
-        self.assertEqual(patched["version"], "99999.99999.99999.99999")
+        # 真实版未捕获 → 静态兜底 4 段支配版本（每分量远大于现实版本）
+        self.assertEqual(patched["version"], "99.99.99.9999")
         self.assertTrue(patched["forbid_zip"])
         # 完整 file_list 必须保留（含非大厅资源）
         self.assertEqual(
@@ -86,7 +86,10 @@ class SetupMitmManifestPatchTest(unittest.TestCase):
         self.assertEqual(assets.patch_real_project_manifest(manifest_bytes), manifest_bytes)
 
     def assert_dominates(self, served: str, real: str):
-        """断言下发版本在每个分量上都 >= 真实版本（绕过游戏 versionLessThan 的 bug）。"""
+        """断言下发版本（4 段缓冲）在每个分量上都 >= 真实官方版本（绕过 versionLessThan 逐段 bug）。
+
+        与官方同段数（4 段），每段加缓冲偏移 → 每段都 >= 官方对应段，至少一段严格更大。
+        """
         sv = [int(x) for x in served.split(".")]
         rv = [int(x) for x in real.split(".")]
         self.assertEqual(len(sv), len(rv), (served, real))
@@ -141,15 +144,21 @@ class SetupMitmManifestPatchTest(unittest.TestCase):
         self.assert_dominates(patched["version"], "1.0.1.1776")
 
     def test_served_version_dominates_and_triggers(self):
-        """支配版本：每分量 >= 真实版（4G 判 NOUPDATE）且首分量远大（热点必触发）。"""
+        """4 段缓冲支配版本：与官方同段数，每段 +缓冲(1,5,9,1000) > 官方对应段
+        （4G 判 NOUPDATE）且首分量更大（热点必触发）。"""
         assets = self.make_assets()
-        # 真实版未知 → 静态兜底支配版本
-        self.assertEqual(assets._served_version(), "99999.99999.99999.99999")
-        # 真实版已知 → 每分量 +偏移，仍支配
+        # 真实版未知 → 静态兜底 4 段支配版本
+        self.assertEqual(assets._served_version(), "99.99.99.9999")
+        # 真实版已知 → 每段 +缓冲偏移，4 段与官方一致
         assets.real_online_version = "1.0.1.1776"
-        self.assert_dominates(assets._served_version(), "1.0.1.1776")
-        # 关键回归：末段必须 > 真实 build，否则 versionLessThan bug 会在 4G 误触发
-        self.assertGreater(int(assets._served_version().split(".")[-1]), 1776)
+        served = assets._served_version()
+        self.assertEqual(served, "2.5.10.2776")  # 1.0.1.1776 → 2.5.10.2776
+        self.assert_dominates(served, "1.0.1.1776")
+        # 关键回归：每段都 > 官方对应段，否则 versionLessThan 逐段 bug 会在 4G 误触发
+        sv = [int(x) for x in served.split(".")]
+        rv = [1, 0, 1, 1776]
+        for s, r in zip(sv, rv):
+            self.assertGreater(s, r, (served, "1.0.1.1776"))
 
 
 if __name__ == "__main__":

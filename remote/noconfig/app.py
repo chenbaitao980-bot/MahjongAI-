@@ -65,6 +65,32 @@ _cfg_path: str = ""
 # 默认用户（向后兼容单用户模式）
 _default_user_id = "default"
 
+
+def configure(cfg: dict, cfg_path: str = "") -> None:
+    """由 main.py 注入运行时配置。
+
+    将 YAML 配置写入模块级 _cfg / _cfg_path，并把已有的持久化凭证
+    预填到默认用户，保证单用户场景开箱即用。
+    """
+    global _cfg, _cfg_path
+    _cfg = cfg or {}
+    _cfg_path = cfg_path or ""
+
+    hs = _cfg.get("handshake_blob", "")
+    at = _cfg.get("auth_token_12b", "")
+    srs_sid = _cfg.get("srs_sessionid", "")
+    if hs and at:
+        user = _get_or_create_user(_default_user_id, name=_default_user_id)
+        user.handshake_blob = hs
+        user.auth_token_12b = at
+        user.srs_sessionid = srs_sid
+        user.userid = _cfg.get("userid", "")
+        _LOGGER.info(
+            "[NOCONFIG] 默认用户已预填持久化凭证: hs=%d bytes, auth=%d bytes, srs_sid=%s",
+            len(hs) // 2, len(at) // 2, "有" if srs_sid else "无",
+        )
+
+
 # ─── 请求模型 ────────────────────────────────────────────────────
 
 
@@ -81,6 +107,13 @@ class PushRequest(BaseModel):
     snapshot: Dict[str, Any]
     api_token: str
     user_id: str = ""  # 多用户场景下，extractor 推送时带 user_id
+
+
+class PresenceRequest(BaseModel):
+    """presence 信号：手机进大厅/进游戏时由 ecs_proxy 上报，按 srs_sessionid 分用户。"""
+    api_token: str
+    user_id: str  # 用户唯一标识（通常是 srs_sessionid 的 hex）
+    name: str = ""  # 玩家昵称（从 PlayerData 解出，可选）
 
 
 class RegisterRoomRequest(BaseModel):
@@ -334,6 +367,24 @@ async def register(req: RegisterRequest):
     return {"status": "ok", "message": "凭证已注册", "mode": "noconfig", "user_id": user.user_id}
 
 
+def _auto_fill_credentials(user: "User", fallback_srs_sid: str = "") -> None:
+    """如果用户缺少凭证，自动从 default 用户复制 handshake/auth，srs_sessionid 用 user_id 或 fallback"""
+    if user.handshake_blob and user.auth_token_12b and user.srs_sessionid:
+        return  # 凭证齐全，无需操作
+    default_user = user_store.get_user(_default_user_id)
+    if not default_user or not default_user.handshake_blob or not default_user.auth_token_12b:
+        return  # default 也没有凭证
+    srs_sid = fallback_srs_sid or user.user_id
+    if user.user_id == _default_user_id:
+        srs_sid = default_user.srs_sessionid  # default 用户保留自己的 srs_sessionid
+    user.update_credentials(
+        handshake_blob=default_user.handshake_blob,
+        auth_token_12b=default_user.auth_token_12b,
+        srs_sessionid=srs_sid,
+    )
+    _LOGGER.info("[NOCONFIG] 自动补全凭证给用户 %s (srs_sid=%s)", user.user_id, srs_sid[:16] if srs_sid else "none")
+
+
 @app.post("/push")
 async def push(req: PushRequest):
     _check_api_token(req.api_token)
@@ -344,6 +395,8 @@ async def push(req: PushRequest):
     if user is None:
         # 自动创建用户（如果 extractor 推送时用户不存在）
         user = user_store.add_user(target_user_id, name=target_user_id)
+    # 确保用户有凭证（重启后用户可能丢失凭证）
+    _auto_fill_credentials(user, fallback_srs_sid=target_user_id)
 
     was_offline = user.state_store.should_use_game_client()
     user.on_push(req.snapshot)
@@ -351,6 +404,25 @@ async def push(req: PushRequest):
     if was_offline:
         _stop_spectator(user)
     return {"status": "ok", "mode": "noconfig", "user_id": user.user_id}
+
+
+@app.post("/presence")
+async def presence(req: PresenceRequest):
+    """presence 上报：手机进大厅/进游戏时由 ecs_proxy 调用，按 user_id(srs_sessionid) 标记在线。
+
+    与 /push 的区别：presence 不带手牌快照，仅标记"该用户当前活跃"，用于
+    "进大厅即显示在线"。手牌数据仍走 /push（依赖 0x2bc0 解码）。
+    """
+    _check_api_token(req.api_token)
+    user = _get_or_create_user(req.user_id, name=req.name)
+    # 若带了更可信的昵称（PlayerData 解出），更新显示名
+    if req.name and user.name in ("", user.user_id):
+        user.name = req.name
+    # 自动补全凭证（从 default 复制 handshake/auth，srs_sessionid 用 user_id）
+    _auto_fill_credentials(user, fallback_srs_sid=req.user_id)
+    user.touch_presence()
+    _LOGGER.info("[NOCONFIG] presence: user=%s name=%s 标记在线", user.user_id, user.name)
+    return {"status": "ok", "mode": "noconfig", "user_id": user.user_id, "online": True}
 
 
 @app.post("/register-room")
@@ -516,9 +588,13 @@ iframe { width: 100%; height: calc(100vh - 140px); border: none; }
 
 <script>
 let currentUserId = null;
-let apiToken = localStorage.getItem('mj_admin_token') || '';
+// token 优先级：URL ?token= > localStorage。支持 /admin?token=xxx 直接打开自动加载。
+const _urlToken = new URLSearchParams(location.search).get('token');
+let apiToken = (_urlToken || localStorage.getItem('mj_admin_token') || '').trim();
+if (apiToken) localStorage.setItem('mj_admin_token', apiToken);
 document.getElementById('token-input').value = apiToken;
-document.getElementById('token-input').addEventListener('change', (e) => {
+// 输入即刷新（input 事件，不必失焦）
+document.getElementById('token-input').addEventListener('input', (e) => {
   apiToken = e.target.value.trim();
   localStorage.setItem('mj_admin_token', apiToken);
   refreshUsers();
@@ -540,6 +616,12 @@ async function refreshUsers() {
     if (!r.ok) { console.error('获取用户列表失败:', r.status); return; }
     const data = await r.json();
     renderUserList(data.users || []);
+    if (!currentUserId) {
+      const preferred = (data.users || []).find(u => u.is_online && u.user_id !== 'default')
+        || (data.users || []).find(u => u.is_online)
+        || (data.users || [])[0];
+      if (preferred) selectUser(preferred.user_id);
+    }
     document.getElementById('total-users').textContent = data.total || 0;
     const online = (data.users || []).filter(u => u.is_online).length;
     document.getElementById('online-users').textContent = online;
@@ -560,12 +642,23 @@ function renderUserList(users) {
   const container = document.getElementById('user-list');
   if (!users.length) { container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px;">暂无用户</div>'; return; }
   container.innerHTML = users.map(u => `
-    <div class="user-item ${currentUserId === u.user_id ? 'active' : ''}" data-id="${u.user_id}" onclick="selectUser('${u.user_id}'">
+    <div class="user-item ${currentUserId === u.user_id ? 'active' : ''}" data-id="${u.user_id}" onclick="selectUser('${u.user_id}')">
       <div class="name">${escapeHtml(u.name || u.user_id)}</div>
       <div class="id">ID: ${escapeHtml(u.user_id)}</div>
-      <div class="status ${u.is_online ? 'online' : 'offline'}">${u.is_online ? '● 在线' : '○ 离线'}</div>
+      <div class="status ${u.is_online ? 'online' : 'offline'}">${u.is_online ? '● 在线' : '○ 离线' + formatLastSeen(u.last_seen_ago)}</div>
     </div>
   `).join('');
+}
+
+function formatLastSeen(agoSecs) {
+  if (agoSecs == null) return ' · 从未在线';
+  const s = Math.floor(agoSecs);
+  if (s < 60) return ' · ' + s + ' 秒前在线';
+  const m = Math.floor(s / 60);
+  if (m < 60) return ' · ' + m + ' 分钟前在线';
+  const h = Math.floor(m / 60);
+  if (h < 24) return ' · ' + h + ' 小时前在线';
+  return ' · ' + Math.floor(h / 24) + ' 天前在线';
 }
 
 function selectUser(userId) {
@@ -574,7 +667,7 @@ function selectUser(userId) {
   document.querySelector('.user-item[data-id="' + userId + '"]')?.classList.add('active');
   // 加载该用户的手牌页面
   const frame = document.getElementById('hand-frame');
-  frame.src = '/static/index.html?token=' + encodeURIComponent(apiToken) + '&user_id=' + encodeURIComponent(userId);
+  frame.src = '/static/index.html?token=' + encodeURIComponent(apiToken) + '&user_id=' + encodeURIComponent(userId) + '&v=' + Date.now();
 }
 
 function escapeHtml(text) {

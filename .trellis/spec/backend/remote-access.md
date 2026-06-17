@@ -1337,3 +1337,83 @@ curl -s http://8.136.37.136:8000/ | head -5  # 手牌展示页 HTML
 # 手机连热点 → 双击 5_extractor_hotspot.bat → 手机进游戏打牌
 # 看 http://8.136.37.136:8000/ 是否有手牌数据
 ```
+
+---
+
+## 16. 代码同步流向铁律（2026-06-17 立规）
+
+### 16.1 唯一允许的流向
+
+```
+本地修改 → git commit → restart_hotspot_mitm_and_ecs.bat → 服务器
+                                                              ↑
+                                                              单向
+```
+
+**禁止**：直接登录服务器编辑代码、直接 scp/sftp 修文件、用 ssh 跑 sed/echo 改代码。
+
+### 16.2 唯一允许的反向操作
+
+服务器上**只能读、不能写**。如果发现服务器代码意外比本地新（被人手改、被脚本同步覆盖、被 codex 直接动），处理流程**必须**是：
+
+```bash
+# 1. 把服务器代码拉回本地（覆盖本地工作目录）
+scp root@8.136.37.136:/opt/mahjong-remote/<差异文件> <本地对应路径>
+
+# 2. 本地 git diff 看清楚到底差了什么
+git diff -- <差异文件>
+
+# 3. 本地审完，commit 进 git
+git add <差异文件>
+git commit -m "sync: pull <文件> back from server"
+
+# 4. 之后再走正常 restart_hotspot_mitm_and_ecs.bat 重新部署
+```
+
+**严禁**：在服务器上当场 patch、跑修改命令；服务器永远只能是"本地 git 的镜像"，发现差异就立刻把服务器版本拉回本地走 git。
+
+### 16.3 这条规矩为什么必须存在
+
+历史教训（2026-06-17，整整 4 小时排查）：
+
+| 时间 | 事件 |
+|------|------|
+| 6/16 14:07 | 服务器上 `handshake.py::parse_player_data` 被手改成正确版本（1B 长度前缀），LOLLAPALOOZA 上报开始正常 |
+| 6/16 | 这个手改**没有提交 git**，本地仓库依然是 2B `<H` 的 bug 版本 |
+| 6/17 7:53 | codex 修 `crypto.py::reset_cfb`，部署时（可能是 sftp 同步整个 `remote/srs_spectator/` 目录）把仓库里 2B bug 版本覆盖回服务器 |
+| 6/17 8:07 | 用户跑 `restart_hotspot_mitm_and_ecs.bat`，再一次把本地代码（bug 版本）推到服务器 |
+| 6/17 上午 | LOLLAPALOOZA 永久消失，admin 上只剩 default lobby 兜底用户 |
+| 6/17 10:00–14:00 | 反复手工 ssh 改服务器、scp 来回拉、systemd 重启 70+ 次，越改越乱 |
+
+**根因不是 codex 写错了代码，是服务器上长期存在"未入库的正确版本"**，任何一次部署都会把它覆盖掉。如果当初遵守"服务器只读，发现差异先 pull 回来 git commit"，6/16 14:07 那次手改就会进入 git，6/17 的部署不会回滚它。
+
+### 16.4 `restart_hotspot_mitm_and_ecs.bat` 的覆盖范围（必须知道）
+
+脚本 (`scripts/restart_hotspot_mitm_and_ecs.py:181-185`) 打包 tar 时**只包含**：
+
+- `remote/noconfig/hijack/` （整个目录）
+- `remote/relay/` （整个目录）
+- `apk/game_base.apk`
+
+**不包含**：`remote/noconfig/app.py`、`remote/noconfig/user_store.py`、`remote/srs_spectator/`、`remote/extractor/`、`remote/vpn/`、`remote/hotspot/` 等。
+
+→ 改这些目录里的文件时，**单跑 bat 脚本不会同步到服务器**，必须显式 scp + systemctl restart。
+
+### 16.5 部署前自检脚本
+
+任何部署到服务器前，先跑一次 md5 对比，确认本地与服务器无差异（差异 = 服务器有未入库改动，**必须先拉回 git**）：
+
+```bash
+# 单文件对比
+LOCAL=$(md5sum remote/noconfig/hijack/tcp_proxy.py | awk '{print $1}')
+REMOTE=$(ssh root@8.136.37.136 'md5sum /opt/mahjong-remote/remote/noconfig/hijack/tcp_proxy.py' | awk '{print $1}')
+[ "$LOCAL" = "$REMOTE" ] && echo "OK in sync" || echo "DIFF! pull server back first"
+
+# 整个 noconfig 目录批量对比
+for f in $(cd remote/noconfig && find . -name '*.py'); do
+  L=$(md5sum "remote/noconfig/$f" 2>/dev/null | awk '{print $1}')
+  R=$(ssh root@8.136.37.136 "md5sum /opt/mahjong-remote/remote/noconfig/$f 2>/dev/null" | awk '{print $1}')
+  [ "$L" != "$R" ] && echo "DIFF: $f (local=$L  remote=$R)"
+done
+```
+

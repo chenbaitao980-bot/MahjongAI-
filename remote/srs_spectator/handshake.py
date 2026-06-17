@@ -76,7 +76,17 @@ def build_req_plus_data() -> bytes:
 
 
 def parse_player_data(payload: bytes) -> dict:
-    """Parse PlayerData response (msgid=6)."""
+    """Parse PlayerData response (msgid=6).
+
+    线上实测明文（手机 `LOLLAPALOOZA`）：
+      00 c51b0000 f634a140 0c 4c4f4c4c4150414c4f4f5a41 00 6f588b49338f49d2ae69c38f04b2ff1c
+      ^  ^^^^^^^  ^^^^^^^  ^  ^^^^^^^^^^^^^^^^^^^^^^^^ ^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      fl areaid    numid   nl   "LOLLAPALOOZA" (12B)   ul    sessionid (16B)
+
+    nick_len / url_len / msg_len 都是 **1 字节** 长度前缀（不是 readString 的 uint16）。
+    历史上误用 <H 解析，会把第一个昵称字节吃成长度高位，导致 nickname 越界 +
+    sessionid 永远拿不到 → presence 上报失败。详见 [memory:srs-cfb-and-string-prefix-fix]。
+    """
     if len(payload) < 9:
         return {"error": "payload too short"}
 
@@ -85,22 +95,24 @@ def parse_player_data(payload: bytes) -> dict:
     areaid = struct.unpack_from("<i", payload, offset)[0]; offset += 4
     numid = struct.unpack_from("<i", payload, offset)[0]; offset += 4
 
-    nick_len = struct.unpack_from("<H", payload, offset)[0]; offset += 2
+    if offset + 1 > len(payload):
+        return {"error": "nick_len missing"}
+    nick_len = payload[offset]; offset += 1
     nick_end = min(offset + nick_len, len(payload))
     nickname = payload[offset:nick_end].decode("utf-8", errors="replace")
-    offset = min(offset + nick_len, len(payload))
+    offset = nick_end
 
-    if offset + 2 > len(payload):
+    if offset + 1 > len(payload):
         return {"flag": flag, "areaid": areaid, "numid": numid, "nickname": nickname,
                 "protecturl": "", "msg": "", "sessionid": b""}
-    url_len = struct.unpack_from("<H", payload, offset)[0]; offset += 2
+    url_len = payload[offset]; offset += 1
     url_end = min(offset + url_len, len(payload))
     protecturl = payload[offset:url_end].decode("utf-8", errors="replace")
-    offset = min(offset + url_len, len(payload))
+    offset = url_end
 
     msg = ""
-    if flag == 1 and offset + 2 <= len(payload):
-        msg_len = struct.unpack_from("<H", payload, offset)[0]; offset += 2
+    if flag == 1 and offset + 1 <= len(payload):
+        msg_len = payload[offset]; offset += 1
         msg = payload[offset:offset+msg_len].decode("utf-8", errors="replace")
         offset += msg_len
 

@@ -1,0 +1,13 @@
+api_token: d4a8e1f29c6b7305e8d1f264
+admin_username: admin
+admin_password: Aa123456
+auth_token_12b: 846a29fd572fbbdf89af0fb4
+game_server_ip: 47.96.0.227
+game_server_port: 7777
+handshake_blob: 459937d169da1ecda3c63f5a89a70b94e55d92
+mode: noconfig
+port: 8002
+push_timeout: 5
+spectator_url: http://localhost:8003
+srs_sessionid: deadbeef0001
+userid: newpt1084306678

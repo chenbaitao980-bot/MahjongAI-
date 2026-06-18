@@ -118,7 +118,7 @@ function Assert-HotspotIp {
 function Deploy-Remote {
     Invoke-Checked tar @(
         "-cf", $TarPath,
-        "remote/noconfig/hijack",
+        "remote/noconfig",
         "remote/relay",
         "apk/game_base.apk"
     )
@@ -137,7 +137,7 @@ rm -rf /tmp/hijack-update
 mkdir -p /tmp/hijack-update
 cd /tmp/hijack-update
 tar -xf /tmp/hijack-update.tar
-cp -r remote/noconfig/hijack/* /opt/mahjong-remote/remote/noconfig/hijack/
+cp -r remote/noconfig/* /opt/mahjong-remote/remote/noconfig/
 cp -r remote/relay/* /opt/mahjong-remote/remote/relay/
 mkdir -p /opt/mahjong-remote/apk
 cp apk/game_base.apk /opt/mahjong-remote/apk/game_base.apk

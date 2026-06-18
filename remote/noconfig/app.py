@@ -24,11 +24,17 @@ app.py — MahjongAI Noconfig Relay (多用户版)
 """
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
+import json
 import logging
 import os
+import secrets
 import subprocess
 import sys
 import threading
+import time
 from typing import Any, Dict, Optional
 
 # 确保项目根目录和 relay 目录在 sys.path
@@ -43,8 +49,8 @@ if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
 import yaml
-from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -64,6 +70,9 @@ _cfg_path: str = ""
 
 # 默认用户（向后兼容单用户模式）
 _default_user_id = "default"
+_ADMIN_AUTH_COOKIE = "mj_admin_auth"
+_ADMIN_SESSION_TTL_SECONDS = 12 * 60 * 60
+_ADMIN_REMEMBER_TTL_SECONDS = 30 * 24 * 60 * 60
 
 
 def configure(cfg: dict, cfg_path: str = "") -> None:
@@ -127,6 +136,12 @@ class UpdateUserRequest(BaseModel):
     name: str
 
 
+class AdminLoginRequest(BaseModel):
+    username: str
+    password: str
+    remember: bool = False
+
+
 # ─── 内部工具 ────────────────────────────────────────────────────
 
 
@@ -134,6 +149,72 @@ def _check_api_token(token: str):
     expected = _cfg.get("api_token", "")
     if not expected or token != expected:
         raise HTTPException(status_code=401, detail="无效 api_token")
+
+
+def _admin_username() -> str:
+    return str(_cfg.get("admin_username", "") or "").strip()
+
+
+def _admin_password() -> str:
+    return str(_cfg.get("admin_password", "") or "")
+
+
+def _admin_cookie_secret() -> str:
+    return str(_cfg.get("admin_cookie_secret") or _cfg.get("api_token") or "mahjongai-admin-secret")
+
+
+def _is_admin_configured() -> bool:
+    return bool(_admin_username() and _admin_password())
+
+
+def _make_admin_cookie_value(username: str, ttl_seconds: int) -> str:
+    expires_at = int(time.time()) + ttl_seconds
+    payload = f"{username}|{expires_at}"
+    signature = hmac.new(
+        _admin_cookie_secret().encode("utf-8"),
+        payload.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    return base64.urlsafe_b64encode(f"{payload}|{signature}".encode("utf-8")).decode("ascii")
+
+
+def _read_admin_cookie(request: Request) -> Optional[str]:
+    raw = request.cookies.get(_ADMIN_AUTH_COOKIE)
+    if not raw:
+        return None
+    try:
+        decoded = base64.urlsafe_b64decode(raw.encode("ascii")).decode("utf-8")
+        username, expires_at_text, signature = decoded.split("|", 2)
+        payload = f"{username}|{expires_at_text}"
+        expected_signature = hmac.new(
+            _admin_cookie_secret().encode("utf-8"),
+            payload.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        if not secrets.compare_digest(signature, expected_signature):
+            return None
+        if int(expires_at_text) < int(time.time()):
+            return None
+        if not secrets.compare_digest(username, _admin_username()):
+            return None
+        return username
+    except Exception:
+        return None
+
+
+def _set_admin_cookie(response: JSONResponse | RedirectResponse, username: str, remember: bool) -> None:
+    ttl_seconds = _ADMIN_REMEMBER_TTL_SECONDS if remember else _ADMIN_SESSION_TTL_SECONDS
+    response.set_cookie(
+        key=_ADMIN_AUTH_COOKIE,
+        value=_make_admin_cookie_value(username, ttl_seconds),
+        max_age=ttl_seconds if remember else None,
+        httponly=True,
+        samesite="lax",
+    )
+
+
+def _clear_admin_cookie(response: RedirectResponse) -> None:
+    response.delete_cookie(_ADMIN_AUTH_COOKIE, httponly=True, samesite="lax")
 
 
 def _get_or_create_user(user_id: str, name: str = "") -> "User":
@@ -520,46 +601,163 @@ async def delete_user(user_id: str, token: str = Query(..., description="鉴权 
 
 # ─── Admin Page ─────────────────────────────────────────────────
 
+@app.post("/admin/login")
+async def admin_login(req: AdminLoginRequest):
+    if not _is_admin_configured():
+        raise HTTPException(status_code=503, detail="admin login is not configured")
+
+    if not (
+        secrets.compare_digest(req.username, _admin_username())
+        and secrets.compare_digest(req.password, _admin_password())
+    ):
+        _LOGGER.warning("[NOCONFIG] admin login failed for user=%s", req.username)
+        raise HTTPException(status_code=401, detail="invalid username or password")
+
+    response = JSONResponse({"status": "ok", "username": req.username})
+    _set_admin_cookie(response, req.username, req.remember)
+    _LOGGER.info("[NOCONFIG] admin login success for user=%s remember=%s", req.username, req.remember)
+    return response
+
+
+@app.get("/admin/logout")
+async def admin_logout():
+    response = RedirectResponse(url="/admin", status_code=303)
+    _clear_admin_cookie(response)
+    return response
+
+
 @app.get("/admin", response_class=HTMLResponse)
-async def admin_page():
+async def admin_page(request: Request):
     """后台管理页面 — 用户列表 + 搜索 + 手牌展示"""
-    return HTMLResponse(content=_build_admin_page())
+    if not _is_admin_configured():
+        return HTMLResponse(content=_build_admin_login_page(config_error="未配置后台账号密码"), status_code=503)
+
+    username = _read_admin_cookie(request)
+    if not username:
+        return HTMLResponse(content=_build_admin_login_page())
+
+    return HTMLResponse(content=_build_admin_page(username=username, api_token=_cfg.get("api_token", "")))
 
 
-def _build_admin_page() -> str:
+def _build_admin_login_page(config_error: str = "") -> str:
+    error_json = json.dumps(config_error, ensure_ascii=False)
+    return f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MahjongAI Admin Login</title>
+<style>
+:root {{ --bg: #0f1115; --panel: #1a1d24; --panel2: #232733; --txt: #e8eaed; --muted: #9aa0ab; --line: #333947; --accent: #f5b301; --danger: #ef4444; }}
+* {{ box-sizing: border-box; }}
+body {{ margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at top, #1f2431 0%, #0f1115 55%); color: var(--txt); font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; }}
+.card {{ width: min(420px, calc(100vw - 32px)); background: rgba(26, 29, 36, 0.96); border: 1px solid var(--line); border-radius: 16px; padding: 28px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35); }}
+h1 {{ margin: 0 0 8px; font-size: 24px; }}
+p {{ margin: 0 0 20px; color: var(--muted); font-size: 14px; line-height: 1.6; }}
+label {{ display: block; margin: 14px 0 6px; font-size: 13px; color: var(--muted); }}
+input[type="text"], input[type="password"] {{ width: 100%; border: 1px solid var(--line); border-radius: 10px; background: var(--panel2); color: var(--txt); padding: 12px 14px; font-size: 14px; }}
+.row {{ display: flex; align-items: center; justify-content: space-between; margin-top: 14px; gap: 12px; }}
+.remember {{ display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }}
+button {{ width: 100%; margin-top: 18px; border: none; border-radius: 10px; background: var(--accent); color: #111; padding: 12px 14px; font-size: 14px; font-weight: 700; cursor: pointer; }}
+button:disabled {{ opacity: 0.7; cursor: wait; }}
+.error {{ min-height: 20px; margin-top: 14px; color: var(--danger); font-size: 13px; }}
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>MahjongAI 后台登录</h1>
+    <p>登录后进入无配置模式后台。勾选“记住我”后，下次访问无需重新输入账号密码。</p>
+    <label for="username">账号</label>
+    <input id="username" type="text" autocomplete="username" />
+    <label for="password">密码</label>
+    <input id="password" type="password" autocomplete="current-password" />
+    <div class="row">
+      <label class="remember"><input id="remember" type="checkbox" checked />记住我</label>
+    </div>
+    <button id="login-btn" type="button" onclick="login()">登录</button>
+    <div class="error" id="error"></div>
+  </div>
+<script>
+const initialError = {error_json};
+if (initialError) {{
+  document.getElementById('error').textContent = initialError;
+}}
+async function login() {{
+  const btn = document.getElementById('login-btn');
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value;
+  const remember = document.getElementById('remember').checked;
+  const errorEl = document.getElementById('error');
+  errorEl.textContent = '';
+  if (!username || !password) {{
+    errorEl.textContent = '请输入账号和密码';
+    return;
+  }}
+  btn.disabled = true;
+  btn.textContent = '登录中...';
+  try {{
+    const r = await fetch('/admin/login', {{
+      method: 'POST',
+      headers: {{ 'Content-Type': 'application/json' }},
+      body: JSON.stringify({{ username, password, remember }}),
+    }});
+    const data = await r.json().catch(() => ({{}}));
+    if (!r.ok) {{
+      errorEl.textContent = data.detail || '登录失败';
+      return;
+    }}
+    window.location.href = '/admin';
+  }} catch (e) {{
+    errorEl.textContent = '网络异常，请稍后重试';
+  }} finally {{
+    btn.disabled = false;
+    btn.textContent = '登录';
+  }}
+}}
+document.getElementById('password').addEventListener('keydown', (e) => {{
+  if (e.key === 'Enter') login();
+}});
+</script>
+</body>
+</html>"""
+
+
+def _build_admin_page(username: str, api_token: str) -> str:
     """构建后台管理页面 HTML"""
-    return """<!DOCTYPE html>
+    username_json = json.dumps(username, ensure_ascii=False)
+    api_token_json = json.dumps(api_token)
+    return f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MahjongAI 多用户管理</title>
 <style>
-:root { --bg: #0f1115; --panel: #1a1d24; --panel2: #232733; --txt: #e8eaed; --muted: #9aa0ab; --line: #333947; --accent: #f5b301; --man: #c0392b; --pin: #2563c9; --sou: #1e9e5a; }
-* { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--txt); font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; }
-header { display: flex; align-items: center; gap: 12px; padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--line); }
-header h1 { font-size: 18px; margin: 0; font-weight: 600; }
-header .stats { margin-left: auto; font-size: 13px; color: var(--muted); }
-.container { display: flex; height: calc(100vh - 60px); }
-.sidebar { width: 320px; min-width: 320px; border-right: 1px solid var(--line); display: flex; flex-direction: column; }
-.search-box { padding: 12px 16px; border-bottom: 1px solid var(--line); }
-.search-box input { width: 100%; background: var(--panel2); border: 1px solid var(--line); color: var(--txt); padding: 8px 12px; border-radius: 6px; font-size: 13px; }
-.user-list { flex: 1; overflow-y: auto; padding: 8px; }
-.user-item { padding: 10px 12px; margin: 4px 0; border-radius: 6px; cursor: pointer; transition: background 0.2s; }
-.user-item:hover { background: var(--panel2); }
-.user-item.active { background: var(--panel2); border-left: 3px solid var(--accent); }
-.user-item .name { font-weight: 600; font-size: 14px; }
-.user-item .id { font-size: 12px; color: var(--muted); }
-.user-item .status { font-size: 11px; margin-top: 4px; }
-.user-item .status.online { color: var(--sou); }
-.user-item .status.offline { color: var(--muted); }
-.main { flex: 1; padding: 20px; overflow-y: auto; }
-.empty-state { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--muted); font-size: 14px; }
-.token-bar { padding: 8px 16px; background: var(--panel2); border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 8px; }
-.token-bar input { flex: 1; background: var(--bg); border: 1px solid var(--line); color: var(--txt); padding: 6px 10px; border-radius: 4px; font-size: 12px; }
-.token-bar button { background: var(--accent); color: #000; border: none; padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; }
-iframe { width: 100%; height: calc(100vh - 140px); border: none; }
+:root {{ --bg: #0f1115; --panel: #1a1d24; --panel2: #232733; --txt: #e8eaed; --muted: #9aa0ab; --line: #333947; --accent: #f5b301; --man: #c0392b; --pin: #2563c9; --sou: #1e9e5a; }}
+* {{ box-sizing: border-box; }}
+body {{ margin: 0; background: var(--bg); color: var(--txt); font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; }}
+header {{ display: flex; align-items: center; gap: 12px; padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--line); }}
+header h1 {{ font-size: 18px; margin: 0; font-weight: 600; }}
+header .stats {{ margin-left: auto; font-size: 13px; color: var(--muted); }}
+.container {{ display: flex; height: calc(100vh - 60px); }}
+.sidebar {{ width: 320px; min-width: 320px; border-right: 1px solid var(--line); display: flex; flex-direction: column; }}
+.search-box {{ padding: 12px 16px; border-bottom: 1px solid var(--line); }}
+.search-box input {{ width: 100%; background: var(--panel2); border: 1px solid var(--line); color: var(--txt); padding: 8px 12px; border-radius: 6px; font-size: 13px; }}
+.user-list {{ flex: 1; overflow-y: auto; padding: 8px; }}
+.user-item {{ padding: 10px 12px; margin: 4px 0; border-radius: 6px; cursor: pointer; transition: background 0.2s; }}
+.user-item:hover {{ background: var(--panel2); }}
+.user-item.active {{ background: var(--panel2); border-left: 3px solid var(--accent); }}
+.user-item .name {{ font-weight: 600; font-size: 14px; }}
+.user-item .id {{ font-size: 12px; color: var(--muted); }}
+.user-item .status {{ font-size: 11px; margin-top: 4px; }}
+.user-item .status.online {{ color: var(--sou); }}
+.user-item .status.offline {{ color: var(--muted); }}
+.main {{ flex: 1; padding: 20px; overflow-y: auto; }}
+.toolbar {{ padding: 8px 16px; background: var(--panel2); border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 8px; }}
+.toolbar .meta {{ font-size: 12px; color: var(--muted); }}
+.toolbar .actions {{ display: flex; gap: 8px; }}
+.toolbar button, .toolbar a {{ background: var(--accent); color: #000; border: none; padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; text-decoration: none; }}
+iframe {{ width: 100%; height: calc(100vh - 140px); border: none; }}
 </style>
 </head>
 <body>
@@ -577,10 +775,12 @@ iframe { width: 100%; height: calc(100vh - 140px); border: none; }
     </div>
   </div>
   <div class="main">
-    <div class="token-bar">
-      <span style="font-size:12px;color:var(--muted)">Token:</span>
-      <input id="token-input" placeholder="输入 api_token" value="">
-      <button onclick="refreshUsers()">刷新</button>
+    <div class="toolbar">
+      <div class="meta">已登录账号: <span id="current-admin"></span></div>
+      <div class="actions">
+        <button onclick="refreshUsers()">刷新</button>
+        <a href="/admin/logout">退出登录</a>
+      </div>
     </div>
     <iframe id="hand-frame" src="about:blank"></iframe>
   </div>
@@ -588,69 +788,60 @@ iframe { width: 100%; height: calc(100vh - 140px); border: none; }
 
 <script>
 let currentUserId = null;
-// token 优先级：URL ?token= > localStorage。支持 /admin?token=xxx 直接打开自动加载。
-const _urlToken = new URLSearchParams(location.search).get('token');
-let apiToken = (_urlToken || localStorage.getItem('mj_admin_token') || '').trim();
-if (apiToken) localStorage.setItem('mj_admin_token', apiToken);
-document.getElementById('token-input').value = apiToken;
-// 输入即刷新（input 事件，不必失焦）
-document.getElementById('token-input').addEventListener('input', (e) => {
-  apiToken = e.target.value.trim();
-  localStorage.setItem('mj_admin_token', apiToken);
-  refreshUsers();
-});
+const apiToken = {api_token_json};
+document.getElementById('current-admin').textContent = {username_json};
 
-document.getElementById('search-input').addEventListener('input', (e) => {
+document.getElementById('search-input').addEventListener('input', (e) => {{
   const q = e.target.value.trim();
-  if (q) {
+  if (q) {{
     searchUsers(q);
-  } else {
+  }} else {{
     refreshUsers();
-  }
-});
+  }}
+}});
 
-async function refreshUsers() {
+async function refreshUsers() {{
   if (!apiToken) return;
-  try {
+  try {{
     const r = await fetch('/api/users?token=' + encodeURIComponent(apiToken));
-    if (!r.ok) { console.error('获取用户列表失败:', r.status); return; }
+    if (!r.ok) {{ console.error('获取用户列表失败:', r.status); return; }}
     const data = await r.json();
     renderUserList(data.users || []);
-    if (!currentUserId) {
+    if (!currentUserId) {{
       const preferred = (data.users || []).find(u => u.is_online && u.user_id !== 'default')
         || (data.users || []).find(u => u.is_online)
         || (data.users || [])[0];
       if (preferred) selectUser(preferred.user_id);
-    }
+    }}
     document.getElementById('total-users').textContent = data.total || 0;
     const online = (data.users || []).filter(u => u.is_online).length;
     document.getElementById('online-users').textContent = online;
-  } catch (e) { console.error('刷新用户失败:', e); }
-}
+  }} catch (e) {{ console.error('刷新用户失败:', e); }}
+}}
 
-async function searchUsers(q) {
+async function searchUsers(q) {{
   if (!apiToken) return;
-  try {
+  try {{
     const r = await fetch('/api/users/search?token=' + encodeURIComponent(apiToken) + '&q=' + encodeURIComponent(q));
     if (!r.ok) return;
     const data = await r.json();
     renderUserList(data.users || []);
-  } catch (e) { console.error('搜索用户失败:', e); }
-}
+  }} catch (e) {{ console.error('搜索用户失败:', e); }}
+}}
 
-function renderUserList(users) {
+function renderUserList(users) {{
   const container = document.getElementById('user-list');
-  if (!users.length) { container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px;">暂无用户</div>'; return; }
+  if (!users.length) {{ container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px;">暂无用户</div>'; return; }}
   container.innerHTML = users.map(u => `
-    <div class="user-item ${currentUserId === u.user_id ? 'active' : ''}" data-id="${u.user_id}" onclick="selectUser('${u.user_id}')">
-      <div class="name">${escapeHtml(u.name || u.user_id)}</div>
-      <div class="id">ID: ${escapeHtml(u.user_id)}</div>
-      <div class="status ${u.is_online ? 'online' : 'offline'}">${u.is_online ? '● 在线' : '○ 离线' + formatLastSeen(u.last_seen_ago)}</div>
+    <div class="user-item ${{currentUserId === u.user_id ? 'active' : ''}}" data-id="${{u.user_id}}" onclick="selectUser('${{u.user_id}}')">
+      <div class="name">${{escapeHtml(u.name || u.user_id)}}</div>
+      <div class="id">ID: ${{escapeHtml(u.user_id)}}</div>
+      <div class="status ${{u.is_online ? 'online' : 'offline'}}">${{u.is_online ? '● 在线' : '○ 离线' + formatLastSeen(u.last_seen_ago)}}</div>
     </div>
   `).join('');
-}
+}}
 
-function formatLastSeen(agoSecs) {
+function formatLastSeen(agoSecs) {{
   if (agoSecs == null) return ' · 从未在线';
   const s = Math.floor(agoSecs);
   if (s < 60) return ' · ' + s + ' 秒前在线';
@@ -659,24 +850,22 @@ function formatLastSeen(agoSecs) {
   const h = Math.floor(m / 60);
   if (h < 24) return ' · ' + h + ' 小时前在线';
   return ' · ' + Math.floor(h / 24) + ' 天前在线';
-}
+}}
 
-function selectUser(userId) {
+function selectUser(userId) {{
   currentUserId = userId;
   document.querySelectorAll('.user-item').forEach(el => el.classList.remove('active'));
   document.querySelector('.user-item[data-id="' + userId + '"]')?.classList.add('active');
-  // 加载该用户的手牌页面
   const frame = document.getElementById('hand-frame');
   frame.src = '/static/index.html?token=' + encodeURIComponent(apiToken) + '&user_id=' + encodeURIComponent(userId) + '&v=' + Date.now();
-}
+}}
 
-function escapeHtml(text) {
+function escapeHtml(text) {{
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
-}
+}}
 
-// 自动刷新
 setInterval(refreshUsers, 5000);
 refreshUsers();
 </script>

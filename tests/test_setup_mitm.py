@@ -16,6 +16,9 @@ class SetupMitmManifestPatchTest(unittest.TestCase):
         assets.served_md5 = "netconf-md5"
         assets.served_size = 100
         assets.served_name = "aa/netconf.luac"
+        assets.netengine_md5 = "netengine-md5"
+        assets.netengine_size = 400
+        assets.netengine_name = "dd/netengine.luac"
         assets.resensure_md5 = "resensure-md5"
         assets.resensure_size = 200
         assets.resensure_name = "bb/resensure.luac"

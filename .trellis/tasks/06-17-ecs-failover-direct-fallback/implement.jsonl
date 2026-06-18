@@ -1,0 +1,9 @@
+{"file": ".trellis/spec/backend/remote-access.md", "reason": "ECS 部署形态、systemd 服务名、端口/安全组约束、noconfig 链路结构——bat 写 stop/start 命令需要准确的服务名"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "错误处理规范，影响 NetEngine.luac 注入的失败回调代码风格与 ECS 关停后端口连通性自检脚本的输出"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "代码质量基线，影响 netengine_patch.py 新模块的结构与单测要求"}
+{"file": ".trellis/spec/backend/game-protocol.md", "reason": "游戏协议层语义（SRS 连接状态、fail 回调时序），决定 _srsConnFailCount 注入点选择"}
+{"file": "remote/noconfig/hijack/netconf_patch.py", "reason": "现有 XXTEA 解密/加密流程参考；新模块 netengine_patch.py 复用 unwrap_luac/wrap_luac/SIGN/KEY"}
+{"file": "remote/noconfig/hijack/manifest_forge.py", "reason": "扩展为多文件下发的基线代码；保留 file_url/forbid_zip/version 既定行为"}
+{"file": "remote/noconfig/hijack/setup_mitm.py", "reason": "443 HTTP 投递路由现位置；新增 NetEngine.luac 投递路径需在此挂"}
+{"file": "apk/_dump_NetEngine.lua", "reason": "解密后的 NetEngine.lua，patch 改写函数需对照实际行号与缩进"}
+{"file": "apk/_dump_NetConf.lua", "reason": "解密后的 NetConf.lua，确认 5045/5067/5167 表的现有结构与缩进"}

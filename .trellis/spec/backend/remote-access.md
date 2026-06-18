@@ -1417,3 +1417,106 @@ for f in $(cd remote/noconfig && find . -name '*.py'); do
 done
 ```
 
+---
+
+## 17. ECS 故障兜底（noconfig Path Y）
+
+> **铁律**：noconfig 链路下发的客户端补丁必须让手机**在 ECS 整机宕机时仍能走真服玩所有玩法**（含金币局）。这是产品承诺，不是 nice-to-have。
+
+### 17.1 默认下发形态（强制）
+
+noconfig 设置期热更必须**双注入**——只下 NetConf.luac 不够：
+
+| 文件 | 改写规则 |
+|---|---|
+| `NetConf.luac` | `LOCAL_TCP_LIST[5045]` **保留真服 47.96.101.155** + 追加 ECS；`LOCAL_TCP_LIST_50[5067/5167]` 改为 `[ECS_entry, 真服 entry]` 两项；**禁止注入 `LOCAL_TCP_LIST_50[5045]`**（让代码 fallthrough 到普通 random 路径） |
+| `NetEngine.luac` | 注入全局 `XH._srsConnFailCount`、把 `getTcpConnectInfoByGroupId` 中 _50 分支 `return list[1]` 改成 `return list[(_failCount % #list) + 1]`、在所有 `addLinkStateScriptFunc` 回调里挂 LINK_STATE FAIL 自增 + 自重连 |
+
+### 17.2 必须知道的客户端事实
+
+`NetEngine.lua::getTcpConnectInfoByGroupId` 的 _50 分支硬编码 `return list[1]`，无 fallback、无 random、无重选。**只改 NetConf.luac 不动 NetEngine.luac 时，金币局兜底数学上做不到**——ECS 一挂，5067/5167 永久不可达。
+
+### 17.3 故障兜底验证工具
+
+| 杠杆 | 用途 |
+|---|---|
+| `stop_ecs_services.bat` | SSH 跑 `systemctl stop` 关 ECS 进程（不关机），用于验证 4G 用户回路真服 |
+| `start_ecs_services.bat` | 配套 start，验证回归 ECS 抓牌 |
+
+**仅关进程，不关机**——`stop` 完后端口立即 `connect refused`（不是 SYN 黑洞），客户端能立刻拿到 FAIL 触发轮询。
+
+### 17.4 服务名（实际部署，2026-06-17 起）
+
+bat / systemctl 命令**必须用以下实际部署单元名**，不要照抄 PRD 里的占位：
+
+| 服务 | 用途 |
+|---|---|
+| `mahjong-mitm-hotupdate` | 443 + DNS 热更 MITM |
+| `mahjong-tcp-proxy` | 大厅 + 金币游服 SRS 代理 |
+| `mahjong-relay-noconfig` | :8002 spectator relay（**不是** `noconfig-multi`） |
+| `mjx-vpn` | VPN extractor |
+
+---
+
+## 18. 客户端 Lua Patch 改动纪律
+
+> **触发**：任何 patch 模块改写 APK 内 `*.luac`（NetConf / NetEngine / 其它资源）。
+
+### 18.1 幂等（强制）
+
+再次 patch 已 patched 的 luac 必须是 **noop**（0 替换、0 注入）。用 sentinel（独有变量名 / 注入语句字面量）检测注入痕迹后 early-return；**禁止盲目 sub**——双重注入会把客户端代码改成无效 Lua。
+
+### 18.2 XXTEA inc 标记（不要新写）
+
+| 文件 | inc 标记 | 走哪条 |
+|---|---|---|
+| `NetConf.luac` | `inc=False`（密文长 == 明文长） | `xxtea_decrypt/encrypt` |
+| `NetEngine.luac` 及其它 cocos `.luac` | `inc=True`（明文末尾带 4 字节长度尾） | `unwrap_luac/wrap_luac` |
+
+**统一从 `remote/noconfig/hijack/netconf_patch.py` 复用 `unwrap_luac/wrap_luac/SIGN/KEY`**——不要在新模块里手写 XXTEA。
+
+### 18.3 定位用结构匹配，不用行号
+
+游戏官方热更覆盖时行号会变。改写定位**必须**用：
+
+- 正则匹配函数名 / 表名（`LOCAL_TCP_LIST_50\s*=\s*\{`）
+- 花括号配平截块（参考 `_find_real_block_span`）
+- 字面量唯一性判断（必含字符串 `must_contain`）
+
+**禁止**：`source.split("\n")[N]`、`re.sub` 不限范围在全文乱替（NetConf.lua 里 `47.96.101.155` 出现在多个区，会污染非台州的区）。
+
+### 18.4 LOCAL_TCP_LIST_50 改写约束
+
+任何对 `LOCAL_TCP_LIST_50[*]` 的注入 / 改写**必须保留至少一项真服 entry** 在列表里。违者 = ECS 整机宕机时该玩法永久不可达 = 违反 §17 产品承诺。Code-spec 检查表：
+
+- [ ] 改后的 list `#list >= 2`
+- [ ] 文本含原真服 IP / hostname 字符串
+- [ ] 不要用 `_inject_srs50_block(5045)` 风格的「钉死 list[1]」
+
+### 18.5 必备 selftest CLI（强制）
+
+每个 patch 模块必须暴露 `--selftest` 入口，覆盖：
+
+1. 解密 → 改写 → 加密 → 再解密的 XXTEA 往返
+2. 改后明文断言（含/不含若干字面量）
+3. 二次 patch 幂等（0 改动）
+
+### 18.6 Wrong vs Correct
+
+**Wrong**——钉死单点（ECS 一挂金币局必死）：
+
+```lua
+[5067] = { {id=0, ip="8.136.37.136", port=5767} }
+```
+
+**Correct**——ECS 在前抓凭证、真服在后做兜底：
+
+```lua
+[5067] = {
+    {id=0, ip="8.136.37.136", port=5767},
+    {id=0, ip="srs-zj.tt2kj.com", port=7777},
+}
+```
+
+配合 NetEngine 轮询补丁，ECS 死 → `_srsConnFailCount++` → 下次连真服。
+

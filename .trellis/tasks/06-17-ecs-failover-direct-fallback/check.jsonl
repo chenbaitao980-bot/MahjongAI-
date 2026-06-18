@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "lint/typecheck/test 验证基线"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "ECS 关停后端口探测的错误输出规范；netengine fail-callback 注入逻辑核对"}
+{"file": ".trellis/spec/backend/remote-access.md", "reason": "validate ECS 服务名、端口、安全组——bat 检查脚本必须指对端口/服务"}
+{"file": ".trellis/spec/backend/game-protocol.md", "reason": "确认 LINK_STATE_FAIL 语义与回调注入位置正确"}
+{"file": "apk/_dump_NetEngine.lua", "reason": "校验 patch 后的 NetEngine.luac 反解文本与预期 diff 完全匹配"}
+{"file": "apk/_dump_NetConf.lua", "reason": "校验 patch 后的 NetConf.luac 反解文本：5045 列表[真服+ECS]、_50[5045] 不存在、_50[5067/5167] 含 [ECS, 真服] 两项"}
+{"file": "regression-tests/cases/ecs-failover-direct-fallback.md", "reason": "真机回归记录：ECS 关停 + 4G 全玩法验证"}

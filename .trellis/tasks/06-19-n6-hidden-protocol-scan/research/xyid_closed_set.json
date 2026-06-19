@@ -1,0 +1,3540 @@
+{
+  "1": [
+    {
+      "msg_type": 1,
+      "name": "ActiveProtocol.ReqLedger",
+      "struct": "ActiveProtocol.ReqLedger",
+      "protocol": "ActiveProtocol",
+      "processid": 30,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ActiveProtocol.lua",
+      "source_line": 114,
+      "raw_expr": "1"
+    },
+    {
+      "msg_type": 1,
+      "name": "CMDT_REQREALNAMEAUTH",
+      "struct": "BoxDataProtocol.ReqRealNameAuth",
+      "protocol": "BoxDataProtocol",
+      "processid": 113,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BoxDataProtocol.lua",
+      "source_line": 85,
+      "raw_expr": "CMDT_REQREALNAMEAUTH"
+    },
+    {
+      "msg_type": 1,
+      "name": "CMDT_CHECKACT",
+      "struct": "DispatchProtocol.CheckAct",
+      "protocol": "DispatchProtocol",
+      "processid": 147,
+      "direction": "?",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/DispatchProtocol.lua",
+      "source_line": 169,
+      "raw_expr": "CMDT_CHECKACT"
+    },
+    {
+      "msg_type": 1,
+      "name": "CMDT_REQCHECKNEWMAIL",
+      "struct": "MailProtocol.ReqCheckNewMail",
+      "protocol": "MailProtocol",
+      "processid": 141,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/MailProtocol.lua",
+      "source_line": 18,
+      "raw_expr": "CMDT_REQCHECKNEWMAIL"
+    },
+    {
+      "msg_type": 1,
+      "name": "CMDT_REQTASKCONFIG",
+      "struct": "TaskProtocol.ReqTaskConfig",
+      "protocol": "TaskProtocol",
+      "processid": 120,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TaskProtocol.lua",
+      "source_line": 27,
+      "raw_expr": "CMDT_REQTASKCONFIG"
+    }
+  ],
+  "2": [
+    {
+      "msg_type": 2,
+      "name": "ActiveProtocol.RespLedger",
+      "struct": "ActiveProtocol.RespLedger",
+      "protocol": "ActiveProtocol",
+      "processid": 30,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ActiveProtocol.lua",
+      "source_line": 138,
+      "raw_expr": "2"
+    },
+    {
+      "msg_type": 2,
+      "name": "CMDT_RESPREALNAMEAUTH",
+      "struct": "BoxDataProtocol.RespRealNameAuth",
+      "protocol": "BoxDataProtocol",
+      "processid": 113,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BoxDataProtocol.lua",
+      "source_line": 115,
+      "raw_expr": "CMDT_RESPREALNAMEAUTH"
+    },
+    {
+      "msg_type": 2,
+      "name": "CMDT_RESPCHECKNEWMAIL",
+      "struct": "MailProtocol.RespCheckNewMail",
+      "protocol": "MailProtocol",
+      "processid": 141,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/MailProtocol.lua",
+      "source_line": 40,
+      "raw_expr": "CMDT_RESPCHECKNEWMAIL"
+    },
+    {
+      "msg_type": 2,
+      "name": "CMDT_RESPTASKCONFIG",
+      "struct": "TaskProtocol.RespTaskConfig",
+      "protocol": "TaskProtocol",
+      "processid": 120,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TaskProtocol.lua",
+      "source_line": 49,
+      "raw_expr": "CMDT_RESPTASKCONFIG"
+    }
+  ],
+  "3": [
+    {
+      "msg_type": 3,
+      "name": "ActiveProtocol.ReqDetail",
+      "struct": "ActiveProtocol.ReqDetail",
+      "protocol": "ActiveProtocol",
+      "processid": 30,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ActiveProtocol.lua",
+      "source_line": 264,
+      "raw_expr": "3"
+    },
+    {
+      "msg_type": 3,
+      "name": "CMDT_REQGETPLAYERMAILLIST",
+      "struct": "MailProtocol.ReqGetPlayerMailList",
+      "protocol": "MailProtocol",
+      "processid": 141,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/MailProtocol.lua",
+      "source_line": 64,
+      "raw_expr": "CMDT_REQGETPLAYERMAILLIST"
+    },
+    {
+      "msg_type": 3,
+      "name": "CMDT_REQTASKPERCENT",
+      "struct": "TaskProtocol.ReqTaskPercent",
+      "protocol": "TaskProtocol",
+      "processid": 120,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TaskProtocol.lua",
+      "source_line": 139,
+      "raw_expr": "CMDT_REQTASKPERCENT"
+    }
+  ],
+  "4": [
+    {
+      "msg_type": 4,
+      "name": "ActiveProtocol.RespDetail",
+      "struct": "ActiveProtocol.RespDetail",
+      "protocol": "ActiveProtocol",
+      "processid": 30,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ActiveProtocol.lua",
+      "source_line": 290,
+      "raw_expr": "4"
+    },
+    {
+      "msg_type": 4,
+      "name": "CMDT_REQJOINDISPATCHQUEUE",
+      "struct": "DispatchProtocol.ReqJoinDispatchQueue",
+      "protocol": "DispatchProtocol",
+      "processid": 147,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/DispatchProtocol.lua",
+      "source_line": 49,
+      "raw_expr": "CMDT_REQJOINDISPATCHQUEUE"
+    },
+    {
+      "msg_type": 4,
+      "name": "CMDT_RESPGETPLAYERMAILLIST",
+      "struct": "MailProtocol.RespGetPlayerMailList",
+      "protocol": "MailProtocol",
+      "processid": 141,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/MailProtocol.lua",
+      "source_line": 106,
+      "raw_expr": "CMDT_RESPGETPLAYERMAILLIST"
+    },
+    {
+      "msg_type": 4,
+      "name": "CMDT_RESPTASKPERCENT",
+      "struct": "TaskProtocol.RespTaskPercent",
+      "protocol": "TaskProtocol",
+      "processid": 120,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TaskProtocol.lua",
+      "source_line": 160,
+      "raw_expr": "CMDT_RESPTASKPERCENT"
+    }
+  ],
+  "5": [
+    {
+      "msg_type": 5,
+      "name": "ActiveProtocol.ReqGetGame",
+      "struct": "ActiveProtocol.ReqGetGame",
+      "protocol": "ActiveProtocol",
+      "processid": 30,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ActiveProtocol.lua",
+      "source_line": 16,
+      "raw_expr": "5"
+    },
+    {
+      "msg_type": 5,
+      "name": "CMDT_REQUSERTAG",
+      "struct": "BoxDataProtocol.ReqUserTag",
+      "protocol": "BoxDataProtocol",
+      "processid": 113,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BoxDataProtocol.lua",
+      "source_line": 214,
+      "raw_expr": "CMDT_REQUSERTAG"
+    },
+    {
+      "msg_type": 5,
+      "name": "CMDT_RESPJOINDISPATCHQUEUE",
+      "struct": "DispatchProtocol.RespJoinDispatchQueue",
+      "protocol": "DispatchProtocol",
+      "processid": 147,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/DispatchProtocol.lua",
+      "source_line": 84,
+      "raw_expr": "CMDT_RESPJOINDISPATCHQUEUE"
+    },
+    {
+      "msg_type": 5,
+      "name": "CMDT_REQGETMAILDETAIL",
+      "struct": "MailProtocol.ReqGetMailDetail",
+      "protocol": "MailProtocol",
+      "processid": 141,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/MailProtocol.lua",
+      "source_line": 140,
+      "raw_expr": "CMDT_REQGETMAILDETAIL"
+    },
+    {
+      "msg_type": 5,
+      "name": "CMDT_PLAYERCONNECT",
+      "struct": "SRSProtocol.PlayerConnect",
+      "protocol": "SRSProtocol",
+      "processid": 0,
+      "direction": "?",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/SRSProtocol.lua",
+      "source_line": 20,
+      "raw_expr": "CMDT_PLAYERCONNECT"
+    },
+    {
+      "msg_type": 5,
+      "name": "CMDT_REQGETTASKAWARD",
+      "struct": "TaskProtocol.ReqGetTaskAward",
+      "protocol": "TaskProtocol",
+      "processid": 120,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TaskProtocol.lua",
+      "source_line": 90,
+      "raw_expr": "CMDT_REQGETTASKAWARD"
+    }
+  ],
+  "6": [
+    {
+      "msg_type": 6,
+      "name": "ActiveProtocol.RespGetGame",
+      "struct": "ActiveProtocol.RespGetGame",
+      "protocol": "ActiveProtocol",
+      "processid": 30,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ActiveProtocol.lua",
+      "source_line": 38,
+      "raw_expr": "6"
+    },
+    {
+      "msg_type": 6,
+      "name": "CMDT_RESPUSERTAG",
+      "struct": "BoxDataProtocol.RespUserTag",
+      "protocol": "BoxDataProtocol",
+      "processid": 113,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BoxDataProtocol.lua",
+      "source_line": 265,
+      "raw_expr": "CMDT_RESPUSERTAG"
+    },
+    {
+      "msg_type": 6,
+      "name": "CMDT_REQLEAVEDISPATCHQUEUE",
+      "struct": "DispatchProtocol.ReqLeaveDispatchQueue",
+      "protocol": "DispatchProtocol",
+      "processid": 147,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/DispatchProtocol.lua",
+      "source_line": 116,
+      "raw_expr": "CMDT_REQLEAVEDISPATCHQUEUE"
+    },
+    {
+      "msg_type": 6,
+      "name": "CMDT_RESPGETMAILDETAIL",
+      "struct": "MailProtocol.RespGetMailDetail",
+      "protocol": "MailProtocol",
+      "processid": 141,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/MailProtocol.lua",
+      "source_line": 170,
+      "raw_expr": "CMDT_RESPGETMAILDETAIL"
+    },
+    {
+      "msg_type": 6,
+      "name": "CMDT_PLAYERDATA",
+      "struct": "SRSProtocol.PlayerData",
+      "protocol": "SRSProtocol",
+      "processid": 0,
+      "direction": "?",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/SRSProtocol.lua",
+      "source_line": 135,
+      "raw_expr": "CMDT_PLAYERDATA"
+    },
+    {
+      "msg_type": 6,
+      "name": "CMDT_RESPGETTASKAWARD",
+      "struct": "TaskProtocol.RespGetTaskAward",
+      "protocol": "TaskProtocol",
+      "processid": 120,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TaskProtocol.lua",
+      "source_line": 112,
+      "raw_expr": "CMDT_RESPGETTASKAWARD"
+    }
+  ],
+  "7": [
+    {
+      "msg_type": 7,
+      "name": "ActiveProtocol.ReqGetShareID",
+      "struct": "ActiveProtocol.ReqGetShareID",
+      "protocol": "ActiveProtocol",
+      "processid": 30,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ActiveProtocol.lua",
+      "source_line": 781,
+      "raw_expr": "7"
+    },
+    {
+      "msg_type": 7,
+      "name": "CMDT_RESPLEAVEDISPATCHQUEUE",
+      "struct": "DispatchProtocol.RespLeaveDispatchQueue",
+      "protocol": "DispatchProtocol",
+      "processid": 147,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/DispatchProtocol.lua",
+      "source_line": 140,
+      "raw_expr": "CMDT_RESPLEAVEDISPATCHQUEUE"
+    },
+    {
+      "msg_type": 7,
+      "name": "CMDT_REQREADALLMAIL",
+      "struct": "MailProtocol.ReqReadAllMail",
+      "protocol": "MailProtocol",
+      "processid": 141,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/MailProtocol.lua",
+      "source_line": 205,
+      "raw_expr": "CMDT_REQREADALLMAIL"
+    }
+  ],
+  "8": [
+    {
+      "msg_type": 8,
+      "name": "ActiveProtocol.RespGetShareID",
+      "struct": "ActiveProtocol.RespGetShareID",
+      "protocol": "ActiveProtocol",
+      "processid": 30,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ActiveProtocol.lua",
+      "source_line": 808,
+      "raw_expr": "8"
+    },
+    {
+      "msg_type": 8,
+      "name": "CMDT_NOTIFYUSERJOINTABLEINFO",
+      "struct": "DispatchProtocol.NotifyUserJoinTableInfo",
+      "protocol": "DispatchProtocol",
+      "processid": 147,
+      "direction": "notify",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/DispatchProtocol.lua",
+      "source_line": 186,
+      "raw_expr": "CMDT_NOTIFYUSERJOINTABLEINFO"
+    },
+    {
+      "msg_type": 8,
+      "name": "CMDT_RESPREADALLMAIL",
+      "struct": "MailProtocol.RespReadAllMail",
+      "protocol": "MailProtocol",
+      "processid": 141,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/MailProtocol.lua",
+      "source_line": 228,
+      "raw_expr": "CMDT_RESPREADALLMAIL"
+    }
+  ],
+  "9": [
+    {
+      "msg_type": 9,
+      "name": "CMDT_FORCELEAVEDISPATCHQUEUE",
+      "struct": "DispatchProtocol.NotifyForceLeaveDispatchQueue",
+      "protocol": "DispatchProtocol",
+      "processid": 147,
+      "direction": "notify",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/DispatchProtocol.lua",
+      "source_line": 217,
+      "raw_expr": "CMDT_FORCELEAVEDISPATCHQUEUE"
+    },
+    {
+      "msg_type": 9,
+      "name": "CMDT_REQDELMAIL",
+      "struct": "MailProtocol.ReqDelMail",
+      "protocol": "MailProtocol",
+      "processid": 141,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/MailProtocol.lua",
+      "source_line": 252,
+      "raw_expr": "CMDT_REQDELMAIL"
+    }
+  ],
+  "10": [
+    {
+      "msg_type": 10,
+      "name": "CMDT_REQDISPATCHAPPIDLIST",
+      "struct": "DispatchProtocol.ReqDispatchAppIDList",
+      "protocol": "DispatchProtocol",
+      "processid": 147,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/DispatchProtocol.lua",
+      "source_line": 243,
+      "raw_expr": "CMDT_REQDISPATCHAPPIDLIST"
+    },
+    {
+      "msg_type": 10,
+      "name": "CMDT_RESPDELMAIL",
+      "struct": "MailProtocol.RespDelMail",
+      "protocol": "MailProtocol",
+      "processid": 141,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/MailProtocol.lua",
+      "source_line": 275,
+      "raw_expr": "CMDT_RESPDELMAIL"
+    },
+    {
+      "msg_type": 10,
+      "name": "CMDT_REQSRSLOAD",
+      "struct": "SRSProtocol.ReqSRSLoad",
+      "protocol": "SRSProtocol",
+      "processid": 0,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/SRSProtocol.lua",
+      "source_line": 430,
+      "raw_expr": "CMDT_REQSRSLOAD"
+    }
+  ],
+  "11": [
+    {
+      "msg_type": 11,
+      "name": "CMDT_REPORTNEWPLAYER",
+      "struct": "AuthProtocol.ReportNewPlayer",
+      "protocol": "AuthProtocol",
+      "processid": 3,
+      "direction": "notify",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/AuthProtocol.lua",
+      "source_line": 7,
+      "raw_expr": "CMDT_REPORTNEWPLAYER"
+    },
+    {
+      "msg_type": 11,
+      "name": "CMDT_RESPDISPATCHAPPIDLIST",
+      "struct": "DispatchProtocol.RespDispatchAppIDList",
+      "protocol": "DispatchProtocol",
+      "processid": 147,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/DispatchProtocol.lua",
+      "source_line": 259,
+      "raw_expr": "CMDT_RESPDISPATCHAPPIDLIST"
+    },
+    {
+      "msg_type": 11,
+      "name": "CMDT_REQGETAWARD",
+      "struct": "MailProtocol.ReqGetAward",
+      "protocol": "MailProtocol",
+      "processid": 141,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/MailProtocol.lua",
+      "source_line": 301,
+      "raw_expr": "CMDT_REQGETAWARD"
+    },
+    {
+      "msg_type": 11,
+      "name": "CMDT_REQUEST_CREATE_TABLE",
+      "struct": "RoomProtocol.ReqCreateTable",
+      "protocol": "RoomProtocol",
+      "processid": 84,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/RoomProtocol.lua",
+      "source_line": 83,
+      "raw_expr": "CMDT_REQUEST_CREATE_TABLE"
+    },
+    {
+      "msg_type": 11,
+      "name": "CMDT_RESPSRSLOAD",
+      "struct": "SRSProtocol.RespSRSLoad",
+      "protocol": "SRSProtocol",
+      "processid": 0,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/SRSProtocol.lua",
+      "source_line": 458,
+      "raw_expr": "CMDT_RESPSRSLOAD"
+    },
+    {
+      "msg_type": 11,
+      "name": "CMDT_REQTASKPROTOCOL",
+      "struct": "TaskProtocol.ReqTaskProtocol",
+      "protocol": "TaskProtocol",
+      "processid": 120,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TaskProtocol.lua",
+      "source_line": 204,
+      "raw_expr": "CMDT_REQTASKPROTOCOL"
+    }
+  ],
+  "12": [
+    {
+      "msg_type": 12,
+      "name": "ActiveProtocol.ReqTeaHouseCost",
+      "struct": "ActiveProtocol.ReqTeaHouseCost",
+      "protocol": "ActiveProtocol",
+      "processid": 30,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ActiveProtocol.lua",
+      "source_line": 1330,
+      "raw_expr": "12"
+    },
+    {
+      "msg_type": 12,
+      "name": "CMDT_RESPGETAWARD",
+      "struct": "MailProtocol.RespGetAward",
+      "protocol": "MailProtocol",
+      "processid": 141,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/MailProtocol.lua",
+      "source_line": 324,
+      "raw_expr": "CMDT_RESPGETAWARD"
+    },
+    {
+      "msg_type": 12,
+      "name": "CMDT_RESPONSE_CREATE_TABLE",
+      "struct": "RoomProtocol.RespCreateTable",
+      "protocol": "RoomProtocol",
+      "processid": 84,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/RoomProtocol.lua",
+      "source_line": 139,
+      "raw_expr": "CMDT_RESPONSE_CREATE_TABLE"
+    },
+    {
+      "msg_type": 12,
+      "name": "CMDT_RESPTASKPROTOCOL",
+      "struct": "TaskProtocol.RespTaskProtocol",
+      "protocol": "TaskProtocol",
+      "processid": 120,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TaskProtocol.lua",
+      "source_line": 229,
+      "raw_expr": "CMDT_RESPTASKPROTOCOL"
+    }
+  ],
+  "13": [
+    {
+      "msg_type": 13,
+      "name": "ActiveProtocol.RespTeaHouseCost",
+      "struct": "ActiveProtocol.RespTeaHouseCost",
+      "protocol": "ActiveProtocol",
+      "processid": 30,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ActiveProtocol.lua",
+      "source_line": 1368,
+      "raw_expr": "13"
+    },
+    {
+      "msg_type": 13,
+      "name": "CMDT_REQBINDID",
+      "struct": "BoxDataProtocol.ReqBindID",
+      "protocol": "BoxDataProtocol",
+      "processid": 113,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BoxDataProtocol.lua",
+      "source_line": 156,
+      "raw_expr": "CMDT_REQBINDID"
+    },
+    {
+      "msg_type": 13,
+      "name": "CMDT_REQUEST_JOIN_TABLE",
+      "struct": "RoomProtocol.ReqJoinTable",
+      "protocol": "RoomProtocol",
+      "processid": 84,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/RoomProtocol.lua",
+      "source_line": 188,
+      "raw_expr": "CMDT_REQUEST_JOIN_TABLE"
+    },
+    {
+      "msg_type": 13,
+      "name": "CMDT_REQWEBTASKCONFIG",
+      "struct": "TaskProtocol.ReqWebTaskConfig",
+      "protocol": "TaskProtocol",
+      "processid": 120,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TaskProtocol.lua",
+      "source_line": 314,
+      "raw_expr": "CMDT_REQWEBTASKCONFIG"
+    }
+  ],
+  "14": [
+    {
+      "msg_type": 14,
+      "name": "ActiveProtocol.ReqTeaHousePlayerCost",
+      "struct": "ActiveProtocol.ReqTeaHousePlayerCost",
+      "protocol": "ActiveProtocol",
+      "processid": 30,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ActiveProtocol.lua",
+      "source_line": 1411,
+      "raw_expr": "14"
+    },
+    {
+      "msg_type": 14,
+      "name": "CMDT_RESPBINDID",
+      "struct": "BoxDataProtocol.RespBindID",
+      "protocol": "BoxDataProtocol",
+      "processid": 113,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BoxDataProtocol.lua",
+      "source_line": 186,
+      "raw_expr": "CMDT_RESPBINDID"
+    },
+    {
+      "msg_type": 14,
+      "name": "CMDT_RESPONSE_JOIN_TABLE",
+      "struct": "RoomProtocol.RespJoinTable",
+      "protocol": "RoomProtocol",
+      "processid": 84,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/RoomProtocol.lua",
+      "source_line": 242,
+      "raw_expr": "CMDT_RESPONSE_JOIN_TABLE"
+    },
+    {
+      "msg_type": 14,
+      "name": "CMDT_REQSRSADDR",
+      "struct": "SRSProtocol.ReqSRSAddr",
+      "protocol": "SRSProtocol",
+      "processid": 0,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/SRSProtocol.lua",
+      "source_line": 484,
+      "raw_expr": "CMDT_REQSRSADDR"
+    },
+    {
+      "msg_type": 14,
+      "name": "CMDT_RESPWEBTASKCONFIG",
+      "struct": "TaskProtocol.RespWebTaskConfig",
+      "protocol": "TaskProtocol",
+      "processid": 120,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TaskProtocol.lua",
+      "source_line": 339,
+      "raw_expr": "CMDT_RESPWEBTASKCONFIG"
+    }
+  ],
+  "15": [
+    {
+      "msg_type": 15,
+      "name": "ActiveProtocol.RespTeaHousePlayerCost",
+      "struct": "ActiveProtocol.RespTeaHousePlayerCost",
+      "protocol": "ActiveProtocol",
+      "processid": 30,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ActiveProtocol.lua",
+      "source_line": 1446,
+      "raw_expr": "15"
+    },
+    {
+      "msg_type": 15,
+      "name": "CMDT_REQGETCONFIGDATAEX",
+      "struct": "BoxDataProtocol.ReqGetConfigDataEx",
+      "protocol": "BoxDataProtocol",
+      "processid": 113,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BoxDataProtocol.lua",
+      "source_line": 428,
+      "raw_expr": "CMDT_REQGETCONFIGDATAEX"
+    },
+    {
+      "msg_type": 15,
+      "name": "CMDT_REQUEST_POSITION",
+      "struct": "RoomProtocol.ReqPlayerPosition",
+      "protocol": "RoomProtocol",
+      "processid": 84,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/RoomProtocol.lua",
+      "source_line": 308,
+      "raw_expr": "CMDT_REQUEST_POSITION"
+    },
+    {
+      "msg_type": 15,
+      "name": "CMDT_RESPSRSADDR",
+      "struct": "SRSProtocol.RespSRSAddr",
+      "protocol": "SRSProtocol",
+      "processid": 0,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/SRSProtocol.lua",
+      "source_line": 501,
+      "raw_expr": "CMDT_RESPSRSADDR"
+    }
+  ],
+  "16": [
+    {
+      "msg_type": 16,
+      "name": "ActiveProtocol.ReqTeaBigWinnerInfo",
+      "struct": "ActiveProtocol.ReqTeaBigWinnerInfo",
+      "protocol": "ActiveProtocol",
+      "processid": 30,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ActiveProtocol.lua",
+      "source_line": 934,
+      "raw_expr": "16"
+    },
+    {
+      "msg_type": 16,
+      "name": "CMDT_RESPGETCONFIGDATAEX",
+      "struct": "BoxDataProtocol.RespGetConfigDataEx",
+      "protocol": "BoxDataProtocol",
+      "processid": 113,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BoxDataProtocol.lua",
+      "source_line": 454,
+      "raw_expr": "CMDT_RESPGETCONFIGDATAEX"
+    },
+    {
+      "msg_type": 16,
+      "name": "CMDT_RESPONSE_POSITION",
+      "struct": "RoomProtocol.RespPlayerPosition",
+      "protocol": "RoomProtocol",
+      "processid": 84,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/RoomProtocol.lua",
+      "source_line": 332,
+      "raw_expr": "CMDT_RESPONSE_POSITION"
+    }
+  ],
+  "17": [
+    {
+      "msg_type": 17,
+      "name": "ActiveProtocol.RespTeaBigWinnerInfo",
+      "struct": "ActiveProtocol.RespTeaBigWinnerInfo",
+      "protocol": "ActiveProtocol",
+      "processid": 30,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ActiveProtocol.lua",
+      "source_line": 990,
+      "raw_expr": "17"
+    },
+    {
+      "msg_type": 17,
+      "name": "CMDT_REQROOMPLAYERCOUNT",
+      "struct": "BoxDataProtocol.ReqRoomPlayerCount",
+      "protocol": "BoxDataProtocol",
+      "processid": 113,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BoxDataProtocol.lua",
+      "source_line": 475,
+      "raw_expr": "CMDT_REQROOMPLAYERCOUNT"
+    },
+    {
+      "msg_type": 17,
+      "name": "CMDT_REQUEST_JOIN_TABLE_WITH_GOLD",
+      "struct": "RoomProtocol.ReqJoinTableWithGold",
+      "protocol": "RoomProtocol",
+      "processid": 84,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/RoomProtocol.lua",
+      "source_line": 402,
+      "raw_expr": "CMDT_REQUEST_JOIN_TABLE_WITH_GOLD"
+    }
+  ],
+  "18": [
+    {
+      "msg_type": 18,
+      "name": "ActiveProtocol.ReqTeaBigWinnerBill",
+      "struct": "ActiveProtocol.ReqTeaBigWinnerBill",
+      "protocol": "ActiveProtocol",
+      "processid": 30,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ActiveProtocol.lua",
+      "source_line": 843,
+      "raw_expr": "18"
+    },
+    {
+      "msg_type": 18,
+      "name": "CMDT_RESPROOMPLAYERCOUNT",
+      "struct": "BoxDataProtocol.RespRoomPlayerCount",
+      "protocol": "BoxDataProtocol",
+      "processid": 113,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BoxDataProtocol.lua",
+      "source_line": 515,
+      "raw_expr": "CMDT_RESPROOMPLAYERCOUNT"
+    },
+    {
+      "msg_type": 18,
+      "name": "CMDT_RESPONSE_JOIN_TABLE_WITH_GOLD",
+      "struct": "RoomProtocol.RespJoinTableWithGold",
+      "protocol": "RoomProtocol",
+      "processid": 84,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/RoomProtocol.lua",
+      "source_line": 464,
+      "raw_expr": "CMDT_RESPONSE_JOIN_TABLE_WITH_GOLD"
+    }
+  ],
+  "19": [
+    {
+      "msg_type": 19,
+      "name": "ActiveProtocol.RespTeaBigWinnerBill",
+      "struct": "ActiveProtocol.RespTeaBigWinnerBill",
+      "protocol": "ActiveProtocol",
+      "processid": 30,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ActiveProtocol.lua",
+      "source_line": 884,
+      "raw_expr": "19"
+    },
+    {
+      "msg_type": 19,
+      "name": "CMDT_REQGETUSEEMOJIPROPINFO",
+      "struct": "BoxDataProtocol.ReqGetUseEmojiPropInfo",
+      "protocol": "BoxDataProtocol",
+      "processid": 113,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BoxDataProtocol.lua",
+      "source_line": 555,
+      "raw_expr": "CMDT_REQGETUSEEMOJIPROPINFO"
+    },
+    {
+      "msg_type": 19,
+      "name": "CMDT_REQWEBTASKLIST",
+      "struct": "TaskProtocol.ReqWebTaskList",
+      "protocol": "TaskProtocol",
+      "processid": 120,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TaskProtocol.lua",
+      "source_line": 254,
+      "raw_expr": "CMDT_REQWEBTASKLIST"
+    }
+  ],
+  "20": [
+    {
+      "msg_type": 20,
+      "name": "ActiveProtocol.ReqDealBigWinnerBill",
+      "struct": "ActiveProtocol.ReqDealBigWinnerBill",
+      "protocol": "ActiveProtocol",
+      "processid": 30,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ActiveProtocol.lua",
+      "source_line": 744,
+      "raw_expr": "20"
+    },
+    {
+      "msg_type": 20,
+      "name": "CMDT_RESPGETUSEEMOJIPROPINFO",
+      "struct": "BoxDataProtocol.RespGetUseEmojiPropInfo",
+      "protocol": "BoxDataProtocol",
+      "processid": 113,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BoxDataProtocol.lua",
+      "source_line": 579,
+      "raw_expr": "CMDT_RESPGETUSEEMOJIPROPINFO"
+    },
+    {
+      "msg_type": 20,
+      "name": "CMDT_RESPWEBTASKLIST",
+      "struct": "TaskProtocol.RespWebTaskList",
+      "protocol": "TaskProtocol",
+      "processid": 120,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TaskProtocol.lua",
+      "source_line": 276,
+      "raw_expr": "CMDT_RESPWEBTASKLIST"
+    }
+  ],
+  "21": [
+    {
+      "msg_type": 21,
+      "name": "ActiveProtocol.RespDealBigWinnerBill",
+      "struct": "ActiveProtocol.RespDealBigWinnerBill",
+      "protocol": "ActiveProtocol",
+      "processid": 30,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ActiveProtocol.lua",
+      "source_line": 675,
+      "raw_expr": "21"
+    }
+  ],
+  "23": [
+    {
+      "msg_type": 23,
+      "name": "CMDT_REQHEARTBEAT",
+      "struct": "BoxDataProtocol.ReqVisitorHeart",
+      "protocol": "BoxDataProtocol",
+      "processid": 113,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BoxDataProtocol.lua",
+      "source_line": 897,
+      "raw_expr": "CMDT_REQHEARTBEAT"
+    },
+    {
+      "msg_type": 23,
+      "name": "RoomProtocol.StartGameByLobby",
+      "struct": "RoomProtocol.StartGameByLobby",
+      "protocol": "RoomProtocol",
+      "processid": 84,
+      "direction": "?",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/RoomProtocol.lua",
+      "source_line": 519,
+      "raw_expr": "23"
+    },
+    {
+      "msg_type": 23,
+      "name": "CMDT_REQPLAYERPLUSDATA",
+      "struct": "SRSProtocol.ReqPlayerPlusData",
+      "protocol": "SRSProtocol",
+      "processid": 0,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/SRSProtocol.lua",
+      "source_line": 302,
+      "raw_expr": "CMDT_REQPLAYERPLUSDATA"
+    }
+  ],
+  "24": [
+    {
+      "msg_type": 24,
+      "name": "ActiveProtocol.ReqCurTime",
+      "struct": "ActiveProtocol.ReqCurTime",
+      "protocol": "ActiveProtocol",
+      "processid": 30,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ActiveProtocol.lua",
+      "source_line": 383,
+      "raw_expr": "24"
+    },
+    {
+      "msg_type": 24,
+      "name": "CMDT_RESPHEARTBEAT",
+      "struct": "BoxDataProtocol.RespVisitorHeart",
+      "protocol": "BoxDataProtocol",
+      "processid": 113,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BoxDataProtocol.lua",
+      "source_line": 929,
+      "raw_expr": "CMDT_RESPHEARTBEAT"
+    },
+    {
+      "msg_type": 24,
+      "name": "CMDT_REQGETGOLDROOMINFO",
+      "struct": "RoomProtocol.ReqGetGoldRoomInfo",
+      "protocol": "RoomProtocol",
+      "processid": 84,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/RoomProtocol.lua",
+      "source_line": 547,
+      "raw_expr": "CMDT_REQGETGOLDROOMINFO"
+    },
+    {
+      "msg_type": 24,
+      "name": "CMDT_RESPPLAYERPLUSDATA",
+      "struct": "SRSProtocol.RespPlayerPlusData",
+      "protocol": "SRSProtocol",
+      "processid": 0,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/SRSProtocol.lua",
+      "source_line": 323,
+      "raw_expr": "CMDT_RESPPLAYERPLUSDATA"
+    }
+  ],
+  "25": [
+    {
+      "msg_type": 25,
+      "name": "ActiveProtocol.RespCurTime",
+      "struct": "ActiveProtocol.RespCurTime",
+      "protocol": "ActiveProtocol",
+      "processid": 30,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ActiveProtocol.lua",
+      "source_line": 400,
+      "raw_expr": "25"
+    },
+    {
+      "msg_type": 25,
+      "name": "CMDT_REQOTHERUSERINFO",
+      "struct": "BoxDataProtocol.ReqOtherUserInfo",
+      "protocol": "BoxDataProtocol",
+      "processid": 113,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BoxDataProtocol.lua",
+      "source_line": 959,
+      "raw_expr": "CMDT_REQOTHERUSERINFO"
+    },
+    {
+      "msg_type": 25,
+      "name": "CMDT_RESPGETGOLDROOMINFO",
+      "struct": "RoomProtocol.RespGetGoldRoomInfo",
+      "protocol": "RoomProtocol",
+      "processid": 84,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/RoomProtocol.lua",
+      "source_line": 571,
+      "raw_expr": "CMDT_RESPGETGOLDROOMINFO"
+    }
+  ],
+  "26": [
+    {
+      "msg_type": 26,
+      "name": "ActiveProtocol.ReqTeaPlayerLedger",
+      "struct": "ActiveProtocol.ReqTeaPlayerLedger",
+      "protocol": "ActiveProtocol",
+      "processid": 30,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ActiveProtocol.lua",
+      "source_line": 422,
+      "raw_expr": "26"
+    },
+    {
+      "msg_type": 26,
+      "name": "CMDT_RESPOTHERUSERINFO",
+      "struct": "BoxDataProtocol.RespOtherUserInfo",
+      "protocol": "BoxDataProtocol",
+      "processid": 113,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BoxDataProtocol.lua",
+      "source_line": 981,
+      "raw_expr": "CMDT_RESPOTHERUSERINFO"
+    }
+  ],
+  "27": [
+    {
+      "msg_type": 27,
+      "name": "ActiveProtocol.RespTeaPlayerLedger",
+      "struct": "ActiveProtocol.RespTeaPlayerLedger",
+      "protocol": "ActiveProtocol",
+      "processid": 30,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ActiveProtocol.lua",
+      "source_line": 451,
+      "raw_expr": "27"
+    },
+    {
+      "msg_type": 27,
+      "name": "CMDT_REQGETBANINFO",
+      "struct": "BoxDataProtocol.ReqGetBanInfo",
+      "protocol": "BoxDataProtocol",
+      "processid": 113,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BoxDataProtocol.lua",
+      "source_line": 1006,
+      "raw_expr": "CMDT_REQGETBANINFO"
+    }
+  ],
+  "28": [
+    {
+      "msg_type": 28,
+      "name": "ActiveProtocol.RespTeaPlayerLedger",
+      "struct": "ActiveProtocol.RespTeaPlayerLedger",
+      "protocol": "ActiveProtocol",
+      "processid": 30,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ActiveProtocol.lua",
+      "source_line": 635,
+      "raw_expr": "28"
+    },
+    {
+      "msg_type": 28,
+      "name": "CMDT_RESPGETBANINFO",
+      "struct": "BoxDataProtocol.RespGetBanInfo",
+      "protocol": "BoxDataProtocol",
+      "processid": 113,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BoxDataProtocol.lua",
+      "source_line": 1024,
+      "raw_expr": "CMDT_RESPGETBANINFO"
+    }
+  ],
+  "31": [
+    {
+      "msg_type": 31,
+      "name": "CMDT_REQTEABILLINFO",
+      "struct": "ActiveProtocol.ReqTeaBillInfo",
+      "protocol": "ActiveProtocol",
+      "processid": 30,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ActiveProtocol.lua",
+      "source_line": 1103,
+      "raw_expr": "CMDT_REQTEABILLINFO"
+    }
+  ],
+  "32": [
+    {
+      "msg_type": 32,
+      "name": "CMDT_RESPTEABILLINFO",
+      "struct": "ActiveProtocol.RespTeaBillInfo",
+      "protocol": "ActiveProtocol",
+      "processid": 30,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ActiveProtocol.lua",
+      "source_line": 1137,
+      "raw_expr": "CMDT_RESPTEABILLINFO"
+    }
+  ],
+  "35": [
+    {
+      "msg_type": 35,
+      "name": "ActiveProtocol.ReqSelectTeaBillInfo",
+      "struct": "ActiveProtocol.ReqSelectTeaBillInfo",
+      "protocol": "ActiveProtocol",
+      "processid": 30,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ActiveProtocol.lua",
+      "source_line": 1707,
+      "raw_expr": "35"
+    }
+  ],
+  "36": [
+    {
+      "msg_type": 36,
+      "name": "ActiveProtocol.RespSelectTeaBillInfo",
+      "struct": "ActiveProtocol.RespSelectTeaBillInfo",
+      "protocol": "ActiveProtocol",
+      "processid": 30,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ActiveProtocol.lua",
+      "source_line": 1752,
+      "raw_expr": "36"
+    }
+  ],
+  "42": [
+    {
+      "msg_type": 42,
+      "name": "CMDT_REQBOXLEDGER",
+      "struct": "ActiveProtocol.ReqBoxLedger",
+      "protocol": "ActiveProtocol",
+      "processid": 30,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ActiveProtocol.lua",
+      "source_line": 1490,
+      "raw_expr": "CMDT_REQBOXLEDGER"
+    }
+  ],
+  "43": [
+    {
+      "msg_type": 43,
+      "name": "CMDT_RESPBOXLEDGER",
+      "struct": "ActiveProtocol.RespBoxLedger",
+      "protocol": "ActiveProtocol",
+      "processid": 30,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ActiveProtocol.lua",
+      "source_line": 1538,
+      "raw_expr": "CMDT_RESPBOXLEDGER"
+    }
+  ],
+  "101": [
+    {
+      "msg_type": 101,
+      "name": "CMDT_POPUPMSGBOX",
+      "struct": "AgBaseProtocol.PopupMsgBox",
+      "protocol": "AgBaseProtocol",
+      "processid": 1,
+      "direction": "?",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/AgBaseProtocol.lua",
+      "source_line": 171,
+      "raw_expr": "CMDT_POPUPMSGBOX"
+    }
+  ],
+  "106": [
+    {
+      "msg_type": 106,
+      "name": "ActiveProtocol.BatchProtocol",
+      "struct": "ActiveProtocol.BatchProtocol",
+      "protocol": "ActiveProtocol",
+      "processid": 30,
+      "direction": "?",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ActiveProtocol.lua",
+      "source_line": 355,
+      "raw_expr": "106"
+    }
+  ],
+  "107": [
+    {
+      "msg_type": 107,
+      "name": "AgBaseProtocol.ChatMsg",
+      "struct": "AgBaseProtocol.ChatMsg",
+      "protocol": "AgBaseProtocol",
+      "processid": 1,
+      "direction": "?",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/AgBaseProtocol.lua",
+      "source_line": 44,
+      "raw_expr": "107"
+    }
+  ],
+  "118": [
+    {
+      "msg_type": 118,
+      "name": "CMDT_REPORTSRSERR",
+      "struct": "AgBaseProtocol.ReportSRSErr",
+      "protocol": "AgBaseProtocol",
+      "processid": 1,
+      "direction": "notify",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/AgBaseProtocol.lua",
+      "source_line": 9,
+      "raw_expr": "CMDT_REPORTSRSERR"
+    }
+  ],
+  "223": [
+    {
+      "msg_type": 223,
+      "name": "TeaHouseProtocol.ReqOpenTeaHouse",
+      "struct": "TeaHouseProtocol.ReqOpenTeaHouse",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 589,
+      "raw_expr": "23 + XY_ID_PLUS"
+    }
+  ],
+  "224": [
+    {
+      "msg_type": 224,
+      "name": "TeaHouseProtocol.RespOpenTeaHouse",
+      "struct": "TeaHouseProtocol.RespOpenTeaHouse",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 623,
+      "raw_expr": "24 + XY_ID_PLUS"
+    }
+  ],
+  "225": [
+    {
+      "msg_type": 225,
+      "name": "TeaHouseProtocol.ReqCloseTeaHouse",
+      "struct": "TeaHouseProtocol.ReqCloseTeaHouse",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 733,
+      "raw_expr": "25 + XY_ID_PLUS"
+    }
+  ],
+  "226": [
+    {
+      "msg_type": 226,
+      "name": "TeaHouseProtocol.RespCloseTeaHouse",
+      "struct": "TeaHouseProtocol.RespCloseTeaHouse",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 753,
+      "raw_expr": "26 + XY_ID_PLUS"
+    }
+  ],
+  "227": [
+    {
+      "msg_type": 227,
+      "name": "TeaHouseProtocol.ReqKickUser",
+      "struct": "TeaHouseProtocol.ReqKickUser",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 894,
+      "raw_expr": "27 + XY_ID_PLUS"
+    }
+  ],
+  "228": [
+    {
+      "msg_type": 228,
+      "name": "TeaHouseProtocol.RespKickUser",
+      "struct": "TeaHouseProtocol.RespKickUser",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 924,
+      "raw_expr": "28 + XY_ID_PLUS"
+    }
+  ],
+  "231": [
+    {
+      "msg_type": 231,
+      "name": "TeaHouseProtocol.UserInfo",
+      "struct": "TeaHouseProtocol.UserInfo",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "?",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 955,
+      "raw_expr": "31 + XY_ID_PLUS"
+    }
+  ],
+  "241": [
+    {
+      "msg_type": 241,
+      "name": "TeaHouseProtocol.SetupTeaHouse",
+      "struct": "TeaHouseProtocol.SetupTeaHouse",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "?",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 162,
+      "raw_expr": "41 + XY_ID_PLUS"
+    }
+  ],
+  "251": [
+    {
+      "msg_type": 251,
+      "name": "TeaHouseProtocol.ReqTeaHouseRight",
+      "struct": "TeaHouseProtocol.ReqTeaHouseRight",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 23,
+      "raw_expr": "51 + XY_ID_PLUS"
+    }
+  ],
+  "252": [
+    {
+      "msg_type": 252,
+      "name": "TeaHouseProtocol.RespTeaHouseRight",
+      "struct": "TeaHouseProtocol.RespTeaHouseRight",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 42,
+      "raw_expr": "52 + XY_ID_PLUS"
+    }
+  ],
+  "277": [
+    {
+      "msg_type": 277,
+      "name": "TeaHouseProtocol.ReqSetPayType",
+      "struct": "TeaHouseProtocol.ReqSetPayType",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 81,
+      "raw_expr": "77 + XY_ID_PLUS"
+    }
+  ],
+  "281": [
+    {
+      "msg_type": 281,
+      "name": "CMDT_REQCREATETABLEAUTOSIT",
+      "struct": "TeaHouseProtocol.ReqCreateTableAutoSit",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 1269,
+      "raw_expr": "CMDT_REQCREATETABLEAUTOSIT"
+    }
+  ],
+  "282": [
+    {
+      "msg_type": 282,
+      "name": "CMDT_RESPCREATETABLEAUTOSIT",
+      "struct": "TeaHouseProtocol.RespCreateTableAutoSit",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 1379,
+      "raw_expr": "CMDT_RESPCREATETABLEAUTOSIT"
+    }
+  ],
+  "284": [
+    {
+      "msg_type": 284,
+      "name": "CMDT_RESPJIONTAETABLE",
+      "struct": "TeaHouseProtocol.RespJoinTeaTable",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 1481,
+      "raw_expr": "CMDT_RESPJIONTAETABLE"
+    }
+  ],
+  "287": [
+    {
+      "msg_type": 287,
+      "name": "TeaHouseProtocol.ReqSetTeaInfo",
+      "struct": "TeaHouseProtocol.ReqSetTeaInfo",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 781,
+      "raw_expr": "87 + XY_ID_PLUS"
+    }
+  ],
+  "288": [
+    {
+      "msg_type": 288,
+      "name": "TeaHouseProtocol.RespSetTeaInfo",
+      "struct": "TeaHouseProtocol.RespSetTeaInfo",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 805,
+      "raw_expr": "88 + XY_ID_PLUS"
+    }
+  ],
+  "298": [
+    {
+      "msg_type": 298,
+      "name": "CMDT_REQINVITEPLAYER",
+      "struct": "TeaHouseProtocol.ReqInvitePlayer",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 529,
+      "raw_expr": "CMDT_REQINVITEPLAYER"
+    }
+  ],
+  "299": [
+    {
+      "msg_type": 299,
+      "name": "CMDT_RESPINVITEPLAYER",
+      "struct": "TeaHouseProtocol.RespInvitePlayer",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 552,
+      "raw_expr": "CMDT_RESPINVITEPLAYER"
+    }
+  ],
+  "300": [
+    {
+      "msg_type": 300,
+      "name": "TeaHouseProtocol.ReqTeaHouseInfoByPlayerType",
+      "struct": "TeaHouseProtocol.ReqTeaHouseInfoByPlayerType",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 269,
+      "raw_expr": "100 + XY_ID_PLUS"
+    }
+  ],
+  "301": [
+    {
+      "msg_type": 301,
+      "name": "CMDT_REQAPPIDLIST",
+      "struct": "IMProtocol.ReqAppidList",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 182,
+      "raw_expr": "CMDT_REQAPPIDLIST"
+    },
+    {
+      "msg_type": 301,
+      "name": "TeaHouseProtocol.RespTeaHouseInfoByPlayerType",
+      "struct": "TeaHouseProtocol.RespTeaHouseInfoByPlayerType",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 310,
+      "raw_expr": "101 + XY_ID_PLUS"
+    }
+  ],
+  "302": [
+    {
+      "msg_type": 302,
+      "name": "CMDT_RESPAPPIDLIST",
+      "struct": "IMProtocol.RespAppidList",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 200,
+      "raw_expr": "CMDT_RESPAPPIDLIST"
+    }
+  ],
+  "303": [
+    {
+      "msg_type": 303,
+      "name": "CMDT_NOTIFYSERVERSTATE",
+      "struct": "IMProtocol.NotifyServerState",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "notify",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 226,
+      "raw_expr": "CMDT_NOTIFYSERVERSTATE"
+    }
+  ],
+  "304": [
+    {
+      "msg_type": 304,
+      "name": "CMDT_REQPLAYERCONNECT",
+      "struct": "IMProtocol.ReqPlayerConnect",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 246,
+      "raw_expr": "CMDT_REQPLAYERCONNECT"
+    }
+  ],
+  "305": [
+    {
+      "msg_type": 305,
+      "name": "CMDT_RESPPLAYERCONNECT",
+      "struct": "IMProtocol.RespPlayerConnect",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 264,
+      "raw_expr": "CMDT_RESPPLAYERCONNECT"
+    }
+  ],
+  "306": [
+    {
+      "msg_type": 306,
+      "name": "CMDT_REQKEEPALIVE",
+      "struct": "IMProtocol.ReqKeepAlive",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 284,
+      "raw_expr": "CMDT_REQKEEPALIVE"
+    },
+    {
+      "msg_type": 306,
+      "name": "TeaHouseProtocol.ReqServerAppid",
+      "struct": "TeaHouseProtocol.ReqServerAppid",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 136,
+      "raw_expr": "106 + XY_ID_PLUS"
+    }
+  ],
+  "307": [
+    {
+      "msg_type": 307,
+      "name": "CMDT_RESPKEEPALIVE",
+      "struct": "IMProtocol.RespKeepAlive",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 302,
+      "raw_expr": "CMDT_RESPKEEPALIVE"
+    },
+    {
+      "msg_type": 307,
+      "name": "TeaHouseProtocol.RespServerAppid",
+      "struct": "TeaHouseProtocol.RespServerAppid",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 240,
+      "raw_expr": "107 + XY_ID_PLUS"
+    },
+    {
+      "msg_type": 307,
+      "name": "TeaHouseProtocol.RespServerAppid",
+      "struct": "TeaHouseProtocol.RespServerAppid",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 1076,
+      "raw_expr": "107 + XY_ID_PLUS"
+    }
+  ],
+  "337": [
+    {
+      "msg_type": 337,
+      "name": "TeaHouseProtocol.ReqUserInfoListCnt",
+      "struct": "TeaHouseProtocol.ReqUserInfoListCnt",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 1105,
+      "raw_expr": "137 + XY_ID_PLUS"
+    }
+  ],
+  "338": [
+    {
+      "msg_type": 338,
+      "name": "TeaHouseProtocol.RespUserInfoListCnt",
+      "struct": "TeaHouseProtocol.RespUserInfoListCnt",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 1125,
+      "raw_expr": "138 + XY_ID_PLUS"
+    }
+  ],
+  "339": [
+    {
+      "msg_type": 339,
+      "name": "TeaHouseProtocol.ReqQuitTeaHouse",
+      "struct": "TeaHouseProtocol.ReqQuitTeaHouse",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 835,
+      "raw_expr": "139 + XY_ID_PLUS"
+    }
+  ],
+  "340": [
+    {
+      "msg_type": 340,
+      "name": "TeaHouseProtocol.RespQuitTeaHouse",
+      "struct": "TeaHouseProtocol.RespQuitTeaHouse",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 856,
+      "raw_expr": "140 + XY_ID_PLUS"
+    }
+  ],
+  "377": [
+    {
+      "msg_type": 377,
+      "name": "CMDT_REQOPERATIONHISTORY",
+      "struct": "TeaHouseProtocol.ReqOperationHistory",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 1182,
+      "raw_expr": "CMDT_REQOPERATIONHISTORY"
+    }
+  ],
+  "378": [
+    {
+      "msg_type": 378,
+      "name": "CMDT_RESPOPERATIONHISTORY",
+      "struct": "TeaHouseProtocol.RespOperationHistory",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 1216,
+      "raw_expr": "CMDT_RESPOPERATIONHISTORY"
+    }
+  ],
+  "401": [
+    {
+      "msg_type": 401,
+      "name": "CMDT_REQJOINIM",
+      "struct": "IMProtocol.ReqJoinIM",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 322,
+      "raw_expr": "CMDT_REQJOINIM"
+    }
+  ],
+  "402": [
+    {
+      "msg_type": 402,
+      "name": "CMDT_RESPJOINIM",
+      "struct": "IMProtocol.RespJoinIM",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 346,
+      "raw_expr": "CMDT_RESPJOINIM"
+    }
+  ],
+  "408": [
+    {
+      "msg_type": 408,
+      "name": "CMDT_REQOPENFRIENDLIST",
+      "struct": "IMProtocol.ReqOpenFriendList",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 376,
+      "raw_expr": "CMDT_REQOPENFRIENDLIST"
+    }
+  ],
+  "409": [
+    {
+      "msg_type": 409,
+      "name": "CMDT_RESPOPENFIENDLIST",
+      "struct": "IMProtocol.RespOpenFriendList",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 391,
+      "raw_expr": "CMDT_RESPOPENFIENDLIST"
+    }
+  ],
+  "410": [
+    {
+      "msg_type": 410,
+      "name": "CMDT_REQCLOSEFRIENDLIST",
+      "struct": "IMProtocol.ReqCloseFriendList",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 405,
+      "raw_expr": "CMDT_REQCLOSEFRIENDLIST"
+    }
+  ],
+  "411": [
+    {
+      "msg_type": 411,
+      "name": "CMDT_RESPCLOSEFRIENDLIST",
+      "struct": "IMProtocol.RespCloseFriendList",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 420,
+      "raw_expr": "CMDT_RESPCLOSEFRIENDLIST"
+    }
+  ],
+  "412": [
+    {
+      "msg_type": 412,
+      "name": "CMDT_NOTIFYPLAYERINFO",
+      "struct": "IMProtocol.NotifyPlayerInfo",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "notify",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 434,
+      "raw_expr": "CMDT_NOTIFYPLAYERINFO"
+    }
+  ],
+  "413": [
+    {
+      "msg_type": 413,
+      "name": "CMDT_REQFRIENDLIST",
+      "struct": "IMProtocol.ReqFriendList",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 476,
+      "raw_expr": "CMDT_REQFRIENDLIST"
+    }
+  ],
+  "414": [
+    {
+      "msg_type": 414,
+      "name": "CMDT_RESPFRIENDLIST",
+      "struct": "IMProtocol.RespFriendList",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 496,
+      "raw_expr": "CMDT_RESPFRIENDLIST"
+    }
+  ],
+  "415": [
+    {
+      "msg_type": 415,
+      "name": "CMDT_REQINVITEGAME",
+      "struct": "IMProtocol.ReqInviteGame",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 563,
+      "raw_expr": "CMDT_REQINVITEGAME"
+    }
+  ],
+  "416": [
+    {
+      "msg_type": 416,
+      "name": "CMDT_RESPINVITEGAME",
+      "struct": "IMProtocol.RespInviteGame",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 611,
+      "raw_expr": "CMDT_RESPINVITEGAME"
+    }
+  ],
+  "417": [
+    {
+      "msg_type": 417,
+      "name": "CMDT_NOTIFYINVITEINFO",
+      "struct": "IMProtocol.NotifyInviteInfo",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "notify",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 637,
+      "raw_expr": "CMDT_NOTIFYINVITEINFO"
+    }
+  ],
+  "418": [
+    {
+      "msg_type": 418,
+      "name": "CMDT_REQGETINVITEINFO",
+      "struct": "IMProtocol.ReqGetInviteInfo",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 690,
+      "raw_expr": "CMDT_REQGETINVITEINFO"
+    }
+  ],
+  "419": [
+    {
+      "msg_type": 419,
+      "name": "CMDT_RESPGETINVITEINFO",
+      "struct": "IMProtocol.RespGetInviteInfo",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 710,
+      "raw_expr": "CMDT_RESPGETINVITEINFO"
+    }
+  ],
+  "420": [
+    {
+      "msg_type": 420,
+      "name": "CMDT_REQREPLYINVITEGAME",
+      "struct": "IMProtocol.ReqReplyInviteGame",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 755,
+      "raw_expr": "CMDT_REQREPLYINVITEGAME"
+    }
+  ],
+  "421": [
+    {
+      "msg_type": 421,
+      "name": "CMDT_RESPREPLYINVITEGAME",
+      "struct": "IMProtocol.RespReplyInviteGame",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 777,
+      "raw_expr": "CMDT_RESPREPLYINVITEGAME"
+    }
+  ],
+  "422": [
+    {
+      "msg_type": 422,
+      "name": "CMDT_NOTIFYREPLYINVITEGAME",
+      "struct": "IMProtocol.NotifyReplyInviteGame",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "notify",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 803,
+      "raw_expr": "CMDT_NOTIFYREPLYINVITEGAME"
+    }
+  ],
+  "425": [
+    {
+      "msg_type": 425,
+      "name": "CMDT_REQINVITEDDLIST",
+      "struct": "IMProtocol.ReqInviteddList",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 834,
+      "raw_expr": "CMDT_REQINVITEDDLIST"
+    }
+  ],
+  "426": [
+    {
+      "msg_type": 426,
+      "name": "CMDT_RESPINVITEDDLIST",
+      "struct": "IMProtocol.RespInviteddList",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 854,
+      "raw_expr": "CMDT_RESPINVITEDDLIST"
+    }
+  ],
+  "431": [
+    {
+      "msg_type": 431,
+      "name": "CMDT_REQFRIENDTABLEINFO",
+      "struct": "IMProtocol.ReqFriendTableList",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 901,
+      "raw_expr": "CMDT_REQFRIENDTABLEINFO"
+    }
+  ],
+  "432": [
+    {
+      "msg_type": 432,
+      "name": "CMDT_RESPFRIENDTABLEINFO",
+      "struct": "IMProtocol.RespFriendTableList",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 921,
+      "raw_expr": "CMDT_RESPFRIENDTABLEINFO"
+    }
+  ],
+  "437": [
+    {
+      "msg_type": 437,
+      "name": "CMDT_RESPWILLJOINTABLE",
+      "struct": "IMProtocol.RespWillJoinTable",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 998,
+      "raw_expr": "CMDT_RESPWILLJOINTABLE"
+    }
+  ],
+  "438": [
+    {
+      "msg_type": 438,
+      "name": "CMDT_NOTIFYWILLJONTABLE",
+      "struct": "IMProtocol.NotifyWillJoinTable",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "notify",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1024,
+      "raw_expr": "CMDT_NOTIFYWILLJONTABLE"
+    }
+  ],
+  "439": [
+    {
+      "msg_type": 439,
+      "name": "CMDT_REQREPLYWILLJONTABLE",
+      "struct": "IMProtocol.ReqReplyFollow",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1053,
+      "raw_expr": "CMDT_REQREPLYWILLJONTABLE"
+    }
+  ],
+  "440": [
+    {
+      "msg_type": 440,
+      "name": "CMDT_RESPREPLYWILLJONTABLE",
+      "struct": "IMProtocol.RespReplyFollow",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1077,
+      "raw_expr": "CMDT_RESPREPLYWILLJONTABLE"
+    }
+  ],
+  "442": [
+    {
+      "msg_type": 442,
+      "name": "CMDT_REQFOLLOWEDDLIST",
+      "struct": "IMProtocol.ReqFolloweddList",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1097,
+      "raw_expr": "CMDT_REQFOLLOWEDDLIST"
+    }
+  ],
+  "443": [
+    {
+      "msg_type": 443,
+      "name": "CMDT_RESPFOLLOWEDDLIST",
+      "struct": "IMProtocol.RespFolloweddList",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1115,
+      "raw_expr": "CMDT_RESPFOLLOWEDDLIST"
+    }
+  ],
+  "450": [
+    {
+      "msg_type": 450,
+      "name": "CMDT_REQRESERVEGAME",
+      "struct": "IMProtocol.ReqReserveGame",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1152,
+      "raw_expr": "CMDT_REQRESERVEGAME"
+    }
+  ],
+  "451": [
+    {
+      "msg_type": 451,
+      "name": "CMDT_RESPRESERVEGAME",
+      "struct": "IMProtocol.RespReserveGame",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1174,
+      "raw_expr": "CMDT_RESPRESERVEGAME"
+    }
+  ],
+  "452": [
+    {
+      "msg_type": 452,
+      "name": "CMDT_NOTIFYRESERVEGAMEINFO",
+      "struct": "IMProtocol.NotifyReserveGame",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "notify",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1194,
+      "raw_expr": "CMDT_NOTIFYRESERVEGAMEINFO"
+    }
+  ],
+  "453": [
+    {
+      "msg_type": 453,
+      "name": "CMDT_REQREPLYRESERVEGAME",
+      "struct": "IMProtocol.ReqReplyReserveGame",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1229,
+      "raw_expr": "CMDT_REQREPLYRESERVEGAME"
+    }
+  ],
+  "454": [
+    {
+      "msg_type": 454,
+      "name": "CMDT_RESPREPLYRESERVEGAME",
+      "struct": "IMProtocol.RespReplyReserveGame",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1254,
+      "raw_expr": "CMDT_RESPREPLYRESERVEGAME"
+    }
+  ],
+  "455": [
+    {
+      "msg_type": 455,
+      "name": "CMDT_REQONEKEYINVITE",
+      "struct": "IMProtocol.ReqQuickInvite",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1276,
+      "raw_expr": "CMDT_REQONEKEYINVITE"
+    }
+  ],
+  "456": [
+    {
+      "msg_type": 456,
+      "name": "CMDT_RESPONEKEYINVITE",
+      "struct": "IMProtocol.RespQuickInvite",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1294,
+      "raw_expr": "CMDT_RESPONEKEYINVITE"
+    }
+  ],
+  "457": [
+    {
+      "msg_type": 457,
+      "name": "CMDT_REQINVITEMERGELIST",
+      "struct": "IMProtocol.ReqAllMessageList",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1314,
+      "raw_expr": "CMDT_REQINVITEMERGELIST"
+    }
+  ],
+  "458": [
+    {
+      "msg_type": 458,
+      "name": "CMDT_RESPINVITEMERGELIST",
+      "struct": "IMProtocol.RespAllMessageList",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1334,
+      "raw_expr": "CMDT_RESPINVITEMERGELIST"
+    }
+  ],
+  "459": [
+    {
+      "msg_type": 459,
+      "name": "CMDT_REQTABLEINFO",
+      "struct": "IMProtocol.ReqTableInfo",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1380,
+      "raw_expr": "CMDT_REQTABLEINFO"
+    }
+  ],
+  "460": [
+    {
+      "msg_type": 460,
+      "name": "CMDT_RESPTABLEINFO",
+      "struct": "IMProtocol.RespTableInfo",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1398,
+      "raw_expr": "CMDT_RESPTABLEINFO"
+    }
+  ],
+  "461": [
+    {
+      "msg_type": 461,
+      "name": "CMDT_REQWILLJOINTABLE",
+      "struct": "IMProtocol.ReqWillJoinTable",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 972,
+      "raw_expr": "CMDT_REQWILLJOINTABLE"
+    }
+  ],
+  "462": [
+    {
+      "msg_type": 462,
+      "name": "CMDT_REQSEARCHFRIEND",
+      "struct": "IMProtocol.ReqHistoryFriends",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1434,
+      "raw_expr": "CMDT_REQSEARCHFRIEND"
+    }
+  ],
+  "463": [
+    {
+      "msg_type": 463,
+      "name": "CMDT_RESPSEARCHFRIEND",
+      "struct": "IMProtocol.RespHistoryFriends",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1452,
+      "raw_expr": "CMDT_RESPSEARCHFRIEND"
+    }
+  ],
+  "464": [
+    {
+      "msg_type": 464,
+      "name": "CMDT_REQLIMITFRIEND",
+      "struct": "IMProtocol.ReqLimitFriend",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1486,
+      "raw_expr": "CMDT_REQLIMITFRIEND"
+    }
+  ],
+  "465": [
+    {
+      "msg_type": 465,
+      "name": "CMDT_RESPLIMITFRIEND",
+      "struct": "IMProtocol.RespLimitFriend",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1508,
+      "raw_expr": "CMDT_RESPLIMITFRIEND"
+    }
+  ],
+  "466": [
+    {
+      "msg_type": 466,
+      "name": "CMDT_REQFRIENDINFO",
+      "struct": "IMProtocol.ReqFriendInfo",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1532,
+      "raw_expr": "CMDT_REQFRIENDINFO"
+    }
+  ],
+  "467": [
+    {
+      "msg_type": 467,
+      "name": "CMDT_RESPFRIENDINFO",
+      "struct": "IMProtocol.RespFriendInfo",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1552,
+      "raw_expr": "CMDT_RESPFRIENDINFO"
+    }
+  ],
+  "468": [
+    {
+      "msg_type": 468,
+      "name": "CMDT_REQGETAPPLYS",
+      "struct": "IMProtocol.ReqGetApplys",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1591,
+      "raw_expr": "CMDT_REQGETAPPLYS"
+    }
+  ],
+  "469": [
+    {
+      "msg_type": 469,
+      "name": "CMDT_RESPGETAPPLYS",
+      "struct": "IMProtocol.RespGetApplys",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1610,
+      "raw_expr": "CMDT_RESPGETAPPLYS"
+    }
+  ],
+  "470": [
+    {
+      "msg_type": 470,
+      "name": "CMDT_REQADDFRIEND",
+      "struct": "IMProtocol.ReqAddFriend",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1643,
+      "raw_expr": "CMDT_REQADDFRIEND"
+    }
+  ],
+  "471": [
+    {
+      "msg_type": 471,
+      "name": "CMDT_RESPADDFRIEND",
+      "struct": "IMProtocol.RespAddFriend",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1662,
+      "raw_expr": "CMDT_RESPADDFRIEND"
+    }
+  ],
+  "472": [
+    {
+      "msg_type": 472,
+      "name": "CMDT_REQDELFRIEND",
+      "struct": "IMProtocol.ReqDelFriend",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1681,
+      "raw_expr": "CMDT_REQDELFRIEND"
+    }
+  ],
+  "473": [
+    {
+      "msg_type": 473,
+      "name": "CMDT_RESPDELFRIEND",
+      "struct": "IMProtocol.RespDelFriend",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1700,
+      "raw_expr": "CMDT_RESPDELFRIEND"
+    }
+  ],
+  "474": [
+    {
+      "msg_type": 474,
+      "name": "CMDT_REQADDFRIENDSTATE",
+      "struct": "IMProtocol.ReqAddFriendState",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1719,
+      "raw_expr": "CMDT_REQADDFRIENDSTATE"
+    }
+  ],
+  "475": [
+    {
+      "msg_type": 475,
+      "name": "CMDT_RESPADDFRIENDSTATE",
+      "struct": "IMProtocol.RespAddFriendState",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1738,
+      "raw_expr": "CMDT_RESPADDFRIENDSTATE"
+    }
+  ],
+  "476": [
+    {
+      "msg_type": 476,
+      "name": "CMDT_REQDEALFRIENDAPPLY",
+      "struct": "IMProtocol.ReqDealFriendApply",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1769,
+      "raw_expr": "CMDT_REQDEALFRIENDAPPLY"
+    }
+  ],
+  "477": [
+    {
+      "msg_type": 477,
+      "name": "CMDT_RESPDEALFRIENDAPPLY",
+      "struct": "IMProtocol.RespDealFriendApply",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1789,
+      "raw_expr": "CMDT_RESPDEALFRIENDAPPLY"
+    }
+  ],
+  "478": [
+    {
+      "msg_type": 478,
+      "name": "CMDT_NOTIFYFRIENDLISTCHANGE",
+      "struct": "IMProtocol.NotifyFriendListChange",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "notify",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1808,
+      "raw_expr": "CMDT_NOTIFYFRIENDLISTCHANGE"
+    }
+  ],
+  "501": [
+    {
+      "msg_type": 501,
+      "name": "CMDT_REQAPPIDLIST",
+      "struct": "BagSysProtocol.ReqAppidList",
+      "protocol": "BagSysProtocol",
+      "processid": 92,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BagSysProtocol.lua",
+      "source_line": 134,
+      "raw_expr": "CMDT_REQAPPIDLIST"
+    }
+  ],
+  "502": [
+    {
+      "msg_type": 502,
+      "name": "CMDT_RESPAPPIDLIST",
+      "struct": "BagSysProtocol.RespAppidList",
+      "protocol": "BagSysProtocol",
+      "processid": 92,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BagSysProtocol.lua",
+      "source_line": 152,
+      "raw_expr": "CMDT_RESPAPPIDLIST"
+    }
+  ],
+  "503": [
+    {
+      "msg_type": 503,
+      "name": "CMDT_NOTIFYSERVERSTATE",
+      "struct": "BagSysProtocol.NotifyServerState",
+      "protocol": "BagSysProtocol",
+      "processid": 92,
+      "direction": "notify",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BagSysProtocol.lua",
+      "source_line": 178,
+      "raw_expr": "CMDT_NOTIFYSERVERSTATE"
+    }
+  ],
+  "504": [
+    {
+      "msg_type": 504,
+      "name": "CMDT_REQPLAYERCONNECT",
+      "struct": "BagSysProtocol.ReqPlayerConnect",
+      "protocol": "BagSysProtocol",
+      "processid": 92,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BagSysProtocol.lua",
+      "source_line": 197,
+      "raw_expr": "CMDT_REQPLAYERCONNECT"
+    }
+  ],
+  "505": [
+    {
+      "msg_type": 505,
+      "name": "CMDT_RESPPLAYERCONNECT",
+      "struct": "BagSysProtocol.RespPlayerConnect",
+      "protocol": "BagSysProtocol",
+      "processid": 92,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BagSysProtocol.lua",
+      "source_line": 214,
+      "raw_expr": "CMDT_RESPPLAYERCONNECT"
+    }
+  ],
+  "506": [
+    {
+      "msg_type": 506,
+      "name": "CMDT_REQKEEPALIVE",
+      "struct": "BagSysProtocol.ReqKeepAlive",
+      "protocol": "BagSysProtocol",
+      "processid": 92,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BagSysProtocol.lua",
+      "source_line": 234,
+      "raw_expr": "CMDT_REQKEEPALIVE"
+    }
+  ],
+  "507": [
+    {
+      "msg_type": 507,
+      "name": "CMDT_RESPKEEPALIVE",
+      "struct": "BagSysProtocol.RespKeepAlive",
+      "protocol": "BagSysProtocol",
+      "processid": 92,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BagSysProtocol.lua",
+      "source_line": 252,
+      "raw_expr": "CMDT_RESPKEEPALIVE"
+    }
+  ],
+  "549": [
+    {
+      "msg_type": 549,
+      "name": "CMDT_REQREGISTERAGENT",
+      "struct": "TeaHouseProtocol.RespOpenTeaHouse",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 671,
+      "raw_expr": "CMDT_REQREGISTERAGENT"
+    }
+  ],
+  "550": [
+    {
+      "msg_type": 550,
+      "name": "CMDT_RESPREGISTERAGENT",
+      "struct": "TeaHouseProtocol.RespOpenTeaHouse",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 697,
+      "raw_expr": "CMDT_RESPREGISTERAGENT"
+    }
+  ],
+  "591": [
+    {
+      "msg_type": 591,
+      "name": "TeaHouseProtocol.NotifyCardCount",
+      "struct": "TeaHouseProtocol.NotifyCardCount",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "notify",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 411,
+      "raw_expr": "391 + XY_ID_PLUS"
+    }
+  ],
+  "596": [
+    {
+      "msg_type": 596,
+      "name": "CMDT_REQRECOMENDINVITATION",
+      "struct": "TeaHouseProtocol.ReqRecomendInvitation",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 444,
+      "raw_expr": "CMDT_REQRECOMENDINVITATION"
+    }
+  ],
+  "597": [
+    {
+      "msg_type": 597,
+      "name": "CMDT_RESPRECOMENDINVITATION",
+      "struct": "TeaHouseProtocol.ReqRecomendInvitation",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 460,
+      "raw_expr": "CMDT_RESPRECOMENDINVITATION"
+    }
+  ],
+  "598": [
+    {
+      "msg_type": 598,
+      "name": "CMDT_REQDEALRECOMENDINVITATION",
+      "struct": "TeaHouseProtocol.ReqDealRecomendInvitation",
+      "protocol": "TeaHouseProtocol",
+      "processid": 116,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/TeaHouseProtocol.lua",
+      "source_line": 508,
+      "raw_expr": "CMDT_REQDEALRECOMENDINVITATION"
+    }
+  ],
+  "601": [
+    {
+      "msg_type": 601,
+      "name": "CMDT_REQJOINBOXPROP",
+      "struct": "BagSysProtocol.ReqJoinBoxProp",
+      "protocol": "BagSysProtocol",
+      "processid": 92,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BagSysProtocol.lua",
+      "source_line": 272,
+      "raw_expr": "CMDT_REQJOINBOXPROP"
+    }
+  ],
+  "602": [
+    {
+      "msg_type": 602,
+      "name": "CMDT_RESPJOINBOXPROP",
+      "struct": "BagSysProtocol.RespJoinBoxProp",
+      "protocol": "BagSysProtocol",
+      "processid": 92,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BagSysProtocol.lua",
+      "source_line": 289,
+      "raw_expr": "CMDT_RESPJOINBOXPROP"
+    }
+  ],
+  "603": [
+    {
+      "msg_type": 603,
+      "name": "CMDT_REQPROPSCONFIG",
+      "struct": "BagSysProtocol.ReqPropsConfig",
+      "protocol": "BagSysProtocol",
+      "processid": 92,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BagSysProtocol.lua",
+      "source_line": 317,
+      "raw_expr": "CMDT_REQPROPSCONFIG"
+    }
+  ],
+  "604": [
+    {
+      "msg_type": 604,
+      "name": "CMDT_RESPPROPSCONFIG",
+      "struct": "BagSysProtocol.ResPropsConfig",
+      "protocol": "BagSysProtocol",
+      "processid": 92,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BagSysProtocol.lua",
+      "source_line": 341,
+      "raw_expr": "CMDT_RESPPROPSCONFIG"
+    }
+  ],
+  "605": [
+    {
+      "msg_type": 605,
+      "name": "CMDT_REQBACKPACKDATA",
+      "struct": "BagSysProtocol.ReqBackpackData",
+      "protocol": "BagSysProtocol",
+      "processid": 92,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BagSysProtocol.lua",
+      "source_line": 378,
+      "raw_expr": "CMDT_REQBACKPACKDATA"
+    }
+  ],
+  "606": [
+    {
+      "msg_type": 606,
+      "name": "CMDT_RESPBACKPACKDATA",
+      "struct": "BagSysProtocol.RespBackpackData",
+      "protocol": "BagSysProtocol",
+      "processid": 92,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BagSysProtocol.lua",
+      "source_line": 412,
+      "raw_expr": "CMDT_RESPBACKPACKDATA"
+    }
+  ],
+  "607": [
+    {
+      "msg_type": 607,
+      "name": "CMDT_REQUSEPROPS",
+      "struct": "BagSysProtocol.ReqUseProps",
+      "protocol": "BagSysProtocol",
+      "processid": 92,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BagSysProtocol.lua",
+      "source_line": 461,
+      "raw_expr": "CMDT_REQUSEPROPS"
+    }
+  ],
+  "608": [
+    {
+      "msg_type": 608,
+      "name": "CMDT_RESPUSEPROPS",
+      "struct": "BagSysProtocol.RespUseProps",
+      "protocol": "BagSysProtocol",
+      "processid": 92,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BagSysProtocol.lua",
+      "source_line": 484,
+      "raw_expr": "CMDT_RESPUSEPROPS"
+    }
+  ],
+  "609": [
+    {
+      "msg_type": 609,
+      "name": "CMDT_REQOPERATEPROPS",
+      "struct": "BagSysProtocol.ReqOperateProps",
+      "protocol": "BagSysProtocol",
+      "processid": 92,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BagSysProtocol.lua",
+      "source_line": 532,
+      "raw_expr": "CMDT_REQOPERATEPROPS"
+    }
+  ],
+  "610": [
+    {
+      "msg_type": 610,
+      "name": "CMDT_RESPOPERATEPROPS",
+      "struct": "BagSysProtocol.RespOperateProps",
+      "protocol": "BagSysProtocol",
+      "processid": 92,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BagSysProtocol.lua",
+      "source_line": 554,
+      "raw_expr": "CMDT_RESPOPERATEPROPS"
+    }
+  ],
+  "611": [
+    {
+      "msg_type": 611,
+      "name": "CMDT_NOTIFYPROPSDATA",
+      "struct": "BagSysProtocol.NotifyPropsAddMsg",
+      "protocol": "BagSysProtocol",
+      "processid": 92,
+      "direction": "notify",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BagSysProtocol.lua",
+      "source_line": 574,
+      "raw_expr": "CMDT_NOTIFYPROPSDATA"
+    }
+  ],
+  "612": [
+    {
+      "msg_type": 612,
+      "name": "CMDT_REQGIFTPACKINFO",
+      "struct": "BagSysProtocol.ReqGiftPackInfo",
+      "protocol": "BagSysProtocol",
+      "processid": 92,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BagSysProtocol.lua",
+      "source_line": 616,
+      "raw_expr": "CMDT_REQGIFTPACKINFO"
+    }
+  ],
+  "613": [
+    {
+      "msg_type": 613,
+      "name": "CMDT_RESPGIFTPACKINFO",
+      "struct": "BagSysProtocol.RespGiftPackInfo",
+      "protocol": "BagSysProtocol",
+      "processid": 92,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BagSysProtocol.lua",
+      "source_line": 655,
+      "raw_expr": "CMDT_RESPGIFTPACKINFO"
+    }
+  ],
+  "3000": [
+    {
+      "msg_type": 3000,
+      "name": "CMDT_REQ_REALTIME_GAME_RECORD",
+      "struct": "IMProtocol.ReqRealtimeGameRecord",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1834,
+      "raw_expr": "CMDT_REQ_REALTIME_GAME_RECORD"
+    },
+    {
+      "msg_type": 3000,
+      "name": "CMDT_REQ_REALTIME_GAME_RECORD",
+      "struct": "MatchLinkProtocol.ReqRealtimeGameRecord",
+      "protocol": "MatchLinkProtocol",
+      "processid": 1006,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/MatchLinkProtocol.lua",
+      "source_line": 517,
+      "raw_expr": "CMDT_REQ_REALTIME_GAME_RECORD"
+    }
+  ],
+  "3001": [
+    {
+      "msg_type": 3001,
+      "name": "CMDT_RESP_REALTIME_GAME_RECORD",
+      "struct": "IMProtocol.RespRealtimeGameRecord",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1858,
+      "raw_expr": "CMDT_RESP_REALTIME_GAME_RECORD"
+    },
+    {
+      "msg_type": 3001,
+      "name": "CMDT_RESP_REALTIME_GAME_RECORD",
+      "struct": "MatchLinkProtocol.RespRealtimeGameRecord",
+      "protocol": "MatchLinkProtocol",
+      "processid": 1006,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/MatchLinkProtocol.lua",
+      "source_line": 541,
+      "raw_expr": "CMDT_RESP_REALTIME_GAME_RECORD"
+    }
+  ],
+  "3002": [
+    {
+      "msg_type": 3002,
+      "name": "CMDT_REQ_UNWATCH_REALTIME_GAME_RECORD",
+      "struct": "IMProtocol.ReqUnwatchRealtimeGameRecord",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1898,
+      "raw_expr": "CMDT_REQ_UNWATCH_REALTIME_GAME_RECORD"
+    },
+    {
+      "msg_type": 3002,
+      "name": "CMDT_REQ_UNWATCH_REALTIME_GAME_RECORD",
+      "struct": "MatchLinkProtocol.ReqUnwatchRealtimeGameRecord",
+      "protocol": "MatchLinkProtocol",
+      "processid": 1006,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/MatchLinkProtocol.lua",
+      "source_line": 581,
+      "raw_expr": "CMDT_REQ_UNWATCH_REALTIME_GAME_RECORD"
+    }
+  ],
+  "3003": [
+    {
+      "msg_type": 3003,
+      "name": "CMDT_RESP_UNWATCH_REALTIME_GAME_RECORD",
+      "struct": "IMProtocol.RespUnwatchRealtimeGameRecord",
+      "protocol": "IMProtocol",
+      "processid": 100,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua",
+      "source_line": 1918,
+      "raw_expr": "CMDT_RESP_UNWATCH_REALTIME_GAME_RECORD"
+    },
+    {
+      "msg_type": 3003,
+      "name": "CMDT_RESP_UNWATCH_REALTIME_GAME_RECORD",
+      "struct": "MatchLinkProtocol.RespUnwatchRealtimeGameRecord",
+      "protocol": "MatchLinkProtocol",
+      "processid": 1006,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/MatchLinkProtocol.lua",
+      "source_line": 601,
+      "raw_expr": "CMDT_RESP_UNWATCH_REALTIME_GAME_RECORD"
+    }
+  ],
+  "5050": [
+    {
+      "msg_type": 5050,
+      "name": "CMDT_REQTRANST050",
+      "struct": "BoxDataProtocol.TransTo50Data",
+      "protocol": "BoxDataProtocol",
+      "processid": 113,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BoxDataProtocol.lua",
+      "source_line": 47,
+      "raw_expr": "CMDT_REQTRANST050"
+    }
+  ],
+  "10000": [
+    {
+      "msg_type": 10000,
+      "name": "CMDT_REQRANKUSERINFO",
+      "struct": "BoxDataProtocol.ReqRankUserInfo",
+      "protocol": "BoxDataProtocol",
+      "processid": 113,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BoxDataProtocol.lua",
+      "source_line": 311,
+      "raw_expr": "CMDT_REQRANKUSERINFO"
+    }
+  ],
+  "10001": [
+    {
+      "msg_type": 10001,
+      "name": "CMDT_RESPRANKUSERINFO",
+      "struct": "BoxDataProtocol.RespRankUserInfo",
+      "protocol": "BoxDataProtocol",
+      "processid": 113,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BoxDataProtocol.lua",
+      "source_line": 375,
+      "raw_expr": "CMDT_RESPRANKUSERINFO"
+    }
+  ],
+  "10002": [
+    {
+      "msg_type": 10002,
+      "name": "CMDT_REQTEAMEMBERLIST",
+      "struct": "BoxDataProtocol.ReqTeaMemberList",
+      "protocol": "BoxDataProtocol",
+      "processid": 113,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BoxDataProtocol.lua",
+      "source_line": 608,
+      "raw_expr": "CMDT_REQTEAMEMBERLIST"
+    }
+  ],
+  "10003": [
+    {
+      "msg_type": 10003,
+      "name": "CMDT_RESPTEAMEMBERLIST",
+      "struct": "BoxDataProtocol.RespTeaMemberList",
+      "protocol": "BoxDataProtocol",
+      "processid": 113,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BoxDataProtocol.lua",
+      "source_line": 635,
+      "raw_expr": "CMDT_RESPTEAMEMBERLIST"
+    }
+  ],
+  "10006": [
+    {
+      "msg_type": 10006,
+      "name": "CMDT_REQTEAHOUSEINFO",
+      "struct": "BoxDataProtocol.ReqTeaHouseInfo",
+      "protocol": "BoxDataProtocol",
+      "processid": 113,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BoxDataProtocol.lua",
+      "source_line": 750,
+      "raw_expr": "CMDT_REQTEAHOUSEINFO"
+    }
+  ],
+  "10007": [
+    {
+      "msg_type": 10007,
+      "name": "CMDT_RESPTEAHOUSEINFO",
+      "struct": "BoxDataProtocol.RespTeaHouseInfo",
+      "protocol": "BoxDataProtocol",
+      "processid": 113,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BoxDataProtocol.lua",
+      "source_line": 775,
+      "raw_expr": "CMDT_RESPTEAHOUSEINFO"
+    }
+  ],
+  "10012": [
+    {
+      "msg_type": 10012,
+      "name": "CMDT_REQTEAHOUSETABLEINFO",
+      "struct": "BoxDataProtocol.ReqTeaHouseTableInfo",
+      "protocol": "BoxDataProtocol",
+      "processid": 113,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BoxDataProtocol.lua",
+      "source_line": 810,
+      "raw_expr": "CMDT_REQTEAHOUSETABLEINFO"
+    }
+  ],
+  "10013": [
+    {
+      "msg_type": 10013,
+      "name": "CMDT_RESPTEAHOUSETABLEINFO",
+      "struct": "BoxDataProtocol.RespTeaHouseTableInfo",
+      "protocol": "BoxDataProtocol",
+      "processid": 113,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BoxDataProtocol.lua",
+      "source_line": 832,
+      "raw_expr": "CMDT_RESPTEAHOUSETABLEINFO"
+    }
+  ],
+  "10014": [
+    {
+      "msg_type": 10014,
+      "name": "CMDT_REQSELFFIGHTINFO",
+      "struct": "BoxDataProtocol.ReqLatelyFightInfo",
+      "protocol": "BoxDataProtocol",
+      "processid": 113,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BoxDataProtocol.lua",
+      "source_line": 682,
+      "raw_expr": "CMDT_REQSELFFIGHTINFO"
+    }
+  ],
+  "10015": [
+    {
+      "msg_type": 10015,
+      "name": "CMDT_RESPSELFFIGHTINFO",
+      "struct": "BoxDataProtocol.RespLatelyFightInfo",
+      "protocol": "BoxDataProtocol",
+      "processid": 113,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/BoxDataProtocol.lua",
+      "source_line": 705,
+      "raw_expr": "CMDT_RESPSELFFIGHTINFO"
+    }
+  ],
+  "11007": [
+    {
+      "msg_type": 11007,
+      "name": "CMDT_REQJOINROOM",
+      "struct": "GameProtocolGT.ReqJoinRoom",
+      "protocol": "GameProtocolGT",
+      "processid": 140,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/GameProtocolGT.lua",
+      "source_line": 22,
+      "raw_expr": "CMDT_REQJOINROOM"
+    }
+  ],
+  "11008": [
+    {
+      "msg_type": 11008,
+      "name": "CMDT_RESPJOINROOM",
+      "struct": "GameProtocolGT.RespJoinRoom",
+      "protocol": "GameProtocolGT",
+      "processid": 140,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/GameProtocolGT.lua",
+      "source_line": 78,
+      "raw_expr": "CMDT_RESPJOINROOM"
+    }
+  ],
+  "11009": [
+    {
+      "msg_type": 11009,
+      "name": "CMDT_PLAYERINFO",
+      "struct": "GameProtocolGT.RespJoinRoom",
+      "protocol": "GameProtocolGT",
+      "processid": 140,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/GameProtocolGT.lua",
+      "source_line": 277,
+      "raw_expr": "CMDT_PLAYERINFO"
+    }
+  ],
+  "11013": [
+    {
+      "msg_type": 11013,
+      "name": "CMDT_STARTGAME",
+      "struct": "GameProtocolGT.StartGame",
+      "protocol": "GameProtocolGT",
+      "processid": 140,
+      "direction": "?",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/GameProtocolGT.lua",
+      "source_line": 468,
+      "raw_expr": "CMDT_STARTGAME"
+    }
+  ],
+  "11014": [
+    {
+      "msg_type": 11014,
+      "name": "GameProtocol.TableInfo",
+      "struct": "GameProtocol.TableInfo",
+      "protocol": "GameProtocol",
+      "processid": 1,
+      "direction": "?",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/GameProtocol.lua",
+      "source_line": 44,
+      "raw_expr": "11014"
+    }
+  ],
+  "11016": [
+    {
+      "msg_type": 11016,
+      "name": "CMDT_REQPLAYERACT",
+      "struct": "GameProtocolGT.RespJoinRoom",
+      "protocol": "GameProtocolGT",
+      "processid": 140,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/GameProtocolGT.lua",
+      "source_line": 149,
+      "raw_expr": "CMDT_REQPLAYERACT"
+    }
+  ],
+  "11017": [
+    {
+      "msg_type": 11017,
+      "name": "CMDT_RESPPLAYERACT",
+      "struct": "GameProtocolGT.RespJoinRoom",
+      "protocol": "GameProtocolGT",
+      "processid": 140,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/GameProtocolGT.lua",
+      "source_line": 192,
+      "raw_expr": "CMDT_RESPPLAYERACT"
+    }
+  ],
+  "11041": [
+    {
+      "msg_type": 11041,
+      "name": "CMDT_ENTERROOMFINISH",
+      "struct": "GameProtocolGT.RespJoinRoom",
+      "protocol": "GameProtocolGT",
+      "processid": 140,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/GameProtocolGT.lua",
+      "source_line": 390,
+      "raw_expr": "CMDT_ENTERROOMFINISH"
+    }
+  ],
+  "11062": [
+    {
+      "msg_type": 11062,
+      "name": "CMDT_REQSR",
+      "struct": "GameProtocolGT.ReqSR",
+      "protocol": "GameProtocolGT",
+      "processid": 140,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/GameProtocolGT.lua",
+      "source_line": 410,
+      "raw_expr": "CMDT_REQSR"
+    }
+  ],
+  "11063": [
+    {
+      "msg_type": 11063,
+      "name": "CMDT_RESPSR",
+      "struct": "GameProtocolGT.RespSR",
+      "protocol": "GameProtocolGT",
+      "processid": 140,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/GameProtocolGT.lua",
+      "source_line": 432,
+      "raw_expr": "CMDT_RESPSR"
+    }
+  ],
+  "11073": [
+    {
+      "msg_type": 11073,
+      "name": "CMDT_REQLEAVEROOM",
+      "struct": "GameProtocol.ReqLeaveRoom",
+      "protocol": "GameProtocol",
+      "processid": 1,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/GameProtocol.lua",
+      "source_line": 10,
+      "raw_expr": "CMDT_REQLEAVEROOM"
+    },
+    {
+      "msg_type": 11073,
+      "name": "CMDT_REQLEAVEROOM",
+      "struct": "GameProtocolGT.RespJoinRoom",
+      "protocol": "GameProtocolGT",
+      "processid": 140,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/GameProtocolGT.lua",
+      "source_line": 237,
+      "raw_expr": "CMDT_REQLEAVEROOM"
+    }
+  ],
+  "11074": [
+    {
+      "msg_type": 11074,
+      "name": "CMDT_RESPLEAVEROOM",
+      "struct": "GameProtocol.RespLeaveRoom",
+      "protocol": "GameProtocol",
+      "processid": 1,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/GameProtocol.lua",
+      "source_line": 25,
+      "raw_expr": "CMDT_RESPLEAVEROOM"
+    },
+    {
+      "msg_type": 11074,
+      "name": "CMDT_RESPLEAVEROOM",
+      "struct": "GameProtocolGT.RespJoinRoom",
+      "protocol": "GameProtocolGT",
+      "processid": 140,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/GameProtocolGT.lua",
+      "source_line": 254,
+      "raw_expr": "CMDT_RESPLEAVEROOM"
+    }
+  ],
+  "12007": [
+    {
+      "msg_type": 12007,
+      "name": "CMDT_REQTEMPSESSIONID",
+      "struct": "ToolProtocol.ReqTempSessionID",
+      "protocol": "ToolProtocol",
+      "processid": 62,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ToolProtocol.lua",
+      "source_line": 30,
+      "raw_expr": "CMDT_REQTEMPSESSIONID"
+    }
+  ],
+  "12008": [
+    {
+      "msg_type": 12008,
+      "name": "CMDT_RESPTEMPSESSIONID",
+      "struct": "ToolProtocol.RespTempSessionID",
+      "protocol": "ToolProtocol",
+      "processid": 62,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ToolProtocol.lua",
+      "source_line": 69,
+      "raw_expr": "CMDT_RESPTEMPSESSIONID"
+    }
+  ],
+  "12009": [
+    {
+      "msg_type": 12009,
+      "name": "CMDT_REQGETPROPATTRS",
+      "struct": "ToolProtocol.ReqPlayerPropsData",
+      "protocol": "ToolProtocol",
+      "processid": 62,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ToolProtocol.lua",
+      "source_line": 197,
+      "raw_expr": "CMDT_REQGETPROPATTRS"
+    }
+  ],
+  "12010": [
+    {
+      "msg_type": 12010,
+      "name": "CMDT_RESPGETPROPATTRS",
+      "struct": "ToolProtocol.RespPlayerPropsData",
+      "protocol": "ToolProtocol",
+      "processid": 62,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ToolProtocol.lua",
+      "source_line": 217,
+      "raw_expr": "CMDT_RESPGETPROPATTRS"
+    }
+  ],
+  "12011": [
+    {
+      "msg_type": 12011,
+      "name": "CMDT_REQSR",
+      "struct": "ToolProtocol.ReqSR",
+      "protocol": "ToolProtocol",
+      "processid": 62,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ToolProtocol.lua",
+      "source_line": 139,
+      "raw_expr": "CMDT_REQSR"
+    }
+  ],
+  "12012": [
+    {
+      "msg_type": 12012,
+      "name": "CMDT_RESPSR",
+      "struct": "ToolProtocol.ResSR",
+      "protocol": "ToolProtocol",
+      "processid": 62,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ToolProtocol.lua",
+      "source_line": 160,
+      "raw_expr": "CMDT_RESPSR"
+    }
+  ],
+  "12057": [
+    {
+      "msg_type": 12057,
+      "name": "CMDT_PACKAGE_TYPE",
+      "struct": "ToolProtocol.ClientInfo",
+      "protocol": "ToolProtocol",
+      "processid": 62,
+      "direction": "?",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ToolProtocol.lua",
+      "source_line": 288,
+      "raw_expr": "CMDT_PACKAGE_TYPE"
+    }
+  ],
+  "12061": [
+    {
+      "msg_type": 12061,
+      "name": "CMDT_REQPLAYERSIMPLEINFO",
+      "struct": "ToolProtocol.ReqPlayerSimpleInfo",
+      "protocol": "ToolProtocol",
+      "processid": 62,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ToolProtocol.lua",
+      "source_line": 323,
+      "raw_expr": "CMDT_REQPLAYERSIMPLEINFO"
+    }
+  ],
+  "12062": [
+    {
+      "msg_type": 12062,
+      "name": "CMDT_RESPPLAYERSIMPLEINFO",
+      "struct": "ToolProtocol.RespPlayerSimpleInfo",
+      "protocol": "ToolProtocol",
+      "processid": 62,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ToolProtocol.lua",
+      "source_line": 347,
+      "raw_expr": "CMDT_RESPPLAYERSIMPLEINFO"
+    }
+  ],
+  "12065": [
+    {
+      "msg_type": 12065,
+      "name": "CMDT_REQCHANGEPLAYERINFO",
+      "struct": "ToolProtocol.ReqChangePlayerInfo",
+      "protocol": "ToolProtocol",
+      "processid": 62,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ToolProtocol.lua",
+      "source_line": 371,
+      "raw_expr": "CMDT_REQCHANGEPLAYERINFO"
+    }
+  ],
+  "12066": [
+    {
+      "msg_type": 12066,
+      "name": "CMDT_RESPCHANGEPLAYERINFO",
+      "struct": "ToolProtocol.RespChangePlayerInfo",
+      "protocol": "ToolProtocol",
+      "processid": 62,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ToolProtocol.lua",
+      "source_line": 404,
+      "raw_expr": "CMDT_RESPCHANGEPLAYERINFO"
+    }
+  ],
+  "12067": [
+    {
+      "msg_type": 12067,
+      "name": "CMDT_REQCHECKBINDUSER",
+      "struct": "ToolProtocol.ReqCheckBindUser",
+      "protocol": "ToolProtocol",
+      "processid": 62,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ToolProtocol.lua",
+      "source_line": 426,
+      "raw_expr": "CMDT_REQCHECKBINDUSER"
+    }
+  ],
+  "12068": [
+    {
+      "msg_type": 12068,
+      "name": "CMDT_RESPCHECKBINDUSER",
+      "struct": "ToolProtocol.RespCheckBindUser",
+      "protocol": "ToolProtocol",
+      "processid": 62,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ToolProtocol.lua",
+      "source_line": 444,
+      "raw_expr": "CMDT_RESPCHECKBINDUSER"
+    }
+  ],
+  "12069": [
+    {
+      "msg_type": 12069,
+      "name": "CMDT_REQBINDUSER",
+      "struct": "ToolProtocol.ReqBindUser",
+      "protocol": "ToolProtocol",
+      "processid": 62,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ToolProtocol.lua",
+      "source_line": 486,
+      "raw_expr": "CMDT_REQBINDUSER"
+    }
+  ],
+  "12070": [
+    {
+      "msg_type": 12070,
+      "name": "CMDT_RESPBINDUSER",
+      "struct": "ToolProtocol.RespBindUser",
+      "protocol": "ToolProtocol",
+      "processid": 62,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/ToolProtocol.lua",
+      "source_line": 519,
+      "raw_expr": "CMDT_RESPBINDUSER"
+    }
+  ],
+  "25100": [
+    {
+      "msg_type": 25100,
+      "name": "MatchLinkProtocol.ReqJoin",
+      "struct": "MatchLinkProtocol.ReqJoin",
+      "protocol": "MatchLinkProtocol",
+      "processid": 1006,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/MatchLinkProtocol.lua",
+      "source_line": 150,
+      "raw_expr": "25100"
+    }
+  ],
+  "25101": [
+    {
+      "msg_type": 25101,
+      "name": "MatchLinkProtocol.RespJoin",
+      "struct": "MatchLinkProtocol.RespJoin",
+      "protocol": "MatchLinkProtocol",
+      "processid": 1006,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/MatchLinkProtocol.lua",
+      "source_line": 176,
+      "raw_expr": "25101"
+    }
+  ],
+  "25102": [
+    {
+      "msg_type": 25102,
+      "name": "MatchLinkProtocol.ReqMatchAwardLog",
+      "struct": "MatchLinkProtocol.ReqMatchAwardLog",
+      "protocol": "MatchLinkProtocol",
+      "processid": 1006,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/MatchLinkProtocol.lua",
+      "source_line": 64,
+      "raw_expr": "25102"
+    }
+  ],
+  "25103": [
+    {
+      "msg_type": 25103,
+      "name": "MatchLinkProtocol.RespMatchAwardLog",
+      "struct": "MatchLinkProtocol.RespMatchAwardLog",
+      "protocol": "MatchLinkProtocol",
+      "processid": 1006,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/MatchLinkProtocol.lua",
+      "source_line": 96,
+      "raw_expr": "25103"
+    }
+  ],
+  "25105": [
+    {
+      "msg_type": 25105,
+      "name": "MatchLinkProtocol.RespMatchMsgToClient",
+      "struct": "MatchLinkProtocol.RespMatchMsgToClient",
+      "protocol": "MatchLinkProtocol",
+      "processid": 1006,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/MatchLinkProtocol.lua",
+      "source_line": 128,
+      "raw_expr": "25105"
+    }
+  ],
+  "25106": [
+    {
+      "msg_type": 25106,
+      "name": "MatchLinkProtocol.ReqInvite",
+      "struct": "MatchLinkProtocol.ReqInvite",
+      "protocol": "MatchLinkProtocol",
+      "processid": 1006,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/MatchLinkProtocol.lua",
+      "source_line": 196,
+      "raw_expr": "25106"
+    }
+  ],
+  "25107": [
+    {
+      "msg_type": 25107,
+      "name": "MatchLinkProtocol.RespInvite",
+      "struct": "MatchLinkProtocol.RespInvite",
+      "protocol": "MatchLinkProtocol",
+      "processid": 1006,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/MatchLinkProtocol.lua",
+      "source_line": 247,
+      "raw_expr": "25107"
+    }
+  ],
+  "25110": [
+    {
+      "msg_type": 25110,
+      "name": "MatchLinkProtocol.ReqGetOrSetHead",
+      "struct": "MatchLinkProtocol.ReqGetOrSetHead",
+      "protocol": "MatchLinkProtocol",
+      "processid": 1006,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/MatchLinkProtocol.lua",
+      "source_line": 299,
+      "raw_expr": "25110"
+    }
+  ],
+  "25111": [
+    {
+      "msg_type": 25111,
+      "name": "MatchLinkProtocol.RespGetOrSetHead",
+      "struct": "MatchLinkProtocol.RespGetOrSetHead",
+      "protocol": "MatchLinkProtocol",
+      "processid": 1006,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/MatchLinkProtocol.lua",
+      "source_line": 329,
+      "raw_expr": "25111"
+    }
+  ],
+  "25112": [
+    {
+      "msg_type": 25112,
+      "name": "MatchLinkProtocol.BroadcastMessage",
+      "struct": "MatchLinkProtocol.BroadcastMessage",
+      "protocol": "MatchLinkProtocol",
+      "processid": 1006,
+      "direction": "?",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/MatchLinkProtocol.lua",
+      "source_line": 387,
+      "raw_expr": "25112"
+    }
+  ],
+  "25114": [
+    {
+      "msg_type": 25114,
+      "name": "MatchLinkProtocol.ReqInviteMore",
+      "struct": "MatchLinkProtocol.ReqInviteMore",
+      "protocol": "MatchLinkProtocol",
+      "processid": 1006,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/MatchLinkProtocol.lua",
+      "source_line": 414,
+      "raw_expr": "25114"
+    }
+  ],
+  "25115": [
+    {
+      "msg_type": 25115,
+      "name": "MatchLinkProtocol.ReqStopSvrMsg",
+      "struct": "MatchLinkProtocol.ReqStopSvrMsg",
+      "protocol": "MatchLinkProtocol",
+      "processid": 1006,
+      "direction": "req",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/MatchLinkProtocol.lua",
+      "source_line": 476,
+      "raw_expr": "25115"
+    }
+  ],
+  "25116": [
+    {
+      "msg_type": 25116,
+      "name": "MatchLinkProtocol.RespStopSvrMsg",
+      "struct": "MatchLinkProtocol.RespStopSvrMsg",
+      "protocol": "MatchLinkProtocol",
+      "processid": 1006,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/MatchLinkProtocol.lua",
+      "source_line": 493,
+      "raw_expr": "25116"
+    }
+  ],
+  "25201": [
+    {
+      "msg_type": 25201,
+      "name": "MatchLinkProtocol.RespNotifyTaskPercent",
+      "struct": "MatchLinkProtocol.RespNotifyTaskPercent",
+      "protocol": "MatchLinkProtocol",
+      "processid": 1006,
+      "direction": "resp",
+      "source_file": "apk_research/decrypted-lua/app/Protocols/MatchLinkProtocol.lua",
+      "source_line": 357,
+      "raw_expr": "25201"
+    }
+  ]
+}

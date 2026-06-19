@@ -1,0 +1,10 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua", "reason": "客户端已知 XY_ID 集合（IMProtocol，processid=100）"}
+{"file": "apk_research/decrypted-lua/app/Protocols/RoomProtocol.lua", "reason": "客户端已知 XY_ID 集合（RoomProtocol，processid=84）"}
+{"file": "remote/srs_spectator/client.py", "reason": "fuzz 用客户端基础设施：握手+加密 wire+回调框架"}
+{"file": ".trellis/tasks/archive/2026-06/06-19-friend-watch-handcards-attack-surface-sweep/research/a4_lobby_poc_v6_seegame2.py", "reason": "PoC v6 SEEGAME2 实证脚本；wire frame v6 + RespJoinTable parser 可复用"}
+{"file": ".trellis/tasks/06-19-n6-hidden-protocol-scan/research/lua-xyid-closed-set.md", "reason": "客户端已知 XY_ID 闭集人类总表（207 unique，155 in [1,5000]）"}
+{"file": ".trellis/tasks/06-19-n6-hidden-protocol-scan/research/xyid_closed_set.json", "reason": "机器可读闭集；fuzzer 的 --skip-known 入口"}
+{"file": ".trellis/tasks/06-19-n6-hidden-protocol-scan/research/fuzz-strategy.md", "reason": "fuzz 战术：分级、分类、加密、节流、风险"}
+{"file": ".trellis/tasks/06-19-n6-hidden-protocol-scan/research/n6_fuzzer.py", "reason": "fuzzer 脚本骨架（dry-run 默认；--live 需人审）"}
+{"file": ".trellis/tasks/06-19-n6-hidden-protocol-scan/research/n6-go-live-checklist.md", "reason": "上线前 5 道关 + abort + hit 升级流程"}

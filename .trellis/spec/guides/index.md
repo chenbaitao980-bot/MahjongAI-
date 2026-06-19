@@ -23,6 +23,7 @@ These guides help you **ask the right questions before coding**.
 |-------|---------|-------------|
 | [Code Reuse Thinking Guide](./code-reuse-thinking-guide.md) | Identify patterns and reduce duplication | When you notice repeated patterns |
 | [Cross-Layer Thinking Guide](./cross-layer-thinking-guide.md) | Think through data flow across layers | Features spanning multiple layers |
+| [MITM 连接稳定性与排查方法论](./mitm-connection-stability-guide.md) | noconfig 热更 MITM 5 条铁律 + 间歇性连接失败排查链 | 改 NetConf/大厅地址；排查 admin 丢用户、手机"重进几次才连上" |
 
 ---
 
@@ -46,6 +47,16 @@ These guides help you **ask the right questions before coding**.
 - [ ] **You're creating a new utility/helper function** ← Search first!
 
 → Read [Code Reuse Thinking Guide](./code-reuse-thinking-guide.md)
+
+### When to Think About MITM Connection Stability
+
+- [ ] You're modifying `netconf_patch.py` / `LOCAL_TCP_LIST` / `LOCAL_TCP_LIST_50`
+- [ ] You're changing how the phone reaches ECS (lobby IP, port, DNS)
+- [ ] Symptoms involve **"intermittent" / "重进几次才连上" / admin 偶发丢用户**
+- [ ] You're touching `setup_mitm.py` version/build offset logic
+- [ ] You're about to trust a "应该已经修了" comment without实机复现
+
+→ Read [MITM 连接稳定性与排查方法论](./mitm-connection-stability-guide.md)
 
 ---
 

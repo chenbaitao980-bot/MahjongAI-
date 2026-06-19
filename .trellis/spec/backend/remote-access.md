@@ -378,14 +378,61 @@ class WatchState:
 
 ### SRS 旁观局限性（关键）
 
-**旁观协议（ReqRealtimeGameRecord, msgid=3000, sub_type=100）只能看到公开信息（打出的牌、弃牌、鸣牌），手牌显示为"牌背"，无法获取隐藏手牌。**
+**修订（2026-06-19 实证）**：之前结论"协议设计不发手牌"**不准确**。实测协议层能拿到 26-33KB zlib 真实回放，**但服务端在 spectator payload 序列化层做了 view filter**，把对手 hand_raw 替换成 7×0x3c 占位符（DEAL 帧）+ meld_summary 编码（HAND_UPDATE 帧）。证据：[`.trellis/tasks/06-19-render-opponent-handcards-on-page/research/poc-v5-result.md`](../../tasks/06-19-render-opponent-handcards-on-page/research/poc-v5-result.md)。
 
-这是服务端协议设计决定的——服务端只向旁观者发送公开事件，不发送手牌内容。
+#### 协议层契约（已实证）
 
-若目标是获取完整手牌（含隐藏牌），旁观模式走不通，唯一可行路径：
-- **VPN 被动嗅探**（已上线 2026-06-13）：手机流量过 ECS，被动抓 7777 端口
-- **Frida siphon**（手机进程 hook）：hook recv，拦截发给手机的数据包并转发云端（另立任务）
-- **云端以玩家身份登录**（未探索）：理论上能收到手牌，但会踢掉手机
+`IMProtocol.ReqRealtimeGameRecord` (XY_ID=3000, processid=100) wire format：
+
+```
+12B header: <HHHHI>
+  flag       (u16, 0x4001)
+  payload_len (u16 LE)
+  msg_type    (u16 LE)  = 3000
+  sub_type    (u16 LE)  = processid = 100   # ★ 不是 0
+  extra       (u32 LE)  = appid             # ★ 不是 0
+                                            # appid = SvrAppidList[(roomid % len) + 1]
+                                            # 见 lobby/Req/Watch/ReqRealtimeGameRecord.lua:16
+payload (encrypted, fresh-from-IV CFB128 with sessionkey):
+  askid       (i32 LE)
+  room_id     (i32 LE)
+  offset      (i32 LE)
+  before_round(i32 LE)
+```
+
+**响应 RespRealtimeGameRecord (XY_ID=3001) payload 反而是明文**——非对称加密设计，请求加密、响应明文。
+
+#### 必须连对的目标地址
+
+| 协议族 | host:port | 端口性质 |
+|---|---|---|
+| **lobby (含 spectator)** | `47.96.101.155:5748` 或 `5749` | TCP `LobbyS2CRewriter` DEFAULT_LOBBY_PORTS |
+| **game (打牌实时帧)** | `47.96.0.227:7777` | tcp_proxy 默认 game IP |
+
+⚠️ **常见错误**：把 srsgroupid (5045) 当成端口连 `47.96.0.227:5045` —— 47.96.0.227 是游服 IP，5045 是 lobby 路由组 ID 不是端口，连上去无握手响应。
+
+#### 服务端 view filter（H16 真因）
+
+修齐 H3+H11+H12+H13 四件后，ReqRealtimeGameRecord 立即回包 26KB zlib 真实回放。zlib 解开后：
+- ✅ DEAL / HAND_UPDATE / draw / discard / meld 全帧序列
+- ❌ **DEAL 帧 player=对手 的 hand_raw 字段位置是 7 个 `0x3c`**
+- ❌ **HAND_UPDATE 帧 player=对手 是 meld_summary 编码（不带 hand_raw）**
+
+服务端 view filter 与请求方 numid 无关——同号、不同号都被过滤（同号实测，不同号待 PoC）。
+
+#### 若目标是获取完整对手手牌
+
+| 路径 | 代价 | 实证状态 |
+|---|---|---|
+| **`0x022B` 局末摊牌** | — | ❌ **证伪（2026-06-20）**：0x022B 是 `deal_1v1` 自己起手牌，**不是摊牌帧**；这游戏无局末亮对手牌的帧（胜负走 win 0x0220 纯数值）。protocol.py:62 误标 "round_result" 应为 "deal_1v1" |
+| **N6 隐藏协议字典扫** | fuzz 24226 帧 | ❌ **clean negative（2026-06-20）**：服务端对所有 unknown msg_type 静默丢弃，0 响应 |
+| **N7 事件帧泄漏暗牌** | 离线扫样本 | ❌ **证伪**：唯一泄漏对手真牌=meld 副露(规则强制公开)，暗牌从不泄漏 |
+| **第三方 numid spectator** | 注册 + 抓凭证一次（小号连热点） | ⏸ 待 PoC（用户已倾向 reject） |
+| **VPN 被动嗅探**（已上线 2026-06-13） | 手机走 ECS VPN | ✅ 工作中（但拿的是**自己**手牌） |
+| **Frida siphon** | 手机进程 hook recv | ✅ 工作中（自己手牌）；对手手牌需 hook 对手手机=不现实 |
+| **N5 侧信道（公开信息防守）** | 已 live | ✅ **唯一可交付的对手信号**：弃牌河+副露→危险度，链路已端到端工作 |
+
+**最终判定（2026-06-20，D23+N6+N7 穷举后）**：**协议层读对手暗牌 = 不可达（H16 完整 hard wall）**。服务端在任何可解密帧从不传对手暗牌真值。可交付能力 = N5 公开信息防守信号。剩余理论路径（1v1 局末摊牌帧 <20%、Frida 对手手机、第三方号）均需用户/额外资源，非协议层。详见 [`.trellis/tasks/06-19-h16-bypass-parent/research/d23-premise-refuted-and-h16-reassessment.md`](../../tasks/06-19-h16-bypass-parent/research/d23-premise-refuted-and-h16-reassessment.md)。
 
 ---
 

@@ -1,0 +1,11 @@
+{"file": ".trellis/tasks/06-19-render-opponent-handcards-on-page/research/15-causes-sweep.md", "reason": "11 candidate root causes for spectator silence — implementer must verify each per the matrix"}
+{"file": ".trellis/tasks/06-19-render-opponent-handcards-on-page/research/no-collude-paths.md", "reason": "8 enumerated path branches across protocol/runtime/supply layers — strategy context"}
+{"file": ".trellis/tasks/06-19-render-opponent-handcards-on-page/research/b2-poc-v4-result.md", "reason": "Negative result evidence: lobby 5748 PoC v4 silent for 25s after handshake success"}
+{"file": ".trellis/tasks/06-19-render-opponent-handcards-on-page/research/cheat-market-recon.md", "reason": "Cheat market recon: friend most likely uses D3 (亲友圈管理员) not D1 (spectator)"}
+{"file": "apk_research/decrypted-lua/lobby/Req/Watch/ReqRealtimeGameRecord.lua", "reason": "Source of truth for spectator request: getAppid formula + watch1006 branch + sendMsg signature"}
+{"file": "apk_research/decrypted-lua/lobby/Modules/Watch/Module.lua", "reason": "spectator dispatch logic (req/resp wiring + IsSeer state)"}
+{"file": "apk_research/decrypted-lua/app/Protocols/IMProtocol.lua", "reason": "ReqRealtimeGameRecord protocol id 3000/3001 + bostream layout"}
+{"file": "apk_research/decrypted-lua/app/Net/NetEngine.lua", "reason": "tcp:sendMessage(processID, appID, msgid, body) wire signature — H3 candidate"}
+{"file": ".trellis/spec/backend/game-protocol.md", "reason": "wire frame format spec (HHHHI 12B header) for sanity check"}
+{"file": ".trellis/spec/backend/remote-access.md", "reason": "spec line 381 'spectator only sees public info' — to be updated per PRD ADR if PoC v5 hits"}
+{"file": "C:/Users/Administrator/.claude/projects/E--claude-project-MahjongAI-MahjongAI/memory/friend-watch-handcards-truth.md", "reason": "Memory of prior protocol findings — what the player connection 0x2BC0 actually contains"}

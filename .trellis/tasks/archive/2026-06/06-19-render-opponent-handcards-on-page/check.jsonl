@@ -1,0 +1,5 @@
+{"file": ".trellis/tasks/06-19-render-opponent-handcards-on-page/research/15-causes-sweep.md", "reason": "All 11 testable hypotheses — checker must confirm each verification step ran with evidence"}
+{"file": ".trellis/tasks/06-19-render-opponent-handcards-on-page/prd.md", "reason": "Acceptance criteria + DoD — checker validates against these"}
+{"file": ".trellis/spec/backend/remote-access.md", "reason": "Spec to update if any PoC v5 variant succeeds (line 381 needs rewrite with conditions)"}
+{"file": "stable/tracker.py", "reason": "1v1 opponent_player bug location — line 86 (local+2)%4 — checker validates 1v1 mode now sees opponent player events"}
+{"file": "remote/relay/static/index.html", "reason": "Admin page renders opponent slot — checker validates discards/melds/draws populate correctly post-fix"}

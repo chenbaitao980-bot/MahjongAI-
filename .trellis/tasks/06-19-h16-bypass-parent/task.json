@@ -1,0 +1,30 @@
+{
+  "id": "06-19-h16-bypass-parent",
+  "name": "06-19-h16-bypass-parent",
+  "title": "h16 bypass attack-surface sweep (parent)",
+  "description": "围绕 H16 (服务端 view filter 把对手手牌一律 0x3c) 的剩余可达突破方向：D23 局末摊牌 / N6 隐藏协议字典扫 / N5 侧信道。子任务并行推进。",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "陈柏涛",
+  "assignee": "陈柏涛",
+  "createdAt": "2026-06-19",
+  "completedAt": "2026-06-20",
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "06-19-d23-round-result-decode",
+    "06-19-n6-hidden-protocol-scan",
+    "06-19-n5-side-channel-tenpai"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "结论:协议层读对手暗牌=不可达(H16 完整 hard wall)。三子任务全穷举:D23 证伪(0x022B 是自己起手)/N6 clean negative(24226 unknown 0 hit 静默)/N7 证伪(只 meld 副露公开)。可交付=N5 公开信息防守信号(已 live)。剩余理论路径(1v1局末摊牌<20%/Frida对手机/第三方号)需用户+额外资源,非协议层。待用户事项见 children/n6 research/NEXT-STEPS-FOR-USER.md",
+  "meta": {}
+}

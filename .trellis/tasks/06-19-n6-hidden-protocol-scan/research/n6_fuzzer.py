@@ -952,6 +952,235 @@ def run_camouflage(args, msg_types: list[int], sub_types: list[int],
     return 0 if not abort_flag["abort"] else 3
 
 
+# ============================================================================
+# SUB-PER-CONN MODE (--sub-per-conn)
+# ============================================================================
+# Correct tactic per research/server-wall-confirmed.md: the server FINs a
+# connection once it sees >=6 DIFFERENT sub_types (processids) on a single
+# connection, but tolerates an unbounded run of unknown msg_types as long as
+# the sub_type stays fixed (PoC _poc_fixedsub: 30+ unknown mt @ fixed sub=100,
+# final_alive=True). So we open ONE fresh connection per sub_type and, with the
+# sub_type pinned, scan ALL unknown msg_types on that connection.
+#
+#   for sub in sub_types:            # 6 sub_types = 6 connections
+#       connect + handshake (fresh)
+#       for mt in unknown_mts:       # fixed sub, all 4845 unknown mt
+#           send (mt, sub); wait response window
+#       disconnect; cooldown
+#
+# Keepalive decision: we deliberately DO NOT inject the standard keepalive
+# (306, sub=100) because that would introduce a SECOND sub_type onto a
+# connection scanning sub!=100, which is exactly the >=6-distinct-sub trigger
+# we are avoiding (and even 2 distinct subs is needless risk). At --rate 5
+# (one frame / 200ms) the connection is never idle long enough to need a
+# heartbeat, so no keepalive is required. See sub-per-conn-report.md §2.
+#
+# Single-sub failure isolation: if a connection's connect/handshake fails, or
+# the connection dies mid-scan (defensive — PoC says fixed-sub is safe), we log
+# it, record the sub as skipped/partial, and CONTINUE to the next sub instead
+# of aborting the whole run.
+# ----------------------------------------------------------------------------
+
+def run_sub_per_conn(args, msg_types: list[int], sub_types: list[int],
+                     out_path: Path, skip_set: set[int]):
+    SRSClient = _import_srs_client(args)
+    if SRSClient is None:
+        return 2
+    host, port = _resolve_host_port(args)
+
+    rate_sleep = 1.0 / max(args.rate, 0.1)
+    max_mt = max(0, args.max_mt_per_conn)  # 0 = unlimited
+
+    logger.info("sub-per-conn: %d sub_types x %d unknown mt; rate=%.1ffps "
+                "conn-cooldown=%.1fs max-mt-per-conn=%s",
+                len(sub_types), len(msg_types), args.rate, args.conn_cooldown,
+                max_mt or "unlimited")
+
+    hs_state = {"done": False}
+    state = {"last": None, "cur_sub": None}
+    popup_count = {"n": 0}
+    abort_flag = {"abort": False, "reason": ""}
+
+    def log_event(rec: dict):
+        rec.setdefault("ts", time.time())
+        with out_path.open("a", encoding="utf-8") as fp:
+            fp.write(json.dumps(rec, ensure_ascii=False) + "\n")
+
+    def on_disconnect():
+        # Expected at the end of each sub's scan; mark conn dead for next loop.
+        hs_state["done"] = False
+
+    askid = int(time.time() * 1000) & 0x7FFFFFFF
+    total_sent = 0
+    total_hits = {"n": 0}
+    per_sub_stats: list[dict] = []
+
+    def on_frame_counting(msg_type, payload):
+        cls = classify_response(
+            msg_type, payload,
+            expected_msg_type=(state["last"][0] + 1) if state["last"] else -1,
+            skip_set=skip_set, handshake_done=hs_state["done"],
+            correlated_send=state["last"],
+        )
+        log_event({
+            "direction": "recv", "wire_msg_type": msg_type,
+            "payload_len": len(payload), "wire_payload_hex": payload[:128].hex(),
+            "classification": cls, "correlated_send": state["last"],
+            "cur_sub": state["cur_sub"],
+        })
+        if cls["score"] > 0:
+            total_hits["n"] += 1
+        if msg_type == 101 and hs_state["done"]:
+            popup_count["n"] += 1
+            if popup_count["n"] >= 5:
+                abort_flag["abort"] = True
+                abort_flag["reason"] = "5 popup boxes -- likely abuse-block"
+        if cls["score"] >= 5:
+            logger.warning("HIGH-SCORE HIT: sent=%s wire_mt=%s score=%d notes=%s",
+                           state["last"], msg_type, cls["score"], cls["notes"])
+
+    for sub in sub_types:
+        if abort_flag["abort"]:
+            logger.error("ABORT before sub=%s: %s", sub, abort_flag["reason"])
+            break
+        state["cur_sub"] = sub
+        state["last"] = None
+        hs_state["done"] = False
+        sub_stat = {"sub": sub, "sent": 0, "hits_before": total_hits["n"],
+                    "status": "ok", "disconnected_at_mt": None}
+
+        client = SRSClient(host=host, port=port, auth_token="", handshake_blob="",
+                           srs_sessionid=args.sessionid, userid=args.userid)
+        client.on_frame(on_frame_counting)
+        client.on_handshake_done(lambda: hs_state.__setitem__("done", True))
+        client.on_disconnect(on_disconnect)
+
+        # connect + handshake; on failure, isolate this sub and continue.
+        if not client.connect(timeout=15.0):
+            logger.error("sub-per-conn: connect failed for sub=%s -- skipping", sub)
+            sub_stat["status"] = "connect-failed"
+            per_sub_stats.append(sub_stat)
+            try:
+                client.disconnect()
+            except Exception:
+                pass
+            time.sleep(args.conn_cooldown)
+            continue
+        deadline = time.time() + 20.0
+        while not hs_state["done"] and time.time() < deadline:
+            time.sleep(0.2)
+        if not hs_state["done"]:
+            logger.error("sub-per-conn: handshake timeout for sub=%s -- skipping", sub)
+            sub_stat["status"] = "handshake-timeout"
+            per_sub_stats.append(sub_stat)
+            try:
+                client.disconnect()
+            except Exception:
+                pass
+            time.sleep(args.conn_cooldown)
+            continue
+
+        logger.warning("=== sub=%s connection up; scanning %d mt (fixed sub) ===",
+                       sub, len(msg_types))
+        sub_sent = 0
+        try:
+            for i, mt in enumerate(msg_types):
+                if abort_flag["abort"]:
+                    logger.error("ABORT during sub=%s: %s", sub, abort_flag["reason"])
+                    sub_stat["status"] = "aborted"
+                    break
+                # defensive health check (PoC: fixed-sub should never FIN)
+                if not connection_alive(client):
+                    logger.warning("sub-per-conn: connection died for sub=%s at "
+                                   "mt index %d (mt=%s) -- isolating, next sub",
+                                   sub, i, mt)
+                    sub_stat["status"] = "disconnected"
+                    sub_stat["disconnected_at_mt"] = mt
+                    break
+                # max-mt-per-conn safety reconnect (default 0 = unlimited)
+                if max_mt and sub_sent >= max_mt:
+                    logger.info("sub-per-conn: hit --max-mt-per-conn=%d for sub=%s "
+                                "-- stopping this connection early", max_mt, sub)
+                    sub_stat["status"] = "max-mt-reached"
+                    break
+                state["last"] = (mt, sub)
+                body = build_body("empty", askid, args.roomid)
+                frame = None
+                try:
+                    frame = send_frame(client, mt, sub, body, args.appid)
+                except Exception as e:
+                    logger.error("sub-per-conn send raised (sub=%s mt=%s): %s",
+                                 sub, mt, e)
+                log_event({
+                    "direction": "send", "msg_type": mt, "sub_type": sub,
+                    "extra": args.appid, "body_template": "empty",
+                    "wire_hex": frame.hex() if frame else "",
+                })
+                sub_sent += 1
+                total_sent += 1
+                askid += 1
+                time.sleep(rate_sleep)
+        finally:
+            try:
+                client.disconnect()
+            except Exception:
+                pass
+        sub_stat["sent"] = sub_sent
+        sub_stat["hits"] = total_hits["n"] - sub_stat.pop("hits_before")
+        per_sub_stats.append(sub_stat)
+        logger.info("sub-per-conn: sub=%s done (sent=%d, status=%s)",
+                    sub, sub_sent, sub_stat["status"])
+        if sub != sub_types[-1] and not abort_flag["abort"]:
+            time.sleep(args.conn_cooldown)
+
+    log_event({"direction": "summary", "mode": "sub-per-conn",
+               "total_sent": total_sent, "total_hits": total_hits["n"],
+               "per_sub": per_sub_stats})
+    logger.warning("=== sub-per-conn finished: total_sent=%d total_hits=%d ===",
+                   total_sent, total_hits["n"])
+    for s in per_sub_stats:
+        logger.warning("  sub=%s sent=%d hits=%s status=%s%s", s["sub"],
+                       s["sent"], s.get("hits", 0), s["status"],
+                       (" at_mt=%s" % s["disconnected_at_mt"])
+                       if s.get("disconnected_at_mt") is not None else "")
+    return 0 if not abort_flag["abort"] else 3
+
+
+def plan_sub_per_conn(args, msg_types: list[int], sub_types: list[int],
+                      out_path: Path):
+    """Dry-run: describe the per-sub-connection scan plan, no socket."""
+    n_sub = len(sub_types)
+    n_mt = len(msg_types)
+    total_frames = n_sub * n_mt
+    rate = max(args.rate, 0.1)
+    max_mt = max(0, args.max_mt_per_conn)
+    # per-conn wall-clock: handshake ~1s + n_mt frames @ rate + cooldown
+    mt_per_conn = min(n_mt, max_mt) if max_mt else n_mt
+    per_conn_secs = 1.0 + mt_per_conn / rate + args.conn_cooldown
+    # if max_mt limits frames per conn, more connections are needed per sub
+    conns_per_sub = 1 if not max_mt else ((n_mt + max_mt - 1) // max_mt)
+    n_conns = n_sub * conns_per_sub
+    est_secs = n_conns * per_conn_secs
+    plan = {
+        "mode": "sub-per-conn", "dry_run": True,
+        "sub_types": sub_types, "n_sub": n_sub,
+        "unknown_mt_per_sub": n_mt,
+        "total_frames": total_frames,
+        "rate_fps": args.rate, "conn_cooldown": args.conn_cooldown,
+        "max_mt_per_conn": max_mt or "unlimited",
+        "connections": n_conns,
+        "est_seconds": round(est_secs, 1),
+        "est_hours": round(est_secs / 3600.0, 2),
+        "note": "no network IO in dry-run; pass --live to actually scan",
+    }
+    with out_path.open("w", encoding="utf-8") as fp:
+        fp.write(json.dumps(plan, ensure_ascii=False) + "\n")
+    logger.warning("=== DRY-RUN sub-per-conn plan === %d sub x %d mt = %d frames, "
+                   "~%d connections, ~%.2fh",
+                   n_sub, n_mt, total_frames, n_conns, est_secs / 3600.0)
+    logger.warning("  full plan: %s", plan)
+
+
 def plan_calibrate(out_path: Path):
     """Dry-run: describe the calibration plan WITHOUT opening a socket."""
     plan = {
@@ -1035,6 +1264,11 @@ def main():
     p.add_argument("--camouflage", action="store_true",
                    help="CAMOUFLAGE scan mode: wall-aware reconnecting scan. "
                         "Dry-run prints reconnect/time estimate.")
+    p.add_argument("--sub-per-conn", action="store_true",
+                   help="SUB-PER-CONN scan mode: one fresh connection per "
+                        "sub_type, fixed sub, scan all unknown mt (correct "
+                        "tactic per server-wall-confirmed.md). Dry-run prints "
+                        "the scan plan.")
     # ---- camouflage parameters (also used by --calibrate Q2/Q4 keepalive pad) ----
     p.add_argument("--unknown-per-conn", type=int, default=3,
                    help="max unknown frames per connection before reconnect "
@@ -1046,6 +1280,14 @@ def main():
                    help="seconds to sleep between camouflage reconnects. Default 3.")
     p.add_argument("--max-reconns", type=int, default=50,
                    help="upper bound on camouflage reconnect count. Default 50.")
+    # ---- sub-per-conn parameters ----
+    p.add_argument("--conn-cooldown", type=float, default=5.0,
+                   help="seconds to sleep between sub-per-conn connections. "
+                        "Default 5.")
+    p.add_argument("--max-mt-per-conn", type=int, default=0,
+                   help="max mt frames per sub-per-conn connection before "
+                        "reconnecting (safety). Default 0 = unlimited (PoC "
+                        "proves fixed-sub run is safe).")
     args = p.parse_args()
 
     # range expansion + skip
@@ -1060,8 +1302,10 @@ def main():
                 len(all_targets), len(msg_types), sub_types, args.body_variants)
     logger.info("output=%s", out_path)
 
-    if args.calibrate and args.camouflage:
-        logger.error("--calibrate and --camouflage are mutually exclusive")
+    if sum([bool(args.calibrate), bool(args.camouflage),
+            bool(args.sub_per_conn)]) > 1:
+        logger.error("--calibrate, --camouflage, --sub-per-conn are mutually "
+                     "exclusive (pick one)")
         return 4
 
     # ---- DRY-RUN (default; never opens a socket) ----
@@ -1072,6 +1316,9 @@ def main():
         elif args.camouflage:
             logger.warning("=== DRY-RUN CAMOUFLAGE === (use --live to scan)")
             plan_camouflage(args, msg_types, sub_types, out_path)
+        elif args.sub_per_conn:
+            logger.warning("=== DRY-RUN SUB-PER-CONN === (use --live to scan)")
+            plan_sub_per_conn(args, msg_types, sub_types, out_path)
         else:
             logger.warning("=== DRY-RUN MODE === (use --live to actually send)")
             run_dry_run(args, msg_types, sub_types, out_path)
@@ -1089,6 +1336,8 @@ def main():
         return run_calibrate(args, out_path, skip)
     if args.camouflage:
         return run_camouflage(args, msg_types, sub_types, out_path, skip)
+    if args.sub_per_conn:
+        return run_sub_per_conn(args, msg_types, sub_types, out_path, skip)
     return run_live(args, msg_types, sub_types, out_path, skip)
 
 

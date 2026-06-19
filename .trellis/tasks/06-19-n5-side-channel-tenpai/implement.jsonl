@@ -1,0 +1,7 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": "stable/protocol.py", "reason": "0x0216 hand_update 帧解码器（含 player+count 元信息）"}
+{"file": ".trellis/tasks/archive/2026-06/06-19-render-opponent-handcards-on-page/research/sample_record_26k.bin", "reason": "完整一局回放数据；可用于离线分析 hand_update(player=对手) 频率/时序/大小"}
+{"file": ".trellis/tasks/06-19-n5-side-channel-tenpai/research/n5_record_parser.py", "reason": "产出：record 事件解析器（ascii 头锚定 walk，切分 sub_cmd/len/body，提取 player+tile/count）"}
+{"file": ".trellis/tasks/06-19-n5-side-channel-tenpai/research/n5_sidechannel.py", "reason": "产出：按局+按 player 提取侧信道特征（对手 discard 河/meld 明牌/draw 计数/手数/动作间隔）"}
+{"file": ".trellis/tasks/06-19-n5-side-channel-tenpai/research/n5_tenpai_infer.py", "reason": "产出：复用 game/danger.py 的听牌/危险度弱信号推断 PoC"}
+{"file": ".trellis/tasks/06-19-n5-side-channel-tenpai/research/n5-poc-result.md", "reason": "产出：N5 侧信道 PoC 结果报告（信号强度评估 + 集成建议）"}

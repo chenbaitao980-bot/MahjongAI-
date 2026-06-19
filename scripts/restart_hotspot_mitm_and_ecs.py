@@ -24,6 +24,10 @@ import paramiko
 
 def get_ssh_password(ecs_host: str) -> str:
     """Prompt for SSH password using a simple GUI dialog."""
+    env_password = os.environ.get("ECS_SSH_PASSWORD", "").strip()
+    if env_password:
+        return env_password
+
     try:
         import tkinter as tk
         from tkinter import simpledialog
@@ -74,6 +78,7 @@ def stop_local_mitm(repo_root: Path, pid_path: Path) -> None:
         try:
             import psutil
 
+            matched = []
             for proc in psutil.process_iter(["pid", "name", "cmdline"]):
                 if proc.info["name"] and proc.info["name"].lower() in (
                     "python.exe",
@@ -84,8 +89,15 @@ def stop_local_mitm(repo_root: Path, pid_path: Path) -> None:
                         if re.search(pattern, cmdline):
                             try:
                                 proc.kill()
+                                matched.append(proc)
                             except (psutil.NoSuchProcess, psutil.AccessDenied):
                                 pass
+                            break
+            for proc in matched:
+                try:
+                    proc.wait(timeout=5)
+                except Exception:
+                    pass
         except ImportError:
             pass
     else:
@@ -100,6 +112,19 @@ def stop_local_mitm(repo_root: Path, pid_path: Path) -> None:
         pid_path.unlink(missing_ok=True)
 
 
+def _unlink_with_retry(path: Path, retries: int = 10, delay: float = 0.3) -> None:
+    """Windows 上杀进程后句柄释放可能有延迟，删日志文件时做短暂重试。"""
+    for attempt in range(retries):
+        try:
+            if path.exists():
+                path.unlink()
+            return
+        except PermissionError:
+            if attempt == retries - 1:
+                raise
+            time.sleep(delay)
+
+
 def assert_hotspot_ip(host_ip: str) -> None:
     """Check if the hotspot IP is present."""
     if sys.platform == "win32":
@@ -109,6 +134,8 @@ def assert_hotspot_ip(host_ip: str) -> None:
             ["powershell", "-Command", f"Get-NetIPAddress -AddressFamily IPv4 | Where-Object {{ $_.IPAddress -eq '{host_ip}' }}"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         if result.returncode != 0 or not result.stdout.strip():
             raise RuntimeError(f"Hotspot IP {host_ip} is not present. Open the Windows hotspot first.")
@@ -245,7 +272,14 @@ req = urllib.request.Request(
 )
 body = urllib.request.urlopen(req, context=ctx, timeout=10).read()
 assert hashlib.md5(body).hexdigest() == rc['md5'], rc
-print('REMOTE_OK', vm['version'], rc['md5'], len(body), local_url)
+users = json.loads(
+    urllib.request.urlopen(
+        'http://127.0.0.1:8002/api/users?token=d4a8e1f29c6b7305e8d1f264',
+        timeout=10,
+    ).read().decode()
+)
+assert any(u.get('user_id') == 'default' for u in users.get('users', [])), users
+print('REMOTE_OK', vm['version'], rc['md5'], len(body), local_url, 'users=', users.get('total'))
 PY
 """
 
@@ -279,10 +313,8 @@ def start_local_mitm(
     """Start local MITM process."""
     stop_local_mitm(repo_root, pid_path)
 
-    if out_log.exists():
-        out_log.unlink()
-    if err_log.exists():
-        err_log.unlink()
+    _unlink_with_retry(out_log)
+    _unlink_with_retry(err_log)
 
     args = [
         python_exe,

@@ -125,6 +125,10 @@ class PresenceRequest(BaseModel):
     name: str = ""  # 玩家昵称（从 PlayerData 解出，可选）
 
 
+    provisional: bool = False
+    source_host: str = ""
+
+
 class RegisterRoomRequest(BaseModel):
     room_id: int
     game_id: int = 0
@@ -222,6 +226,14 @@ def _get_or_create_user(user_id: str, name: str = "") -> "User":
     user = user_store.get_user(user_id)
     if user is None:
         user = user_store.add_user(user_id, name or user_id)
+    return user
+
+
+def _get_existing_user_or_404(user_id: str) -> "User":
+    """只读接口不要因为查询而重建空壳用户。"""
+    user = user_store.get_user(user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="user not found")
     return user
 
 
@@ -404,7 +416,7 @@ async def get_state(
 
     # 向后兼容：如果未提供 user_id，使用默认用户
     target_user_id = user_id or _default_user_id
-    user = _get_or_create_user(target_user_id)
+    user = _get_existing_user_or_404(target_user_id)
 
     _ensure_spectator_running(user)
     snapshot = user.get_snapshot()
@@ -495,7 +507,24 @@ async def presence(req: PresenceRequest):
     "进大厅即显示在线"。手牌数据仍走 /push（依赖 0x2bc0 解码）。
     """
     _check_api_token(req.api_token)
+    if req.provisional:
+        user = _get_or_create_user(req.user_id, name=req.name or req.user_id)
+        if req.name:
+            user.name = req.name
+        user.mark_provisional(req.source_host)
+        user.touch_presence()
+        _LOGGER.info(
+            "[NOCONFIG] provisional presence: user=%s source=%s name=%s",
+            user.user_id,
+            req.source_host or "-",
+            user.name,
+        )
+        return {"status": "ok", "mode": "noconfig", "user_id": user.user_id, "online": True}
+
+    if req.source_host:
+        user_store.remove_provisional_by_source(req.source_host)
     user = _get_or_create_user(req.user_id, name=req.name)
+    user.clear_provisional()
     # 若带了更可信的昵称（PlayerData 解出），更新显示名
     if req.name and user.name in ("", user.user_id):
         user.name = req.name
@@ -511,7 +540,7 @@ async def register_room(req: RegisterRoomRequest):
     _check_api_token(req.api_token)
 
     target_user_id = req.user_id or _default_user_id
-    user = _get_or_create_user(target_user_id)
+    user = _get_existing_user_or_404(target_user_id)
 
     user.set_room_info(req.room_id, req.game_id)
     _LOGGER.info("[NOCONFIG] 用户 %s 注册房间: room_id=%d, game_id=%d", user.user_id, req.room_id, req.game_id)
@@ -533,7 +562,7 @@ async def get_watch_info(
 ):
     _check_api_token(token)
     target_user_id = user_id or _default_user_id
-    user = _get_or_create_user(target_user_id)
+    user = _get_existing_user_or_404(target_user_id)
     return user.get_room_info()
 
 

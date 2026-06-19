@@ -19,6 +19,7 @@ _LOGGER = logging.getLogger("remote.noconfig.user_store")
 
 # 在线判定阈值：超过该秒数没有任何新数据则视为离线（需求：10 分钟）
 ONLINE_TTL_SECONDS = 600.0
+PROVISIONAL_ONLINE_TTL_SECONDS = 30.0
 
 
 class User:
@@ -36,6 +37,9 @@ class User:
         # presence 时间戳：最近一次"活跃"信号（进大厅/进游戏），独立于实际手牌推送。
         # 用于"进大厅即在线"——此时可能还没有任何 0x2bc0 手牌数据。
         self.presence_ts = 0.0
+        self.presence_ttl_seconds = ONLINE_TTL_SECONDS
+        self.is_provisional = False
+        self.provisional_source = ""
         # 每个用户独立的状态存储
         self.state_store = StateStore()
         # spectator 进程（每个用户可独立启动）
@@ -54,6 +58,7 @@ class User:
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "is_online": self.is_online(),
+            "is_provisional": self.is_provisional,
             # 最近一次收到数据的时间戳与距今秒数（前端展示"X 分钟前在线"）
             "last_seen_ts": last_seen if last_seen > 0 else None,
             "last_seen_ago": last_seen_ago,
@@ -63,6 +68,16 @@ class User:
         """标记用户活跃（进大厅/进游戏的 presence 信号）。"""
         self.presence_ts = time.time()
         self.updated_at = self.presence_ts
+
+    def mark_provisional(self, source: str = ""):
+        self.is_provisional = True
+        self.provisional_source = source or ""
+        self.presence_ttl_seconds = PROVISIONAL_ONLINE_TTL_SECONDS
+
+    def clear_provisional(self):
+        self.is_provisional = False
+        self.provisional_source = ""
+        self.presence_ttl_seconds = ONLINE_TTL_SECONDS
 
     def last_seen_ts(self) -> float:
         """最近一次活跃时间戳：取实际数据推送与 presence 信号的较大者。无则返回 0。"""
@@ -77,7 +92,7 @@ class User:
         （5s），仅用于驱动 spectator 的启动/停止判断，不适合作为在线展示阈值。
         """
         last_seen = self.last_seen_ts()
-        if last_seen > 0 and (time.time() - last_seen) < ONLINE_TTL_SECONDS:
+        if last_seen > 0 and (time.time() - last_seen) < self.presence_ttl_seconds:
             return True
         if self.spectator_proc is not None and self.spectator_proc.poll() is None:
             return True
@@ -178,15 +193,45 @@ class UserStore:
         with self._users_lock:
             return self._users.get(user_id)
 
+    def _prune_expired_provisionals_locked(self) -> int:
+        now = time.time()
+        removed_ids = []
+        for user_id, user in list(self._users.items()):
+            if not user.is_provisional:
+                continue
+            last_seen = user.last_seen_ts()
+            if last_seen <= 0 or (now - last_seen) >= user.presence_ttl_seconds:
+                removed_ids.append(user_id)
+                del self._users[user_id]
+        for user_id in removed_ids:
+            _LOGGER.info("[UserStore] pruned expired provisional user: %s", user_id)
+        return len(removed_ids)
+
     def get_all_users(self) -> list:
         """获取所有用户列表"""
         with self._users_lock:
+            self._prune_expired_provisionals_locked()
             return [user.to_dict() for user in self._users.values()]
+
+    def remove_provisional_by_source(self, source: str) -> int:
+        if not source:
+            return 0
+        removed_ids = []
+        with self._users_lock:
+            for user_id, user in list(self._users.items()):
+                if user.is_provisional and user.provisional_source == source:
+                    removed_ids.append(user_id)
+            for user_id in removed_ids:
+                del self._users[user_id]
+        for user_id in removed_ids:
+            _LOGGER.info("[UserStore] removed provisional user: %s source=%s", user_id, source)
+        return len(removed_ids)
 
     def search_users(self, keyword: str) -> list:
         """按名称搜索用户（不区分大小写）"""
         keyword = keyword.lower()
         with self._users_lock:
+            self._prune_expired_provisionals_locked()
             return [
                 user.to_dict()
                 for user in self._users.values()
@@ -211,6 +256,7 @@ class UserStore:
     def get_online_users(self) -> list:
         """获取在线用户列表"""
         with self._users_lock:
+            self._prune_expired_provisionals_locked()
             return [
                 user.to_dict()
                 for user in self._users.values()
@@ -220,6 +266,7 @@ class UserStore:
     def get_user_count(self) -> int:
         """获取用户总数"""
         with self._users_lock:
+            self._prune_expired_provisionals_locked()
             return len(self._users)
 
     def get_default_user(self) -> Optional[User]:

@@ -230,7 +230,8 @@ class LobbyS2CRewriter:
 
     def __init__(self, ecs_ip: str, lobby_ports: tuple[int, ...] = DEFAULT_LOBBY_PORTS,
                  game_proxy_manager=None, rewrite_port: int | None = None,
-                 on_player_data=None, lobby_tap=None, tap_port: int = 0):
+                 on_player_data=None, lobby_tap=None, tap_port: int = 0,
+                 source_host: str = ""):
         self.ecs_ip = ecs_ip
         self.lobby_ports = lobby_ports
         self.game_proxy_manager = game_proxy_manager  # DynamicGameProxyManager 实例
@@ -244,6 +245,7 @@ class LobbyS2CRewriter:
         self._player_data_fired = False
         self._lobby_tap = lobby_tap
         self._tap_port = tap_port
+        self._source_host = source_host or ""
         self._user_id = ""
 
     def feed(self, data: bytes) -> bytes:
@@ -381,6 +383,9 @@ class LobbyS2CRewriter:
                             logger.debug("[lobby] tap user_id bind failed: %s", exc)
                     if self.game_proxy_manager is not None:
                         self.game_proxy_manager.set_user_id(self._user_id)
+                    info = dict(info)
+                    if self._source_host:
+                        info.setdefault("source_host", self._source_host)
                     self._on_player_data(info)
             except Exception as e:
                 logger.debug("[lobby] PlayerData parse/presence failed: %s", e)
@@ -782,7 +787,13 @@ class TcpProxy:
                              daemon=True).start()
 
     def _handle_client(self, client: socket.socket, addr) -> None:
-        rewriter = self.s2c_rewriter() if callable(self.s2c_rewriter) else None
+        if callable(self.s2c_rewriter):
+            try:
+                rewriter = self.s2c_rewriter(addr)
+            except TypeError:
+                rewriter = self.s2c_rewriter()
+        else:
+            rewriter = None
         # 每条连接独立的 on_bytes：游服解码器/tap 不可跨连接共用（旧 session key 污染根因）。
         if self.on_bytes_factory is not None:
             on_bytes = self.on_bytes_factory()
@@ -823,6 +834,10 @@ class TcpProxy:
                 if not data:
                     break
                 total += len(data)
+                if total == len(data):
+                    peer = addr[0] if addr else "?"
+                    logger.debug("[proxy %d][%s] %s %s first chunk %dB",
+                                 self.listen_port, self.diag_tag, peer, direction, len(data))
                 if on_bytes:
                     try:
                         on_bytes(direction, data)
@@ -834,10 +849,12 @@ class TcpProxy:
         except Exception:
             pass
         finally:
-            if direction == "S->C" and total:
-                peer = addr[0] if addr else "?"
-                logger.debug("[proxy %d][%s] %s session ended, S->C %dB total",
-                             self.listen_port, self.diag_tag, peer, total)
+            # 诊断：无条件记录两个方向的字节总数（含 0），用于判定大厅上游是否响应。
+            # C->S total = 手机发出的字节数；S->C total = 上游回发的字节数。
+            # 若 C->S>0 且 S->C=0 → 上游接受连接却不回包；若 C->S=0 → 手机未发登录包。
+            peer = addr[0] if addr else "?"
+            logger.debug("[proxy %d][%s] %s %s session ended, %dB total",
+                         self.listen_port, self.diag_tag, peer, direction, total)
             for s in (src, dst):
                 try:
                     s.close()
@@ -856,7 +873,8 @@ def build_lobby_proxy(listen_host: str, listen_port: int, ecs_ip: str,
                       api_token: str = "",
                       on_connect=None) -> TcpProxy:
     """大厅代理工厂：S→C 改写 RespSRSAddr.szIP → ecs_ip, sPort → rewrite_port。"""
-    def _make_rewriter():
+    def _make_rewriter(addr=None):
+        source_host = addr[0] if addr else ""
         tap = None
         if relay_push_url:
             tap = GameTapDecoder(state_store=None, local_player=1,
@@ -869,7 +887,8 @@ def build_lobby_proxy(listen_host: str, listen_port: int, ecs_ip: str,
             rewrite_port=rewrite_port,
             on_player_data=on_player_data,
             lobby_tap=tap,
-            tap_port=listen_port)
+            tap_port=listen_port,
+            source_host=source_host)
 
     return TcpProxy(
         listen_host, listen_port,
@@ -1122,47 +1141,66 @@ def _selftest() -> None:
 # ─── ECS 部署入口 ────────────────────────────────────────────────────────────
 
 def _make_presence_reporter(presence_url: str, api_token: str):
-    """构造 presence 回调：PlayerData(sessionid+nickname) → POST /presence。
-
-    按 srs_sessionid(hex) 作为 user_id，让"手机进游戏即在多用户页显示在线"。
-    在代理 S→C 线程内调用，requests 短超时，避免阻塞数据泵。
-    """
+    """Build a presence callback that posts lobby/game identity events to /presence."""
     import requests
+
+    def _pending_user_id(host: str, listen_port: int) -> str:
+        host = (host or "unknown").replace(":", "_")
+        return f"__pending__:{host}:{listen_port}"
 
     def _report(info: dict) -> None:
         user_id = info.get("user_id", "")
         if not user_id:
-            sid = info.get("sessionid", b"")
-            if not sid:
-                return
-            user_id = sid.hex() if isinstance(sid, (bytes, bytearray)) else str(sid)
+            if info.get("provisional"):
+                user_id = _pending_user_id(
+                    info.get("source_host", ""),
+                    int(info.get("listen_port", 0) or 0),
+                )
+            else:
+                sid = info.get("sessionid", b"")
+                if not sid:
+                    return
+                user_id = sid.hex() if isinstance(sid, (bytes, bytearray)) else str(sid)
         name = info.get("nickname", "") or info.get("name", "") or ""
+        provisional = bool(info.get("provisional"))
+        source_host = info.get("source_host", "") or ""
         try:
             requests.post(
                 presence_url,
-                json={"api_token": api_token, "user_id": user_id, "name": name},
+                json={
+                    "api_token": api_token,
+                    "user_id": user_id,
+                    "name": name,
+                    "provisional": provisional,
+                    "source_host": source_host,
+                },
                 timeout=3,
             )
-            logger.info("[presence] 上报在线: user=%s name=%s", user_id[:12], name)
+            logger.info("[presence] report online: user=%s name=%s provisional=%s", user_id[:12], name, provisional)
         except Exception as e:
-            logger.debug("[presence] 上报失败: %s", e)
+            logger.debug("[presence] report failed: %s", e)
 
     return _report
 
 
-def _make_lobby_connect_reporter(presence_reporter):
-    """大厅连接日志（不创建 default 用户）。
 
-    历史：曾经为了"PlayerData 解析失败也能看到连接"硬编码 user_id=default 兜底，
-    但 nick_len 用 <H 读的 bug 修好后（[memory:srs-cfb-and-string-prefix-fix]），
-    PlayerData 总能解出真实 sessionid + nickname，不再需要假用户占位——
-    保留它只会让 admin 上同时显示真实玩家 + 多余的 "default lobby x.x.x.x:5748"。
-    现在只打日志，不上报 presence。
-    """
+def _make_lobby_connect_reporter(presence_reporter):
+    """Lobby connect callback: create a short-lived provisional online user."""
+
     def _report(listen_port: int, addr) -> None:
         host = addr[0] if addr else "unknown"
-        logger.info("[lobby] 新连接: %s:%d (等待 PlayerData 解析创建真实用户)",
-                    host, listen_port)
+        logger.info(
+            "[lobby] new connection: %s:%d (waiting for PlayerData to resolve identity)",
+            host,
+            listen_port,
+        )
+        if presence_reporter is not None:
+            presence_reporter({
+                "provisional": True,
+                "source_host": host,
+                "listen_port": listen_port,
+                "name": f"connecting {host}",
+            })
 
     return _report
 

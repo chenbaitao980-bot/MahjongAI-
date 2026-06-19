@@ -1417,6 +1417,81 @@ for f in $(cd remote/noconfig && find . -name '*.py'); do
 done
 ```
 
+### 16.6 `restart_hotspot_mitm_and_ecs.bat` 的真实行为（2026-06-19 校验）
+
+仓库根目录的 `restart_hotspot_mitm_and_ecs.bat` **不是**直接调 PowerShell，
+而是包装 `scripts/restart_hotspot_mitm_and_ecs.py`：
+
+```bat
+@echo off
+setlocal
+python "%~dp0scripts\restart_hotspot_mitm_and_ecs.py" %*
+...
+```
+
+这意味着后续日常恢复时，**双击 bat 即可**，它会按下面顺序处理：
+
+1. 先检查本机热点 IP `192.168.137.1` 是否存在；不存在则直接失败退出
+2. 杀掉本机旧的 `run_hijack.py` / `setup_mitm.py` Python 进程
+3. 重新启动本机热点 MITM（443 + `192.168.137.1:53` + `DnsDivert`）
+4. 本机自检 `https://127.0.0.1/hotfix_update ...`
+5. 打包并上传：
+   - `remote/noconfig/`
+   - `remote/relay/`
+   - `apk/game_base.apk`
+6. 远端重启：
+   - `mahjong-mitm-hotupdate`
+   - `mahjong-tcp-proxy`
+   - `mahjong-relay-noconfig`
+7. 远端再做一次 `REMOTE_OK` 热更链自检
+
+**结论**：对这次“热点热更 + noconfig ECS”链路来说，后续你只跑
+`restart_hotspot_mitm_and_ecs.bat` 就够了，它会把这条链上该杀的本地 MITM 进程、
+该重启的 ECS 三个 systemd 服务都重启掉。
+
+**边界也必须记住**：
+
+- 它不是“清空整台机器全部资源”；只处理匹配 `run_hijack.py/setup_mitm.py` 的本地 Python 进程
+- 它不会重启或同步 `remote/srs_spectator/`、`remote/extractor/`、`remote/vpn/` 等未打包目录
+- 它要求热点先开起来；没开热点时会在第 1 步就停住
+
+### 16.7 2026-06-19 本次 bug 根因：热点热更偶发卡死不是 ECS 挂，而是本机回源被代理污染
+
+这次“重进游戏后热变更偶尔卡住/不触发”的根因，最终确认属于 **E. Implicit Assumption**：
+`setup_mitm.py::_origin_fetch()` 默认相信主机环境是“直连公网”的，但实际 Windows 热点机上
+常驻了系统代理/环境代理，导致回源请求偶尔被带到本地代理端口。
+
+**现场证据**：
+
+- 本地日志曾出现 `ProxyError`
+- 目标代理是 `127.0.0.1:7897`
+- 随后同一批请求出现 `origin failed status=502/404`
+- 这会让 `version.manifest / project.manifest / CDN 文件` 的透明回源不完整，从而表现成
+  “热更偶发卡住”、“本地校验资源卡住”或“这次没触发热更”
+
+**容易误判的点**：
+
+- ECS 服务其实是正常的，问题不在远端服务是否 `active`
+- 热点热更是否触发，前提是手机真的走了本机热点 MITM + `DnsDivert`
+- 只看 ECS `systemctl active` 会产生假安全感；真正决定热更是否稳定的是
+  本机 443/53/WinDivert 是否起来，以及回源是否被代理污染
+
+**最终修复**：
+
+- 在 `remote/noconfig/hijack/setup_mitm.py::_origin_fetch()` 中改为：
+  `requests.Session().trust_env = False`
+- 强制热点 MITM 回源忽略系统/环境代理，永远直连真实 CDN
+
+**防复发规则**：
+
+- 任何“本机 MITM / 回源 / 透明代理”代码，默认都要假设宿主机可能挂着代理
+- 这类回源请求必须显式禁用 `HTTP_PROXY/HTTPS_PROXY`
+- 判断“热更链是否恢复”时，必须同时看：
+  - 本机 `hotspot_mitm_bg.err.log`
+  - 本机 `443` / `192.168.137.1:53`
+  - ECS `mahjong-mitm-hotupdate` / `mahjong-tcp-proxy` / `mahjong-relay-noconfig`
+  - 是否出现新的 `/hotfix_update -> version.manifest -> project.manifest` 连续日志
+
 ---
 
 ## 17. ECS 故障兜底（noconfig Path Y）

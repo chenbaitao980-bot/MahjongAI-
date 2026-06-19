@@ -343,7 +343,11 @@ def patch_netconf(raw_luac: bytes, ecs_ip: str, *, key: bytes = KEY,
 
     1) LOCAL_TCP_LIST[group_id] 大厅块：in-place 把真服 47.96.101.155:5748/5749
        改写为 ECS:5748/5749，块里**不再含真服**。
-    2) **不再注入** LOCAL_TCP_LIST_50[group_id]——5045 走普通路径已是 ECS 单点。
+    2) **注入** LOCAL_TCP_LIST_50[group_id]=ECS——让 NetEngine.getTcpConnectInfoByGroupId
+       的 `_50` 分支命中 `return list[1]`，**确定性返回 ECS、跳过 getSRSConfigListFromFile
+       的 srslist 缓存混入与 math.random**（见 06-19-noconfig-ecs-intermittent-routing
+       实机根因：srslist{5045}.json 把真服条目追加进 list，random 会抽中真服绕过 ECS，
+       表现为"重进几次才连上 ECS"）。
     3) LOCAL_TCP_LIST_50[5067/5167] 金币游服：改写为单项 list[1] = ECS:ecs_listen_port，
        由 ECS 代理转发到原真服 7777，块里**不再含真服**。
     """
@@ -356,6 +360,9 @@ def patch_netconf(raw_luac: bytes, ecs_ip: str, *, key: bytes = KEY,
                 f"未在 LOCAL_TCP_LIST[{group_id}] 块中找到真服 IP {real_ip}，"
                 "请确认 NetConf 结构或 group_id"
             )
+    # 注入 LOCAL_TCP_LIST_50[group_id]=ECS：钉死 _50 分支，跳过 srslist 随机污染。
+    new_source, ninj = _inject_srs50_block(new_source, ecs_ip, group_id, TAIZHOU_LOBBY_PORTS)
+    logger.info("[netconf] _50 注入 [5045]=ECS x%d -> %s", ninj, ecs_ip)
     # 把 _50 里硬编码真服游服（金币局 5067/5167）改成 ECS 单点单条。
     new_source, nrs = _patch_srs50_realservers(new_source, ecs_ip)
     logger.info("[netconf] _50 真服游服改写 %d 个 -> ECS 单点 %s", nrs, ecs_ip)
@@ -373,56 +380,79 @@ def patch_netconf(raw_luac: bytes, ecs_ip: str, *, key: bytes = KEY,
         )
     if ecs_ip not in ecs_block:
         raise AssertionError(f"改写后 {group_id} 块未含 ECS IP")
-    # 校验：LOCAL_TCP_LIST_50[group_id] **不应**存在（已删除注入）
+    # 校验：LOCAL_TCP_LIST_50[group_id] **必须**存在且只含 ECS（钉死 _50 分支，跳过 srslist 随机）
     m50 = re.search(r"LOCAL_TCP_LIST_50\s*=\s*\{", roundtrip)
-    if m50:
-        # 取 _50 表整体范围（花括号配平），仅在表内检查
-        brace = roundtrip.find("{", m50.start())
-        depth = 0
-        j = brace
-        while j < len(roundtrip):
-            if roundtrip[j] == "{":
-                depth += 1
-            elif roundtrip[j] == "}":
-                depth -= 1
-                if depth == 0:
+    if not m50:
+        raise AssertionError("LOCAL_TCP_LIST_50 表缺失，无法注入 [group_id]=ECS")
+    # 取 _50 表整体范围（花括号配平），仅在表内检查
+    brace = roundtrip.find("{", m50.start())
+    depth = 0
+    j = brace
+    while j < len(roundtrip):
+        if roundtrip[j] == "{":
+            depth += 1
+        elif roundtrip[j] == "}":
+            depth -= 1
+            if depth == 0:
+                break
+        j += 1
+    seg = roundtrip[brace:j + 1]
+    # [group_id] 必须存在
+    mblk = re.search(r"\[\s*%d\s*\]\s*=\s*\{" % group_id, seg)
+    if not mblk:
+        raise AssertionError(
+            f"LOCAL_TCP_LIST_50[{group_id}] 未注入（_50 分支不会命中，仍走 srslist 随机）"
+        )
+    # 校验 [group_id] 块只含 ECS、不含真服
+    sub_brace = seg.find("{", mblk.end() - 1)
+    d = 0
+    k = sub_brace
+    while k < len(seg):
+        c = seg[k]
+        if c == "{":
+            d += 1
+        elif c == "}":
+            d -= 1
+            if d == 0:
+                break
+        k += 1
+    g_block = seg[sub_brace:k + 1]
+    if ecs_ip not in g_block:
+        raise AssertionError(f"LOCAL_TCP_LIST_50[{group_id}] 必须含 ECS")
+    if real_ip in g_block:
+        raise AssertionError(
+            f"LOCAL_TCP_LIST_50[{group_id}] 不应含真服 {real_ip}（必须 ECS 单点）"
+        )
+    # 校验：5067/5167 列表只含 ECS、不含真服
+    for gid, (real_host, _real_port, _ecs_port) in SRS50_REMAP.items():
+        mblk = re.search(r"\[\s*%d\s*\]\s*=\s*\{" % gid, seg)
+        if not mblk:
+            continue
+        sub_brace = seg.find("{", mblk.end() - 1)
+        d = 0
+        k = sub_brace
+        while k < len(seg):
+            c = seg[k]
+            if c == "{":
+                d += 1
+            elif c == "}":
+                d -= 1
+                if d == 0:
                     break
-            j += 1
-        seg = roundtrip[brace:j + 1]
-        if re.search(r"\[\s*%d\s*\]" % group_id, seg):
+            k += 1
+        block_body = seg[sub_brace:k + 1]
+        if ecs_ip not in block_body:
             raise AssertionError(
-                f"LOCAL_TCP_LIST_50[{group_id}] 不应存在（5045 走普通路径，ECS 单点）"
+                f"LOCAL_TCP_LIST_50[{gid}] 必须含 ECS"
             )
-        # 校验：5067/5167 列表只含 ECS、不含真服
-        for gid, (real_host, _real_port, _ecs_port) in SRS50_REMAP.items():
-            mblk = re.search(r"\[\s*%d\s*\]\s*=\s*\{" % gid, seg)
-            if not mblk:
-                continue
-            sub_brace = seg.find("{", mblk.end() - 1)
-            d = 0
-            k = sub_brace
-            while k < len(seg):
-                c = seg[k]
-                if c == "{":
-                    d += 1
-                elif c == "}":
-                    d -= 1
-                    if d == 0:
-                        break
-                k += 1
-            block_body = seg[sub_brace:k + 1]
-            if ecs_ip not in block_body:
-                raise AssertionError(
-                    f"LOCAL_TCP_LIST_50[{gid}] 必须含 ECS"
-                )
-            if real_host in block_body:
-                raise AssertionError(
-                    f"LOCAL_TCP_LIST_50[{gid}] 不应再含真服 {real_host}（降级形态：ECS 单点）"
-                )
-    logger.info("[netconf] patched (ECS-only): LOCAL_TCP_LIST[%d] in-place x%d + _50 ECS 单点x%d -> %s",
-                group_id, n, nrs, ecs_ip)
+        if real_host in block_body:
+            raise AssertionError(
+                f"LOCAL_TCP_LIST_50[{gid}] 不应再含真服 {real_host}（降级形态：ECS 单点）"
+            )
+    logger.info("[netconf] patched (ECS-only): LOCAL_TCP_LIST[%d] in-place x%d + _50 注入x%d + _50 真服游服x%d -> %s",
+                group_id, n, ninj, nrs, ecs_ip)
 
-    return PatchResult(source, new_source, n + nrs, new_luac)
+    return PatchResult(source, new_source, n + ninj + nrs, new_luac)
 
 
 def _extract_block(source: str, group_id: int, prefer_ip: str | None = None) -> str:

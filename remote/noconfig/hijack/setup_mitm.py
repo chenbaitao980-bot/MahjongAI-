@@ -321,8 +321,11 @@ class MitmAssets:
     #   +2000 (06-19) 5045/5067/5167 全回滚为 ECS 单点(取消真服 fallback);bump 让
     #         已经热更过 +1000 版本的手机重下新 NetConf,否则手机本地 NOUPDATE 不重下、
     #         继续用 Path Y 版 NetConf(真服+ECS 并存)、~50% 抽真服绕过 ECS tcp_proxy。
+    #   +3000 (06-19) 注入 LOCAL_TCP_LIST_50[5045]=ECS,钉死 NetEngine _50 分支跳过
+    #         srslist{5045}.json 缓存随机污染(实机根因:重进几次才连上 ECS);bump 让
+    #         已热更过 +2000 版本的手机重下新 NetConf,否则本地 NOUPDATE 继续被 srslist 污染。
     #   未来 NetConf 内容变化时必须再 bump build 偏移,否则手机感知不到。
-    _VERSION_SEGMENT_OFFSETS = (1, 5, 9, 2000)
+    _VERSION_SEGMENT_OFFSETS = (1, 5, 9, 3000)
     # 拿不到真实线上版本时的静态兜底支配版本（4 段、每段都远大于任何现实版本）。
     _FALLBACK_DOMINATE_VERSION = "99.99.99.9999"
 

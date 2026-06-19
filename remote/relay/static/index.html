@@ -47,6 +47,10 @@
   .tile.small .suit { font-size: 9px; margin-top: 2px; }
   .tile.back { background: linear-gradient(135deg, #3a7d3a, #2c5e2c); border-color: #244a24; }
   .tile.drawn { outline: 2px solid var(--accent); outline-offset: 1px; }
+  /* 财神红框：手牌中与 snap.baida_tile 相同的牌外面套一圈醒目红边。
+     用 box-shadow 而非 outline 避免和 .drawn 的 outline 互相覆盖；
+     同时摸牌+财神时两个效果叠加可见。 */
+  .tile.caishen { box-shadow: 0 0 0 3px #ff2d2d, 0 1px 0 #b8bcc4, 0 2px 4px rgba(0,0,0,.3); }
   .meld { display: inline-flex; gap: 3px; padding: 4px; margin: 0 8px 6px 0;
     background: var(--panel2); border-radius: 6px; }
   .row { display: flex; gap: 22px; flex-wrap: wrap; }
@@ -120,7 +124,7 @@ function parseTile(t) {
 function tileEl(t, opts={}) {
   const { num, suit } = parseTile(t);
   const el = document.createElement('div');
-  el.className = 'tile ' + suit + (opts.small ? ' small' : '') + (opts.drawn ? ' drawn' : '');
+  el.className = 'tile ' + suit + (opts.small ? ' small' : '') + (opts.drawn ? ' drawn' : '') + (opts.caishen ? ' caishen' : '');
   if (suit === 'z') {
     el.innerHTML = '<span class="num">' + (HONOR[num] || '?') + '</span>';
   } else {
@@ -176,10 +180,12 @@ function render(snap) {
   handBox.innerHTML = '';
   if (!hand.length) { handBox.innerHTML = '<span class="empty">（暂无手牌，进入一局后出现）</span>'; }
   let drawnMarked = false;
+  const baida = snap.baida_tile;
   hand.forEach(t => {
     const isDrawn = (!drawnMarked && drawn && String(t) === String(drawn));
     if (isDrawn) drawnMarked = true;
-    handBox.appendChild(tileEl(t, { drawn: isDrawn }));
+    const isCaishen = !!(baida && String(t) === String(baida));
+    handBox.appendChild(tileEl(t, { drawn: isDrawn, caishen: isCaishen }));
   });
   const handCount = hand.length || me.hand_count || snap.hand_count || 0;
   setText('handcount', handCount ? ('· ' + handCount + ' 张') : '');

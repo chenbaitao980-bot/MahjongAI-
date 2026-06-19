@@ -68,14 +68,8 @@ _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..",
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
-from remote.noconfig.hijack.manifest_forge import (
-    discover_file_key_by_basename,
-    forge_manifest_full,
-)
+from remote.noconfig.hijack.manifest_forge import forge_manifest_full
 from remote.noconfig.hijack.netconf_patch import patch_from_apk, wrap_luac, KEY
-from remote.noconfig.hijack.netengine_patch import (
-    patch_from_apk as patch_netengine_from_apk,
-)
 
 logger = logging.getLogger("remote.noconfig.hijack.setup_mitm")
 
@@ -115,12 +109,6 @@ NETCONF_FILE_KEY = NETCONF_FILE_KEY_DEFAULT
 RESENSURE_FILE_KEY = "src/app/hotupdate/lobby/ResEnsure.luac"
 RESCHECKER_FILE_KEY = "src/app/hotupdate/lobby/ResChecker.luac"
 
-# NetEngine.luac 在 manifest file_list 里的 key（Path Y ECS 故障兜底注入）。
-# 默认按小写 net 约定（与 NetConf 同款大小写规则）；若线上 manifest 用别的大小写
-# 则由 _find_netengine_key 在运行时按 case-insensitive 命中实际 key。
-NETENGINE_FILE_KEY_DEFAULT = "src/app/net/NetEngine.luac"
-NETENGINE_FILE_KEY = NETENGINE_FILE_KEY_DEFAULT
-
 # 是否注入修改版 ResEnsure/ResChecker（跳过 clean_res 的「快速」热更）。
 # 默认 False —— 2026-06-15 排查「热更后黑屏」定位到：跳过 clean_res 会在
 # 手机本地版本回落到 APK 基线（1.0.0.59，与线上 1.0.1.1776 差几千文件）时，
@@ -150,15 +138,6 @@ return ResEnsure
 def _find_netconf_key(file_list: dict) -> str | None:
     """在 file_list 里 case-insensitive 找到 NetConf 条目的实际 key（保留原始大小写）。"""
     want = NETCONF_FILE_KEY_DEFAULT.lower()
-    for k in file_list:
-        if k.lower() == want:
-            return k
-    return None
-
-
-def _find_netengine_key(file_list: dict) -> str | None:
-    """在 file_list 里 case-insensitive 找到 NetEngine 条目的实际 key（保留原始大小写）。"""
-    want = NETENGINE_FILE_KEY_DEFAULT.lower()
     for k in file_list:
         if k.lower() == want:
             return k
@@ -330,8 +309,15 @@ class MitmAssets:
     # 4 段缓冲：每段加一个"略高于官方"的偏移，保证每段都 > 官方可预见未来的对应段
     # （versionLessThan 逐段只判 <，每段都 >= 即永久支配），同时位数贴近官方、不像
     # +100000 那样多一位显得像盗版。
-    #   major(+1) minor(+5) patch(+9) build(+1000)
-    _VERSION_SEGMENT_OFFSETS = (1, 5, 9, 1000)
+    #   major(+1) minor(+5) patch(+9) build(+2000)
+    #
+    # build 段偏移历史:
+    #   +1000 (06-14~06-18) 初始 Path Y 版 NetConf 部署
+    #   +2000 (06-19) 5045/5067/5167 全回滚为 ECS 单点(取消真服 fallback);bump 让
+    #         已经热更过 +1000 版本的手机重下新 NetConf,否则手机本地 NOUPDATE 不重下、
+    #         继续用 Path Y 版 NetConf(真服+ECS 并存)、~50% 抽真服绕过 ECS tcp_proxy。
+    #   未来 NetConf 内容变化时必须再 bump build 偏移,否则手机感知不到。
+    _VERSION_SEGMENT_OFFSETS = (1, 5, 9, 2000)
     # 拿不到真实线上版本时的静态兜底支配版本（4 段、每段都远大于任何现实版本）。
     _FALLBACK_DOMINATE_VERSION = "99.99.99.9999"
 
@@ -380,13 +366,6 @@ class MitmAssets:
         # 1) 改过的 NetConf.luac（台州 5045 → ECS）
         patch = patch_from_apk(self.apk_path, self.ecs_ip)
         self.netconf_luac = patch.new_luac
-
-        # 1b) 改过的 NetEngine.luac（Path Y ECS 故障兜底：fail-count 轮询 + FAIL 自重连）
-        ne_patch = patch_netengine_from_apk(self.apk_path)
-        self.netengine_luac = ne_patch.new_luac
-        self.netengine_md5 = hashlib.md5(self.netengine_luac).hexdigest()
-        self.netengine_size = len(self.netengine_luac)
-        self.netengine_name = f"{self.netengine_md5[:2]}/{self.netengine_md5}.luac"
 
         # 2)+3) 修改版 ResEnsure/ResChecker（跳过 clean_res）——仅在 INJECT_LOBBY_CHECKER
         #       为 True 时构建并注入。默认关闭：见 INJECT_LOBBY_CHECKER 常量处的黑屏说明。
@@ -449,10 +428,8 @@ class MitmAssets:
         # 7) NetConf / ResEnsure / ResChecker 文件下载基址（回源 patch 时写进 project.manifest 的 file_url）
         self.file_base = file_base
 
-        logger.info("MITM assets built: version=%s netconf=%dB md5=%s netengine=%dB md5=%s "
-                    "inject_checker=%s resensure=%dB md5=%s reschecker=%dB md5=%s",
-                    self.version, len(self.netconf_luac), self.served_md5,
-                    len(self.netengine_luac), self.netengine_md5, INJECT_LOBBY_CHECKER,
+        logger.info("MITM assets built: version=%s netconf=%dB md5=%s inject_checker=%s resensure=%dB md5=%s reschecker=%dB md5=%s",
+                    self.version, len(self.netconf_luac), self.served_md5, INJECT_LOBBY_CHECKER,
                     len(self.resensure_luac), self.resensure_md5,
                     len(self.reschecker_luac), self.reschecker_md5)
 
@@ -576,11 +553,10 @@ class MitmAssets:
 
         # ① 顶高版本（游戏据此判定有新版且之后不回滚）
         target_key = _find_netconf_key(file_list)
-        netengine_key = _find_netengine_key(file_list)
         has_lobby_checker = INJECT_LOBBY_CHECKER and (
             RESENSURE_FILE_KEY in file_list or RESCHECKER_FILE_KEY in file_list
         )
-        if not (target_key or netengine_key or has_lobby_checker):
+        if not (target_key or has_lobby_checker):
             logger.info("[patch] project.manifest has no lobby hotfix targets; pass through unchanged")
             return real_manifest_bytes
 
@@ -603,15 +579,6 @@ class MitmAssets:
             entry["size"] = self.served_size
             entry["name"] = self.served_name
             file_list[target_key] = entry
-
-        # ④b NetEngine.luac (Path Y ECS 故障兜底)：和 NetConf 同样原地改写。
-        #    NetEngine 在 lobby 热更包里，与 NetConf 同管道下发，一次热更同时注入。
-        if netengine_key:
-            ne_entry = dict(file_list[netengine_key])
-            ne_entry["md5"] = self.netengine_md5
-            ne_entry["size"] = self.netengine_size
-            ne_entry["name"] = self.netengine_name
-            file_list[netengine_key] = ne_entry
 
         # ⑤ 注入/改写 ResEnsure / ResChecker 条目 → 跳过校验本地资源（默认关闭）。
         #    INJECT_LOBBY_CHECKER=False 时保持线上原版条目不动，手机从 CDN 回源取回
@@ -644,9 +611,8 @@ class MitmAssets:
         #     file_list = forged["file_list"]
 
         logger.info(
-            "[patch] project.manifest: NetConf=%s NetEngine=%s inject_checker=%s ResEnsure=%s ResChecker=%s keys=%d",
+            "[patch] project.manifest: NetConf=%s inject_checker=%s ResEnsure=%s ResChecker=%s keys=%d",
             target_key or "-",
-            netengine_key or "-",
             INJECT_LOBBY_CHECKER,
             INJECT_LOBBY_CHECKER and RESENSURE_FILE_KEY in file_list,
             INJECT_LOBBY_CHECKER and RESCHECKER_FILE_KEY in file_list,
@@ -761,12 +727,6 @@ def make_http_handler(assets: MitmAssets, enable_origin: bool = True):
                     logger.info("[mitm] %s host=%s → NetConf.luac (%dB md5=%s)",
                                 client_ip, host, len(assets.netconf_luac), assets.served_md5)
                     self._send(assets.netconf_luac, "application/octet-stream")
-                    return
-                # NetEngine.luac (Path Y ECS 故障兜底)
-                if rel == assets.netengine_name or rel.endswith(assets.netengine_name):
-                    logger.info("[mitm] %s host=%s → NetEngine.luac (%dB md5=%s)",
-                                client_ip, host, len(assets.netengine_luac), assets.netengine_md5)
-                    self._send(assets.netengine_luac, "application/octet-stream")
                     return
                 # ResEnsure 文件（跳过校验版本）——仅在注入开启时由 PC 提供，
                 # 关闭时 name 为 None，跳过这两个分支，走回源取回原版。

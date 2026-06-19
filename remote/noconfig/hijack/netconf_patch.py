@@ -180,15 +180,17 @@ class PatchResult:
 def _patch_taizhou_block(source: str, ecs_ip: str, group_id: int = TAIZHOU_GROUP_ID,
                          real_ip: str = REAL_LOBBY_IP,
                          ports: tuple[int, ...] = TAIZHOU_LOBBY_PORTS) -> tuple[str, int]:
-    """在 LOCAL_TCP_LIST[<group_id>] = { ... } 这一块里**追加** ECS 条目。
+    """在 LOCAL_TCP_LIST[<group_id>] = { ... } 这一块里**就地把真服 IP 改写为 ECS**。
 
-    Path Y(ECS 故障兜底)策略：保留真服 47.96.101.155:5748/5749 两条原样，**追加**
-    ECS:5748/5749 两条到列表末尾。配合 NetEngine 的轮询补丁（_failCount % #list），
-    ECS 挂时 fail 计数自增 → 自动切到下一项；未挂时随机命中 ECS 概率较高（4 选 1 中
-    2 项指 ECS）但即使命中真服也照样能玩（PRD 接受"ECS 在线时收敛到真服"）。
+    降级形态（2026-06-19，记忆 ecs-failover-path-y）：原 Path Y "追加 ECS 保留真服"
+    导致 NetEngine 普通路径 `math.random(1, len)` 在 [真服, 真服, ECS, ECS] 里 ~50%
+    抽中真服 → 手机直连 7777 绕开 ECS tcp_proxy → relay 抓不到 0x2bc0、admin 看不到
+    登录态。抓牌依赖 ECS 全程在线，与"ECS 整机宕机用户能玩"互斥；选抓牌，5045
+    回滚为 ECS 单点：把块里所有 real_ip 改成 ecs_ip，端口与 id 字段保持原状，
+    列表只剩两个 ECS 条目（端口 5748/5749 用 ECS 监听复用真服端口号）。
 
     NetConf.lua 里 47.96.101.155 出现在多个区（5045/5027/5070 等），必须只动台州块。
-    幂等：若块内已经含 ecs_ip，则直接返回不重复追加。
+    幂等：若块内 real_ip 已经全部被替换为 ecs_ip，返回 (source, 0)。
     """
     # 用花括号配平精确框住整个 [group_id] = { ... } 表块（含嵌套 {id=...} 条目）。
     # 注意 NetConf 顶部有**被注释掉**的同号块（用别的 IP）；只改**含真服 IP 的真块**。
@@ -196,30 +198,14 @@ def _patch_taizhou_block(source: str, ecs_ip: str, group_id: int = TAIZHOU_GROUP
     if start is None:
         return source, 0
     block = source[start:end]
-    if ecs_ip in block:
-        return source, 0  # 幂等：已注入过
-    # 取真服块内首条的缩进作为 ECS 条目的缩进（视觉一致 + 不影响 Lua 解析）
-    indent_match = re.search(r"\n([ \t]*)\{\s*id\s*=", block)
-    indent = indent_match.group(1) if indent_match else "                    "
-    # 找到块末尾的 '}'，向前剥掉它前面的空白（含换行/缩进），保留剥掉前缀作为闭合行的前缀
-    close_idx = block.rfind("}")
-    if close_idx < 0:
-        return source, 0
-    head = block[:close_idx].rstrip()  # 去掉 '}' 前的换行/缩进
-    if not head.endswith(","):
-        head = head + ","
-    appended = "".join(
-        '\n%s{id = 0, ip = "%s", port = %d},' % (indent, ecs_ip, p)
-        for p in ports
-    )
-    # 末尾去掉最后一个逗号也合法；保留逗号在 Lua 表里同样合法（{a,b,} OK）
-    closing = block[close_idx:]                          # 通常是 '}'
-    # 用与原 '}' 同行的前缀（取原块最后一个 '\n' 后到 '}' 的空白）
-    nl = block.rfind("\n", 0, close_idx)
-    closing_prefix = block[nl:close_idx] if nl >= 0 else "\n        "
-    new_block = head + appended + closing_prefix + closing
+    if real_ip not in block:
+        return source, 0  # 幂等：已 in-place 替换过
+    # in-place 把真服 IP 改写为 ECS IP；端口与 id 字段保持，避免触动 LOCAL_TCP_LIST
+    # 其他区（块外的 real_ip 由 _find_real_block_span 已隔离）。
+    new_block = block.replace(real_ip, ecs_ip)
+    n = block.count(real_ip)
     new_source = source[:start] + new_block + source[end:]
-    return new_source, len(ports)
+    return new_source, n
 
 
 def _find_real_block_span(source: str, group_id: int, must_contain: str):
@@ -287,14 +273,13 @@ def _inject_srs50_block(source: str, ecs_ip: str, group_id: int = TAIZHOU_GROUP_
 
 
 def _patch_srs50_realservers(source: str, ecs_ip: str) -> tuple[str, int]:
-    """把 LOCAL_TCP_LIST_50 里硬编码真服游服（SRS50_REMAP 的 groupId）改成 [ECS, 真服] 两项。
+    """把 LOCAL_TCP_LIST_50 里硬编码真服游服（SRS50_REMAP 的 groupId）改成 ECS 单点单条。
 
-    Path Y(ECS 故障兜底)策略：每个金币游服 [groupId] 的 list 改写为
-        list[1] = ECS:ecs_listen_port  (优先指向 ECS，由 ECS 代理转发)
-        list[2] = 真服 ip:7777          (保留真服作为兜底)
-    NetEngine 的 _50 分支被 patch 成 `list[(_failCount % #list) + 1]`，
-    ECS 挂时 _failCount += 1 → 切到 list[2]=真服，金币局直接走真服恢复。
-    幂等：若 list 已经是两项且第 1 项 ip == ECS 则跳过。
+    降级形态（2026-06-19，记忆 ecs-failover-path-y）：原 Path Y 写成 [ECS, 真服] 两项 +
+    NetEngine `_50` 分支轮询，希望 ECS 挂时切真服恢复金币局。但抓牌依赖 ECS tcp_proxy
+    全程在线，与"切真服恢复"互斥（切了真服就抓不到 0x2bc0），同样不需要真服兜底。
+    每个金币游服 [groupId] 改写为单项 list[1] = ECS:ecs_listen_port，由 ECS 代理转发。
+    幂等：若 list 已经只含 ECS 单条且不含真服则跳过。
     """
     # 先框定 LOCAL_TCP_LIST_50 表自身的范围（[5167]/[5067] 在别的表也出现，必须限定）。
     m50 = re.search(r"LOCAL_TCP_LIST_50\s*=\s*\{", source)
@@ -315,7 +300,7 @@ def _patch_srs50_realservers(source: str, ecs_ip: str) -> tuple[str, int]:
     table = source[table_start:table_end]
 
     total = 0
-    for gid, (real_host, real_port, ecs_port) in SRS50_REMAP.items():
+    for gid, (real_host, _real_port, ecs_port) in SRS50_REMAP.items():
         m = re.search(r"\[\s*%d\s*\]\s*=\s*\{" % gid, table)
         if not m:
             continue
@@ -331,16 +316,15 @@ def _patch_srs50_realservers(source: str, ecs_ip: str) -> tuple[str, int]:
                     break
             i += 1
         block = table[brace:i + 1]
-        # 幂等：若块里同时含 ECS 与真服两项则跳过
-        if ecs_ip in block and real_host in block:
+        # 幂等：块里只含 ECS、不含真服，跳过
+        if ecs_ip in block and real_host not in block:
             continue
-        # 重写为 [ECS_entry, real_entry] 两项；保留外层缩进风格
+        # 重写为单项 [ECS_entry]；保留外层缩进风格
         new_block = (
             "{\n"
-            '        {id = 0, ip = "%s", port = %d},\n'
             '        {id = 0, ip = "%s", port = %d}\n'
             "    }"
-        ) % (ecs_ip, ecs_port, real_host, real_port)
+        ) % (ecs_ip, ecs_port)
         if new_block != block:
             table = table[:brace] + new_block + table[i + 1:]
             total += 1
@@ -354,28 +338,27 @@ def patch_netconf(raw_luac: bytes, ecs_ip: str, *, key: bytes = KEY,
                   real_ip: str = REAL_LOBBY_IP) -> PatchResult:
     """主入口：原始 NetConf.luac + ECS IP → 改写后的 NetConf.luac（含往返校验）。
 
-    Path Y(ECS 故障兜底)策略，三处改写：
-    1) LOCAL_TCP_LIST[group_id] 块：保留真服 47.96.101.155:5748/5749 + **追加** ECS:5748/5749
-       两条。NetEngine 普通路径会随机选，但叠加 srslist 缓存依旧以真服为主，4G 时 ECS
-       不可达由 NetEngine fail-count 轮询补丁切到下一项。
-    2) **不再注入** LOCAL_TCP_LIST_50[group_id]——让代码走普通 random 路径，
-       结合 (1) 的真服+ECS 列表，ECS 挂时通过 NetEngine 失败回调切真服。
-    3) LOCAL_TCP_LIST_50[5067/5167] 金币游服：列表改成 [ECS_entry, 真服_entry] 两项，
-       NetEngine `_50` 分支被 patch 成 `list[(_failCount % #list) + 1]`，
-       ECS 挂时 fail 计数自增 → 自动切到真服恢复金币局。
+    降级形态（2026-06-19，记忆 ecs-failover-path-y）：抓牌依赖 ECS tcp_proxy 全程在线，
+    与"ECS 整机宕机切真服兜底"互斥，全部回滚为 ECS 单点：
+
+    1) LOCAL_TCP_LIST[group_id] 大厅块：in-place 把真服 47.96.101.155:5748/5749
+       改写为 ECS:5748/5749，块里**不再含真服**。
+    2) **不再注入** LOCAL_TCP_LIST_50[group_id]——5045 走普通路径已是 ECS 单点。
+    3) LOCAL_TCP_LIST_50[5067/5167] 金币游服：改写为单项 list[1] = ECS:ecs_listen_port，
+       由 ECS 代理转发到原真服 7777，块里**不再含真服**。
     """
     source = unwrap_luac(raw_luac, key)
     new_source, n = _patch_taizhou_block(source, ecs_ip, group_id, real_ip)
     if n == 0:
-        # 已注入过则视为幂等成功（块里已包含 ecs_ip）
+        # 已 in-place 改写过则视为幂等成功（块里已只含 ecs_ip、不含 real_ip）
         if ecs_ip not in source:
             raise ValueError(
                 f"未在 LOCAL_TCP_LIST[{group_id}] 块中找到真服 IP {real_ip}，"
                 "请确认 NetConf 结构或 group_id"
             )
-    # 把 _50 里硬编码真服游服（金币局 5067/5167）改成 [ECS, 真服] 两项。
+    # 把 _50 里硬编码真服游服（金币局 5067/5167）改成 ECS 单点单条。
     new_source, nrs = _patch_srs50_realservers(new_source, ecs_ip)
-    logger.info("[netconf] _50 真服游服改写 %d 个 -> [ECS=%s, 真服]", nrs, ecs_ip)
+    logger.info("[netconf] _50 真服游服改写 %d 个 -> ECS 单点 %s", nrs, ecs_ip)
     new_luac = wrap_luac(new_source, key)
 
     # 往返校验：解密新 luac 必须等于我们写入的源码（容忍末尾 4 字节对齐补的 \n）
@@ -383,10 +366,10 @@ def patch_netconf(raw_luac: bytes, ecs_ip: str, *, key: bytes = KEY,
     if roundtrip.rstrip("\n") != new_source.rstrip("\n"):
         raise AssertionError("XXTEA 往返校验失败：解密新 luac 与改写源码不一致")
     ecs_block = _extract_block(roundtrip, group_id, prefer_ip=ecs_ip)
-    # Path Y: 块里**同时**含真服 IP 和 ECS IP（真服保留 + 追加 ECS）
-    if real_ip not in ecs_block:
+    # 降级形态：块里**只含 ECS、不含真服**
+    if real_ip in ecs_block:
         raise AssertionError(
-            f"改写后 {group_id} 块缺失真服 IP {real_ip}（Path Y 要求保留真服）"
+            f"改写后 {group_id} 块仍含真服 IP {real_ip}（降级形态要求 ECS 单点）"
         )
     if ecs_ip not in ecs_block:
         raise AssertionError(f"改写后 {group_id} 块未含 ECS IP")
@@ -408,9 +391,9 @@ def patch_netconf(raw_luac: bytes, ecs_ip: str, *, key: bytes = KEY,
         seg = roundtrip[brace:j + 1]
         if re.search(r"\[\s*%d\s*\]" % group_id, seg):
             raise AssertionError(
-                f"LOCAL_TCP_LIST_50[{group_id}] 不应存在（Path Y 已删除注入）"
+                f"LOCAL_TCP_LIST_50[{group_id}] 不应存在（5045 走普通路径，ECS 单点）"
             )
-        # 校验：5067/5167 列表是 [ECS, 真服] 两项
+        # 校验：5067/5167 列表只含 ECS、不含真服
         for gid, (real_host, _real_port, _ecs_port) in SRS50_REMAP.items():
             mblk = re.search(r"\[\s*%d\s*\]\s*=\s*\{" % gid, seg)
             if not mblk:
@@ -428,11 +411,15 @@ def patch_netconf(raw_luac: bytes, ecs_ip: str, *, key: bytes = KEY,
                         break
                 k += 1
             block_body = seg[sub_brace:k + 1]
-            if ecs_ip not in block_body or real_host not in block_body:
+            if ecs_ip not in block_body:
                 raise AssertionError(
-                    f"LOCAL_TCP_LIST_50[{gid}] 必须同时含 ECS 与真服两项"
+                    f"LOCAL_TCP_LIST_50[{gid}] 必须含 ECS"
                 )
-    logger.info("[netconf] patched (Path Y): LOCAL_TCP_LIST[%d] 追加 ECS x%d + _50 双 IP 改写x%d -> %s",
+            if real_host in block_body:
+                raise AssertionError(
+                    f"LOCAL_TCP_LIST_50[{gid}] 不应再含真服 {real_host}（降级形态：ECS 单点）"
+                )
+    logger.info("[netconf] patched (ECS-only): LOCAL_TCP_LIST[%d] in-place x%d + _50 ECS 单点x%d -> %s",
                 group_id, n, nrs, ecs_ip)
 
     return PatchResult(source, new_source, n + nrs, new_luac)

@@ -236,7 +236,6 @@ def _origin_fetch(host: str, path: str) -> tuple[int, bytes, str]:
 
     返回 (status_code, body, content_type)。失败/异常返回 (502, b"", "")。
     """
-    import requests
     import urllib3
     urllib3.disable_warnings()
 
@@ -245,7 +244,13 @@ def _origin_fetch(host: str, path: str) -> tuple[int, bytes, str]:
         return 502, b"", ""
     url = f"https://{real_ip}{path}"
     try:
-        r = requests.get(
+        import requests
+
+        session = requests.Session()
+        # Ignore host/system proxy settings so hotspot MITM origin fetches
+        # always go straight to the real CDN.
+        session.trust_env = False
+        r = session.get(
             url,
             headers={"Host": host},
             verify=False,

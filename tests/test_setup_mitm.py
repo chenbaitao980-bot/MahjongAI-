@@ -1,6 +1,14 @@
 import json
+import os
+import sys
 import unittest
+from unittest import mock
 
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
+
+from remote.noconfig.hijack import setup_mitm
 from remote.noconfig.hijack.setup_mitm import (
     MitmAssets,
     RESCHECKER_FILE_KEY,
@@ -162,6 +170,33 @@ class SetupMitmManifestPatchTest(unittest.TestCase):
         rv = [1, 0, 1, 1776]
         for s, r in zip(sv, rv):
             self.assertGreater(s, r, (served, "1.0.1.1776"))
+
+
+class SetupMitmOriginFetchTest(unittest.TestCase):
+    def test_origin_fetch_ignores_proxy_env(self):
+        session = mock.Mock()
+        response = mock.Mock()
+        response.status_code = 200
+        response.content = b"body"
+        response.headers = {"Content-Type": "application/test"}
+        session.get.return_value = response
+
+        with mock.patch.object(setup_mitm, "_resolve_real_ip", return_value="1.2.3.4"):
+            with mock.patch("requests.Session", return_value=session) as session_cls:
+                status, body, ctype = setup_mitm._origin_fetch(
+                    "gxb-oss.hzxuanming.com",
+                    "/yj/files/demo.bin?foo=1",
+                )
+
+        session_cls.assert_called_once_with()
+        self.assertFalse(session.trust_env)
+        session.get.assert_called_once_with(
+            "https://1.2.3.4/yj/files/demo.bin?foo=1",
+            headers={"Host": "gxb-oss.hzxuanming.com"},
+            verify=False,
+            timeout=setup_mitm.ORIGIN_TIMEOUT,
+        )
+        self.assertEqual((status, body, ctype), (200, b"body", "application/test"))
 
 
 if __name__ == "__main__":

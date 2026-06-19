@@ -1,3 +1,5 @@
+> ⚠️ **SUPERSEDED BY [06-19-anti-detection-unified](../../../06-19-anti-detection-unified/prd.md)** — 2026-06-19 合并到统一反检测任务，本文件保留作历史底料。
+
 # noconfig 反向代理方案被运营商发现的风险评估与反检测策略
 
 ## Goal

@@ -1,0 +1,5 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/tasks/archive/2026-06/06-19-render-opponent-handcards-on-page/research/poc-v5-result.md", "reason": "PoC v5 已抓到 26K/33K record 含 0x022B 帧；H16 否决论证基础"}
+{"file": "stable/protocol.py", "reason": "0x2BC0 game_event 解码器；0x022B 已在 GAME_SUB_NAMES 注册但 body 解码 stub 缺失"}
+{"file": "stable/tracker.py", "reason": "PacketStateTracker 把 ProtocolMessage 事件转 BattleState；需在此挂载 round_result 写入"}
+{"file": ".trellis/tasks/archive/2026-06/06-19-render-opponent-handcards-on-page/research/sample_record_26k.bin", "reason": "实测 26K record 样本，可用于离线开发解码器（先扫 0x022B 位置和 body 长度模式）"}

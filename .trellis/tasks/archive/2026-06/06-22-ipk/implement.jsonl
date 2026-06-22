@@ -1,0 +1,4 @@
+{"type":"task","path":".trellis/tasks/06-22-ipk/prd.md","reason":"完整需求、检测项清单、成功标准"}
+{"type":"reference","path":"apps/router_runtime/openwrt/build_ipk.sh","reason":"打包逻辑模板，build_probe_ipk.sh 复用此结构"}
+{"type":"reference","path":"apps/router_runtime/openwrt/postinst","reason":"postinst 写法参考，探针版 postinst 调用 /usr/bin/mahjong-probe"}
+{"type":"reference","path":"apps/router_runtime/openwrt/files/etc/init.d/mahjong-mitm","reason":"procd init.d 格式参考（探针包不需要常驻，了解结构即可）"}

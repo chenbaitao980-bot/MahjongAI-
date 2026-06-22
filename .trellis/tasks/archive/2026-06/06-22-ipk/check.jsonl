@@ -1,0 +1,2 @@
+{"type":"task","path":".trellis/tasks/06-22-ipk/prd.md","reason":"Acceptance Criteria 列表，验证每条是否满足"}
+{"type":"reference","path":"apps/router_runtime/openwrt/build_ipk.sh","reason":"验证 build_probe_ipk.sh 输出格式与此一致"}

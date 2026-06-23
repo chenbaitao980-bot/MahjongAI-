@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/remote-access.md", "reason": "ECS 部署规范、出口策略、服务目录结构，bootstrap 脚本必须遵守"}
+{"file": ".trellis/spec/guides/mitm-connection-stability-guide.md", "reason": "铁律1：LOCAL_TCP_LIST_50[5045] 必须只含 ECS 单值；netconf_patch 分片时仍须满足此约束"}
+{"file": ".trellis/tasks/06-22-ecs-vultr-tokyo/prd.md", "reason": "本任务完整需求：bootstrap/shard_assign/netconf pool/IP参数化/验证全部在此"}
+{"file": ".trellis/tasks/06-19-noconfig-anti-ban-risk-review/prd.md", "reason": "已归档，但 C2/C3 原始设计细节（shard hash 算法、shard_map.yaml 格式）在此"}

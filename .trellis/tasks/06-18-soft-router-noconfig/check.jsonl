@@ -1,0 +1,3 @@
+{"file": ".trellis/tasks/06-18-soft-router-noconfig/prd.md", "reason": "对照验收标准 + Definition of Done 检查交付物完整性"}
+{"file": ".trellis/tasks/archive/2026-06/06-14-srs-addr-hijack/research/hotfix-download-verify.md", "reason": "新包跑出来要保留：VERIFYPEER=0、forbid_zip、md5 算原始 luac 字节、回源真实 manifest"}
+{"file": "remote/noconfig/hijack/setup_mitm.py", "reason": "抽取后字节级 diff 比对，确认 setup-period 主流程零回归"}

@@ -1,0 +1,10 @@
+{"file": ".trellis/tasks/06-18-soft-router-noconfig/prd.md", "reason": "本任务 PRD — 抽取清单/目录结构/Windows→OpenWrt 替换/决议"}
+{"file": ".trellis/tasks/06-18-soft-router-noconfig/research/router-migration-options.md", "reason": "三种迁移路线对比 — 路线 B 最小子集的依据"}
+{"file": ".trellis/tasks/06-18-soft-router-noconfig/research/code-protection-and-packaging.md", "reason": "ipk 打包+代码保护边界（本轮不上混淆但留接口）"}
+{"file": "remote/noconfig/hijack/setup_mitm.py", "reason": "抽取主体源 — DNS responder + HTTPS + manifest 改写；新包改包内相对 import"}
+{"file": "remote/noconfig/hijack/netconf_patch.py", "reason": "抽取源 — XXTEA 解密改 IP，纯离线零外部依赖"}
+{"file": "remote/noconfig/hijack/manifest_forge.py", "reason": "抽取源 — manifest 克隆+伪造"}
+{"file": "remote/noconfig/hijack/run_hijack.py", "reason": "Windows 入口参考 — 不抽，重写为 pc-dev/run_pc.py + openwrt procd 双模"}
+{"file": "remote/noconfig/hijack/dns_divert.py", "reason": "Windows WinDivert 参考 — 不抽，OpenWrt 用 nftables redirect 规则替代"}
+{"file": ".trellis/tasks/archive/2026-06/06-14-srs-addr-hijack/prd.md", "reason": "原 setup-period MITM 设计 PRD — 各组件职责与铁律"}
+{"file": ".trellis/tasks/archive/2026-06/06-14-srs-addr-hijack/research/hotfix-download-verify.md", "reason": "热更下载链路逆向结论 — VERIFYPEER=0/无 gunzip/forbid_zip 等核心约束"}

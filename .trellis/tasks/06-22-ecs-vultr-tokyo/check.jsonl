@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/guides/mitm-connection-stability-guide.md", "reason": "验证铁律1铁律2铁律3未被破坏：单值 ECS、build offset bump、DNS 绑 0.0.0.0"}
+{"file": ".trellis/spec/backend/remote-access.md", "reason": "验证服务目录/端口/systemd 命名符合规范"}
+{"file": ".trellis/tasks/06-22-ecs-vultr-tokyo/prd.md", "reason": "逐条核对 Acceptance Criteria"}

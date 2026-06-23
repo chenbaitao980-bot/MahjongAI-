@@ -1,0 +1,5 @@
+{"file": ".trellis/tasks/06-23-mitm-exe-autostart/prd.md", "reason": "验收基线 — 七条 AC（默认建任务/可删持久/坑A不复发/清旧项/勾选态=任务态/源码态不崩/测试全绿）逐条核对"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "质量门槛 — 测试覆盖、命名、复用既有约定核查"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "核查 schtasks 失败/任务缺失路径的异常与日志是否合规"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "核查 win_task 是否复用 win_admin 的 _frozen/_exe_command 约定，未重复造轮子"}
+{"file": ".trellis/spec/guides/mitm-connection-stability-guide.md", "reason": "回归核查 — 自启改动不破坏链路自愈/热点常开形态"}

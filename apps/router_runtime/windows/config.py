@@ -23,6 +23,9 @@ HOTSPOT_GATEWAY_IP = "192.168.137.1"
 # sidecar 文件名：放在 exe / cwd 同目录，单行写一个 IP 即覆盖 ECS_IP。
 _SIDECAR_NAME = "ecs.txt"
 
+# 开机自启"首跑标记"文件名：存在 = 已默认建过一次自启，此后尊重用户选择不再覆盖。
+_AUTOSTART_MARKER = ".autostart_inited"
+
 
 def _app_dir() -> str:
     """exe 所在目录（打包后）或当前工作目录（源码态）——sidecar 在此查找。"""
@@ -44,6 +47,20 @@ def load_ecs_ip() -> str:
     except Exception as exc:
         logger.warning("读取 sidecar %s 失败，回退写死值 %s：%s", sidecar, ECS_IP, exc)
     return ECS_IP
+
+
+def autostart_was_initialized() -> bool:
+    """是否已做过一次"默认开机自启"初始化（首跑标记是否存在）。"""
+    return os.path.isfile(os.path.join(_app_dir(), _AUTOSTART_MARKER))
+
+
+def mark_autostart_initialized() -> None:
+    """落首跑标记。失败不致命（最坏下次启动再默认建一次，幂等）。"""
+    try:
+        with open(os.path.join(_app_dir(), _AUTOSTART_MARKER), "w", encoding="utf-8") as fh:
+            fh.write("1")
+    except Exception as exc:
+        logger.warning("写开机自启首跑标记失败（不致命）：%s", exc)
 
 
 def detect_hotspot_ip() -> str:

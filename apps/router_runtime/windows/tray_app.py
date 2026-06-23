@@ -2,7 +2,7 @@
 
 开箱即用流程（双击 exe → 全自动）：
   1. 未提权 → 弹 UAC 提权重启自身（绑 53/443 + WinDivert + 写 icssvc 注册表都需管理员）
-  2. 设置开机自启（仅打包 exe）
+  2. 首跑默认设开机自启（计划任务+最高权限，静默提权；仅打包 exe），并清旧 HKCU\\Run 残留
   3. 禁用热点空闲自动关闭 + 开启移动热点
   4. 起完整本地热更 MITM 链路（core.start_all：HTTPS 443 + DNS 53 + WinDivert）
   5. 起热点看门狗（常开兜底）
@@ -20,7 +20,7 @@ import sys
 import threading
 import time
 
-from windows import config, win_admin, win_hotspot
+from windows import config, win_admin, win_hotspot, win_task
 from windows.core import MitmHandles, start_all, stop_all
 
 logger = logging.getLogger("windows.tray_app")
@@ -130,7 +130,11 @@ class TrayApp:
         self._refresh_now()
 
     def _on_toggle_autostart(self, icon, item):
-        win_admin.set_autostart(not win_admin.is_autostart_enabled())
+        # 勾选/取消 = 建/删计划任务。托盘进程已是管理员，不会再弹 UAC。
+        if win_task.is_autostart_enabled():
+            win_task.disable_autostart()
+        else:
+            win_task.enable_autostart()
         icon.update_menu()
 
     def _on_quit(self, icon, item):
@@ -172,7 +176,7 @@ class TrayApp:
             pystray.MenuItem("开/关 移动热点", self._on_toggle_hotspot),
             pystray.MenuItem(
                 "开机自启", self._on_toggle_autostart,
-                checked=lambda item: win_admin.is_autostart_enabled()),
+                checked=lambda item: win_task.is_autostart_enabled()),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("退出", self._on_quit),
         )
@@ -215,8 +219,16 @@ def main() -> None:
         logger.error("提权失败/被拒绝，无法绑 53/443 与 WinDivert，退出")
         sys.exit(1)
 
-    # 2) 开机自启（仅打包 exe 生效；源码态会被告警跳过）
-    win_admin.set_autostart(True)
+    # 2) 开机自启（计划任务 + 最高权限，静默提权，仅打包 exe 生效）。
+    #    迁移：清掉旧 HKCU\Run 残留项，避免与计划任务双重自启。
+    win_admin.set_autostart(False)
+    #    默认开、可关：仅首跑默认建一次任务，之后尊重用户在托盘里的选择不再覆盖；
+    #    若用户保持开启，则每次启动按当前 exe 路径刷新一次（移动文件夹后自启仍有效）。
+    if not config.autostart_was_initialized():
+        win_task.enable_autostart()
+        config.mark_autostart_initialized()
+    elif win_task.is_autostart_enabled():
+        win_task.enable_autostart()
 
     # 3) 配置：热点网关 + 写死/旁路 ECS IP
     host_ip = config.detect_hotspot_ip()

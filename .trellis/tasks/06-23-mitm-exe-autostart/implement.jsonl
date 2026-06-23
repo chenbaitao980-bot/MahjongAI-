@@ -1,0 +1,7 @@
+{"file": ".trellis/tasks/06-23-mitm-exe-autostart/prd.md", "reason": "本任务 PRD — 两坑(A强制True/B开机弹UAC)、计划任务方案、默认开可关、迁移清理 HKCU\\Run、ADR 决议与验收"}
+{"file": "apps/router_runtime/windows/win_admin.py", "reason": "现有自启/自提权实现 — 新 win_task.py 照其 _frozen()/_exe_command()/告警跳过约定写；main 迁移期复用 set_autostart(False) 清 HKCU 残留；勿删其函数"}
+{"file": "apps/router_runtime/windows/tray_app.py", "reason": "主改动点 — main() 删强制 set_autostart(True) 改默认建任务+清残留；_on_toggle_autostart 与菜单 checked 改调 win_task；参考其 is_admin/relaunch 顺序"}
+{"file": "apps/router_runtime/windows/config.py", "reason": "_app_dir() 给首跑 sidecar 标记落盘位置(frozen 用 exe 目录)；勿改其 ECS/热点逻辑"}
+{"file": ".trellis/spec/guides/mitm-connection-stability-guide.md", "reason": "本体系连接稳定性约束 — 确保自启改动不影响链路自愈/热点常开形态"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "schtasks 子进程失败/任务不存在的异常处理与日志规范"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "win_task 建/删/查的日志风格对齐 win_admin（中文 logger.info/warning/error）"}

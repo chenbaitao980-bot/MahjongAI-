@@ -1,0 +1,5 @@
+{"file": ".trellis/tasks/06-23-noconfig-local-exe/prd.md", "reason": "验收基准 — Acceptance Criteria（未装 Python 机可跑/热点常开不掉/来一台注一台/自启恢复）"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "通用质量门槛"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "错误处理 — 热点拉起失败/WinDivert 驱动加载失败/提权失败的降级与提示"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "日志规范一致性核查"}
+{"file": ".trellis/spec/backend/remote-access.md", "reason": "remote 铁律 + 黄金规则张力(187) 是否按 ADR 已声明方式落地"}

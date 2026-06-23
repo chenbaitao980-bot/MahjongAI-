@@ -1,0 +1,13 @@
+# 大二进制 / 构建产物 —— 与仓库根 apk/ 一样不入库
+assets/game_base.apk
+openwrt/dist/
+openwrt/.build/
+data/mitm/
+# Windows PyInstaller 构建产物
+build/
+dist/
+mahjong_mitm.log
+ecs.txt
+__pycache__/
+*.pyc
+.pytest_cache/

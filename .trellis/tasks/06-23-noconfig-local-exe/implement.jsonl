@@ -1,0 +1,13 @@
+{"file": ".trellis/tasks/06-23-noconfig-local-exe/prd.md", "reason": "本任务 PRD — 形态/生命周期/目录结构/承重墙裁决/ADR 决议（写死阿里云 8.136.37.136、pystray、PyInstaller 明文）"}
+{"file": "apps/router_runtime/mahjong_mitm/setup_mitm.py", "reason": "复用内核 — DNS responder + HTTPS MITM + manifest 改写；windows/ 直接 import 它，DEFAULT_ECS_IP=8.136.37.136"}
+{"file": "apps/router_runtime/mahjong_mitm/netconf_patch.py", "reason": "复用内核 — XXTEA 解密改 IP，纯离线零依赖；勿改"}
+{"file": "apps/router_runtime/mahjong_mitm/manifest_forge.py", "reason": "复用内核 — manifest 克隆+伪造；勿改"}
+{"file": "remote/noconfig/hijack/dns_divert.py", "reason": "Windows 命门源 — 收回到 windows/win_dns_divert.py，WinDivert 拦硬编码 DNS 119.29.29.29/223.5.5.5"}
+{"file": "remote/noconfig/hijack/run_hijack.py", "reason": "编排参考 — 现 PC 一键启动的线程编排/参数，tray_app.py 据此重写为托盘版"}
+{"file": "apps/router_runtime/pc-dev/run_pc.py", "reason": "已有 PC 直测入口 — windows/__main__.py 的源码态参考，含 mahjong_mitm 包 import 方式"}
+{"file": "mahjong_ai.spec", "reason": "PyInstaller 惯例样板 — COLLECT 单文件夹/upx/datas/hiddenimports；mahjong_mitm_win.spec 据此改"}
+{"file": "build.bat", "reason": "build 脚本样板 — build_win.bat 据此改；纯 ASCII（见记忆 feedback_bat_ascii_only）"}
+{"file": ".trellis/spec/backend/remote-access.md", "reason": "remote 模块铁律 + UAC 自动提权先例（5_extractor_hotspot.bat/grab_credentials.bat）+ 黄金规则张力(187)"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "目录结构规范 — apps/router_runtime/windows/ 放置依据"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "日志规范 — 托盘黑窗/状态日志统一格式"}
+{"file": ".trellis/tasks/06-18-soft-router-noconfig/prd.md", "reason": "兄弟任务（OpenWrt 版）PRD — mahjong_mitm 抽取清单/为何 dns_divert 当时不抽/共用内核边界"}

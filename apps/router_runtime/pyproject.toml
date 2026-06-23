@@ -1,0 +1,35 @@
+[project]
+name = "mahjong-mitm"
+version = "1.0.0"
+description = "Setup-period hotfix MITM (router/PC). Rewrites game NetConf to point at ECS."
+requires-python = ">=3.10"
+
+# 运行时依赖（最小集）。证书在路由器上由 postinst 用 openssl 预生成，
+# 故 cryptography 仅 PC 直测首次跑且证书缺失时需要 → 列为 optional。
+dependencies = [
+    "requests>=2.25",   # 透明回源真实 CDN
+    "urllib3>=1.26",
+]
+
+[project.optional-dependencies]
+# PC 直测且证书未预生成时自动生成证书需要它；路由器走 openssl，不需要。
+pc-dev = ["cryptography>=3.4"]
+test = ["pytest>=7.0"]
+# Windows 托盘全自动版（windows/ 包 + PyInstaller exe）运行时依赖。
+windows = [
+    "cryptography>=3.4",   # 首次运行自动生成自签 CA
+    "pydivert>=2.1",       # WinDivert 拦游戏硬编码 DNS（自带微软签名驱动）
+    "pystray>=0.19",       # 系统托盘
+    "Pillow>=9.0",         # 托盘图标位图
+    "winsdk==1.0.0b10",    # WinRT 移动热点 NetworkOperatorTetheringManager（单包投影，仅 beta 发行）
+]
+
+[project.scripts]
+mahjong-mitm = "mahjong_mitm.setup_mitm:main"
+mahjong-mitm-tray = "windows.tray_app:main"
+
+[tool.setuptools.packages.find]
+include = ["mahjong_mitm*", "windows*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

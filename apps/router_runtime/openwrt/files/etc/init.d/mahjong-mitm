@@ -1,0 +1,64 @@
+#!/bin/sh /etc/rc.common
+# mahjong-mitm — setup-period 热更 MITM（procd 服务）
+#
+# 启动 python -m mahjong_mitm，参数从 uci config (/etc/config/mahjong-mitm) 读取。
+# 启用时加载 nftables DNS 劫持规则；停用时清除。
+
+START=95
+STOP=10
+USE_PROCD=1
+
+PROG_DIR="/usr/lib/mahjong-mitm"
+PYTHON="/usr/bin/python3"
+
+# 读取 uci，给不存在的字段兜底默认值
+load_config() {
+	config_load mahjong-mitm
+	config_get enabled         main enabled         1
+	config_get host_ip         main host_ip         192.168.8.1
+	config_get ecs_ip          main ecs_ip          8.136.37.136
+	config_get tls_port        main tls_port        443
+	config_get dns_port        main dns_port        5353
+	config_get dns_listen_host main dns_listen_host 0.0.0.0
+}
+
+apply_nft() {
+	# fw4 会 include /etc/nftables.d/*.nft；reload 即生效
+	[ -x /sbin/fw4 ] && fw4 reload >/dev/null 2>&1
+}
+
+clear_nft() {
+	# 删掉规则文件再 reload，让 mahjong_mitm_dns 链消失（恢复正常 DNS）
+	[ -x /sbin/fw4 ] && fw4 reload >/dev/null 2>&1
+}
+
+start_service() {
+	load_config
+
+	if [ "$enabled" != "1" ]; then
+		echo "mahjong-mitm: disabled in uci config, not starting" >&2
+		return 0
+	fi
+
+	# 装载 nftables DNS 劫持（含硬编码 DNS 重定向到本机 dns_port）
+	apply_nft
+
+	local args="--host-ip $host_ip --ecs-ip $ecs_ip --tls-port $tls_port --dns-port $dns_port"
+	[ -n "$dns_listen_host" ] && args="$args --dns-listen-host $dns_listen_host"
+
+	procd_open_instance
+	procd_set_param command "$PYTHON" -m mahjong_mitm $args
+	procd_set_param env PYTHONPATH="$PROG_DIR"
+	procd_set_param respawn 3600 5 5
+	procd_set_param stdout 1
+	procd_set_param stderr 1
+	procd_close_instance
+}
+
+stop_service() {
+	clear_nft
+}
+
+service_triggers() {
+	procd_add_reload_trigger "mahjong-mitm"
+}

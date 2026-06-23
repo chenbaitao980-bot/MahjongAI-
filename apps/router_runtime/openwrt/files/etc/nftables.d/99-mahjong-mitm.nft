@@ -1,0 +1,24 @@
+# 99-mahjong-mitm.nft — DNS 劫持规则（OpenWrt 替换 Windows dns_divert.py）
+#
+# 游戏热更阶段会用硬编码 DNS（119.29.29.29 / 223.5.5.5）绕过系统 DNS。
+# Windows 端用 WinDivert 拦截这些包；OpenWrt 用 nftables redirect 把
+# LAN 段所有目的端口 53 的流量（无论目标 IP）强制重定向到本机 DNS 响应器，
+# 这样硬编码 DNS 也逃不掉。
+#
+# 响应器监听 5353（不抢 dnsmasq 的 53），故重定向到 :5353。
+# 我们的响应器只劫持热更域名，其余转发上游（223.5.5.5），保证手机正常上网。
+#
+# 由 fw4 通过 /etc/nftables.d/ include 机制加载（OpenWrt 22.03+）。
+# init.d 在启用时调用 `fw4 reload`，停用时本规则随服务停止后 reload 清空。
+#
+# 注意：这会劫持 LAN 上**所有**设备的 DNS。setup-period 临时用，
+# 手机改完 NetConf 后停掉本服务（init.d stop）即恢复正常 DNS。
+
+chain mahjong_mitm_dns {
+	type nat hook prerouting priority dstnat - 5; policy accept;
+
+	# 来自 LAN 接口的 53 查询（含硬编码 DNS 目标）→ 本机 5353 响应器。
+	# 不处理路由器自身发起的回源查询（回源在 OUTPUT 之外，走 119.29.29.29 直连）。
+	meta nfproto ipv4 iifname { "br-lan", "wlan0", "wlan1" } udp dport 53 redirect to :5353
+	meta nfproto ipv4 iifname { "br-lan", "wlan0", "wlan1" } tcp dport 53 redirect to :5353
+}

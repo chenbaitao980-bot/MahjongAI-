@@ -1,0 +1,29 @@
+# mahjong-mitm uci config
+#
+# setup-period 热更 MITM 配置。手机连本路由器 WiFi 开游戏触发热更，
+# NetConf 被改写指向 ECS；改完手机切任意网络走 ECS，路由器不再插手。
+#
+# 改完执行: /etc/init.d/mahjong-mitm restart
+
+config mahjong-mitm 'main'
+	# 启用开关（'1' 启用 / '0' 停用）
+	option enabled '1'
+
+	# 手机看到的本路由器 LAN 网关 IP。DNS 把热更域名解析到它，
+	# 手机的 HTTPS 热更请求据此落到本机 443。
+	# OpenWrt 默认 LAN 网关通常是 192.168.8.1（GL.iNet）或 192.168.1.1。
+	option host_ip '192.168.8.1'
+
+	# ECS 公网 IP——写进 NetConf 的台州 5045 替换目标。
+	option ecs_ip '8.136.37.136'
+
+	# HTTPS 监听端口（一般不动）
+	option tls_port '443'
+
+	# DNS 响应器端口。用 5353 避免抢 dnsmasq 的 53；
+	# nftables（99-mahjong-mitm.nft）把 LAN 的 53 重定向到这里。
+	option dns_port '5353'
+
+	# DNS 响应器 bind 地址。路由器场景填 '0.0.0.0' 以接住 nftables 重定向，
+	# 应答里仍返回 host_ip。留空 = 绑 host_ip（PC 直连场景）。
+	option dns_listen_host '0.0.0.0'

@@ -31,26 +31,14 @@
   section h2 { font-size: 13px; margin: 0 0 10px; color: var(--muted);
     font-weight: 600; letter-spacing: .5px; }
   .tiles { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-end; }
-  .tile { width: 40px; height: 56px; border-radius: 6px; background: #fafafa;
-    border: 1px solid #cfd3da; box-shadow: 0 1px 0 #b8bcc4, 0 2px 4px rgba(0,0,0,.3);
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    font-weight: 700; line-height: 1; position: relative; user-select: none; }
-  .tile .num { font-size: 22px; }
-  .tile .suit { font-size: 11px; margin-top: 3px; opacity: .85; }
-  .tile.m { color: var(--man); }
-  .tile.p { color: var(--pin); }
-  .tile.s { color: var(--sou); }
-  .tile.z { color: #1a1d24; }
-  .tile.z .num { font-size: 20px; }
+  .tile { width: 40px; height: 56px; border-radius: 6px;
+    box-shadow: 0 2px 6px rgba(0,0,0,.45);
+    display: block; overflow: hidden; position: relative; user-select: none; }
+  .tile img { display: block; width: 100%; height: 100%; pointer-events: none; }
   .tile.small { width: 30px; height: 42px; }
-  .tile.small .num { font-size: 16px; }
-  .tile.small .suit { font-size: 9px; margin-top: 2px; }
-  .tile.back { background: linear-gradient(135deg, #3a7d3a, #2c5e2c); border-color: #244a24; }
+  .tile.back { background: linear-gradient(135deg, #3a7d3a, #2c5e2c); border: 1px solid #244a24; }
   .tile.drawn { outline: 2px solid var(--accent); outline-offset: 1px; }
-  /* 财神红框：手牌中与 snap.baida_tile 相同的牌外面套一圈醒目红边。
-     用 box-shadow 而非 outline 避免和 .drawn 的 outline 互相覆盖；
-     同时摸牌+财神时两个效果叠加可见。 */
-  .tile.caishen { box-shadow: 0 0 0 3px #ff2d2d, 0 1px 0 #b8bcc4, 0 2px 4px rgba(0,0,0,.3); }
+  .tile.caishen { box-shadow: 0 0 0 3px #ff2d2d, 0 2px 6px rgba(0,0,0,.45); }
   .meld { display: inline-flex; gap: 3px; padding: 4px; margin: 0 8px 6px 0;
     background: var(--panel2); border-radius: 6px; }
   .row { display: flex; gap: 22px; flex-wrap: wrap; }
@@ -105,11 +93,7 @@
 </main>
 
 <script>
-const HONOR = {1:'东',2:'南',3:'西',4:'北',5:'中',6:'发',7:'白'};
-const SUITNAME = {m:'万', p:'筒', s:'条'};
-
 function parseTile(t) {
-  // t 形如 "3m" / "5p" / "7s" / "1z"；容错：若是数字 id 也处理
   if (typeof t === 'number') {
     const id = t; const suits = ['m','p','s'];
     if (id < 27) return { num: (id%9)+1, suit: suits[Math.floor(id/9)] };
@@ -125,11 +109,11 @@ function tileEl(t, opts={}) {
   const { num, suit } = parseTile(t);
   const el = document.createElement('div');
   el.className = 'tile ' + suit + (opts.small ? ' small' : '') + (opts.drawn ? ' drawn' : '') + (opts.caishen ? ' caishen' : '');
-  if (suit === 'z') {
-    el.innerHTML = '<span class="num">' + (HONOR[num] || '?') + '</span>';
-  } else {
-    el.innerHTML = '<span class="num">' + num + '</span><span class="suit">' + (SUITNAME[suit]||'') + '</span>';
-  }
+  const img = document.createElement('img');
+  img.src = 'tiles/' + num + suit + '.png';
+  img.alt = num + suit;
+  img.draggable = false;
+  el.appendChild(img);
   return el;
 }
 

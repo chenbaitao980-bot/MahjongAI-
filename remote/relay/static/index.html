@@ -67,7 +67,11 @@
   <h1>🀄 MahjongAI 实时手牌</h1>
   <span><span class="pulse" id="pulse"></span><span class="status" id="status">未连接</span></span>
   <span id="user-label" style="font-size:12px;color:var(--accent);display:none"></span>
-  <span style="margin-left:auto;font-size:12px;color:var(--muted)">token:</span>
+  <label style="margin-left:auto;font-size:12px;color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:4px;user-select:none">
+    <input type="checkbox" id="show-extra" style="cursor:pointer">
+    显示弃牌/对手
+  </label>
+  <span style="font-size:12px;color:var(--muted)">token:</span>
   <input id="token" placeholder="粘贴 api_token" autocomplete="off">
 </header>
 <div id="cloud-ctrl" style="padding:6px 16px;background:var(--panel2);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px">
@@ -93,7 +97,7 @@
     <div id="mymelds" style="margin-top:10px"></div>
   </section>
 
-  <div class="row">
+  <div class="row" id="extra-row">
     <section class="col">
       <h2>我的弃牌</h2>
       <div class="tiles" id="mydiscards"></div>
@@ -171,7 +175,7 @@ function render(snap) {
   srcEl.style.color = src === 'extractor' ? 'var(--sou)' : 'var(--accent)';
   setText('note', snap.action_note || '');
 
-  // 手牌：把摸到的牌单独高亮（若 drawn_tile 在手牌里，标记最后一张匹配的）
+  // 手牌：财神始终放最左，其余保持原序；摸到的牌单独高亮
   const hand = ((me.hand && me.hand.length ? me.hand : snap.hand) || []).slice();
   const drawn = snap.drawn_tile;
   const handBox = document.getElementById('hand');
@@ -179,7 +183,10 @@ function render(snap) {
   if (!hand.length) { handBox.innerHTML = '<span class="empty">（暂无手牌，进入一局后出现）</span>'; }
   let drawnMarked = false;
   const baida = snap.baida_tile;
-  hand.forEach(t => {
+  const caishenTiles = hand.filter(t => baida && String(t) === String(baida));
+  const normalTiles = hand.filter(t => !(baida && String(t) === String(baida)));
+  const sortedHand = caishenTiles.concat(normalTiles);
+  sortedHand.forEach(t => {
     const isDrawn = (!drawnMarked && drawn && String(t) === String(drawn));
     if (isDrawn) drawnMarked = true;
     const isCaishen = !!(baida && String(t) === String(baida));
@@ -210,6 +217,18 @@ const userId = urlParams.get('user_id') || '';
 
 tokenInput.value = urlToken || localStorage.getItem('mj_token') || '';
 tokenInput.addEventListener('change', () => localStorage.setItem('mj_token', tokenInput.value.trim()));
+
+// Toggle：显示/隐藏 弃牌/对手区域，默认隐藏
+const showExtraCheckbox = document.getElementById('show-extra');
+const extraRow = document.getElementById('extra-row');
+function updateExtraVisibility() {
+  const show = showExtraCheckbox.checked;
+  if (extraRow) extraRow.style.display = show ? 'flex' : 'none';
+  localStorage.setItem('mj_show_extra', show ? '1' : '0');
+}
+showExtraCheckbox.checked = localStorage.getItem('mj_show_extra') === '1';
+updateExtraVisibility();
+showExtraCheckbox.addEventListener('change', updateExtraVisibility);
 
 // 显示当前用户标识
 if (userId) {

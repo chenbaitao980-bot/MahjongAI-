@@ -5,7 +5,7 @@
 
 用法（管理员终端，PC 已开移动热点、手机已连上）:
   cd interface
-  python pc-dev/run_pc.py --host-ip 192.168.137.1 --ecs-ip 8.136.37.136
+  python pc-dev/run_pc.py --host-ip 192.168.137.1 --ecs-ip 8.136.32.137
 
 与路由器版的区别:
   - DNS 端口默认 53（PC 直接绑，不像路由器要避开 dnsmasq）

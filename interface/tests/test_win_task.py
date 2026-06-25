@@ -8,7 +8,7 @@
   - config 首跑标记往返
 
 运行:
-  cd apps/router_runtime
+  cd interface
   python -m pytest tests/ -v
 """
 from __future__ import annotations

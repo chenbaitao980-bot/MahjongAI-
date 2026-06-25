@@ -13,7 +13,7 @@
   - 内嵌资源：assets/game_base.apk 放到 _RUNTIME_ROOT/assets（与 mahjong_mitm 同级，
     使 setup_mitm.DEFAULT_APK = _RUNTIME_ROOT/assets/game_base.apk 在冻结态命中）。
 
-构建：cd apps/router_runtime && winpack\\build_win.bat
+构建：cd interface && winpack\\build_win.bat
 """
 import os
 
@@ -24,7 +24,7 @@ from PyInstaller.utils.hooks import (
     collect_submodules,
 )
 
-# spec 执行时 cwd = apps/router_runtime（build_win.bat 切到此处再调）
+# spec 执行时 cwd = interface（build_win.bat 切到此处再调）
 _ROOT = os.path.abspath(os.getcwd())
 
 datas = []

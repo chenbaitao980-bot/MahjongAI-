@@ -4,7 +4,7 @@
 验证抽取后的 mahjong_mitm 包与 PC 热点完全等效。
 
 用法（管理员终端，PC 已开移动热点、手机已连上）:
-  cd apps/router_runtime
+  cd interface
   python pc-dev/run_pc.py --host-ip 192.168.137.1 --ecs-ip 8.136.37.136
 
 与路由器版的区别:
@@ -13,7 +13,7 @@
     本最小化包不含它；若游戏走硬编码 DNS，请用仓库原版 run_hijack.py 做完整 PC 测试，
     本入口主要验证「抽取后的 manifest/NetConf 改写逻辑」在新包结构下不回归。
 
-证书落点: apps/router_runtime/data/mitm/（首次运行用 cryptography 自动生成，需 pip install cryptography）
+证书落点: interface/data/mitm/（首次运行用 cryptography 自动生成，需 pip install cryptography）
 """
 from __future__ import annotations
 

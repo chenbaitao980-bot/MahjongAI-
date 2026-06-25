@@ -4,7 +4,7 @@
 #
 # 用法:
 #   1. 下载对应 SDK（GL-MT3000 = mediatek/filogic, OpenWrt 23.05）
-#   2. ln -s $(pwd)/apps/router_runtime <SDK>/package/mahjong-mitm
+#   2. ln -s $(pwd)/interface <SDK>/package/mahjong-mitm
 #      （或把本目录拷进 SDK 的 package/ 下）
 #   3. cd <SDK> && make package/mahjong-mitm/compile V=s
 #   产物: <SDK>/bin/packages/<arch>/base/mahjong-mitm_*.ipk

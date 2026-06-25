@@ -1,7 +1,7 @@
 @echo off
 REM build_win.bat - Build the Windows tray exe (PyInstaller one-folder).
 REM Pure ASCII only (cmd.exe mis-parses non-ASCII line bytes). Run from anywhere;
-REM this script cd's to apps/router_runtime (its parent dir) first.
+REM this script cd's to interface (its parent dir) first.
 
 setlocal
 cd /d "%~dp0.."

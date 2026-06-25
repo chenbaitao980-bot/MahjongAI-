@@ -4,7 +4,7 @@
 否则手机热更下来的 NetConf 加载失败。复用 setup_mitm._selftest 的全链路断言。
 
 运行:
-  cd apps/router_runtime
+  cd interface
   python -m pytest tests/ -v
   # 或直接: python -m mahjong_mitm --selftest
 """

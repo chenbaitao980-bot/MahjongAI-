@@ -5,7 +5,7 @@
 # 无编译产物，故 Architecture=all，任意机器（含 Windows Git Bash）有 tar/gzip 即可打包。
 #
 # 用法:
-#   cd apps/router_runtime/openwrt
+#   cd interface/openwrt
 #   sh build_ipk.sh [version]
 #
 # 产物: ./dist/mahjong-mitm_<version>_all.ipk
@@ -21,7 +21,7 @@ PKG="mahjong-mitm"
 ARCH="all"
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-RUNTIME_ROOT="$(cd "$HERE/.." && pwd)"   # apps/router_runtime/
+RUNTIME_ROOT="$(cd "$HERE/.." && pwd)"   # interface/
 BUILD="$HERE/.build"
 DIST="$HERE/dist"
 DATA="$BUILD/data"

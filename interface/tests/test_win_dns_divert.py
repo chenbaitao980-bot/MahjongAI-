@@ -4,7 +4,7 @@
 pydivert/WinDivert 驱动相关只能在 Windows 管理员真机验，不入单测。
 
 运行:
-  cd apps/router_runtime
+  cd interface
   python -m pytest tests/ -v
 """
 from __future__ import annotations

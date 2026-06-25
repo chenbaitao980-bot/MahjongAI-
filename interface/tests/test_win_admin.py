@@ -3,7 +3,7 @@
 提权与注册表写入有副作用，只能真机验；这里只测无副作用的命令行拼接逻辑。
 
 运行:
-  cd apps/router_runtime
+  cd interface
   python -m pytest tests/ -v
 """
 from __future__ import annotations

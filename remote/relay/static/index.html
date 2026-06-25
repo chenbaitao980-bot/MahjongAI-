@@ -31,14 +31,28 @@
   section h2 { font-size: 13px; margin: 0 0 10px; color: var(--muted);
     font-weight: 600; letter-spacing: .5px; }
   .tiles { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-end; }
+  /* 白底牌身：mah_face_2 图集只有透明文字层，需自带象牙白牌面把透明 PNG 叠在白底上 = 官方观感 */
   .tile { width: 40px; height: 56px; border-radius: 6px;
-    box-shadow: 0 2px 6px rgba(0,0,0,.45);
+    background: linear-gradient(160deg, #fffefb, #f1ece0);
+    border: 1px solid #d8d2c4;
+    box-shadow: inset 0 1px 1px rgba(255,255,255,.9), 0 2px 6px rgba(0,0,0,.45);
     display: block; overflow: hidden; position: relative; user-select: none; }
   .tile img { display: block; width: 100%; height: 100%; pointer-events: none; }
   .tile.small { width: 30px; height: 42px; }
   .tile.back { background: linear-gradient(135deg, #3a7d3a, #2c5e2c); border: 1px solid #244a24; }
   .tile.drawn { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .tile.caishen { box-shadow: 0 0 0 3px #ff2d2d, 0 2px 6px rgba(0,0,0,.45); }
+  @keyframes caishenGlow {
+    from { box-shadow: 0 0 0 2px #ffcb3d, 0 0 8px rgba(255,157,0,.7), 0 2px 6px rgba(0,0,0,.45); }
+    to   { box-shadow: 0 0 0 2px #ff9d00, 0 0 14px rgba(255,203,61,.95), 0 2px 6px rgba(0,0,0,.45); }
+  }
+  .tile.caishen { border-color: #ffcb3d;
+    animation: caishenGlow 1.4s ease-in-out infinite alternate; }
+  /* 财神金徽：tile 内右上角，不依赖溢出（避开 overflow:hidden 裁剪） */
+  .tile.caishen::after { content: "财"; position: absolute; top: 1px; right: 1px;
+    width: 13px; height: 13px; border-radius: 50%; z-index: 2;
+    background: linear-gradient(135deg, #ffe08a, #ff9d00); color: #fff;
+    font-size: 8px; line-height: 13px; text-align: center; font-weight: 700;
+    box-shadow: 0 0 3px rgba(0,0,0,.4); }
   .meld { display: inline-flex; gap: 3px; padding: 4px; margin: 0 8px 6px 0;
     background: var(--panel2); border-radius: 6px; }
   .row { display: flex; gap: 22px; flex-wrap: wrap; }

@@ -160,6 +160,24 @@ HTTP 401 Unauthorized
 
 ---
 
+## 牌面资源（static/tiles/）
+
+后台读牌网页的 34 张牌面（`static/tiles/{n}{suit}.png`，如 `1m.png`…`7z.png`）来自
+**浙江游戏大厅官方台州麻将皮肤**（MahFace areaid 7109），由切图脚本一键复跑产出：
+
+```bash
+python scripts/fetch_official_tiles.py            # 抓取+切图覆盖 static/tiles/
+python scripts/fetch_official_tiles.py --dry-run  # 只校验不写盘
+python scripts/fetch_official_tiles.py --channel 7109  # 切换皮肤区号
+```
+
+- 链路：`hotfix_update`(channel=7109) → manifest → `file_list` 取
+  `mahlayer_mah_face_2.{plist,png}`（md5 分桶存储名）→ 下载并 md5 校验 → 解析图集切图。
+- 输出：34 张统一 **140×158 RGBA**（保留透明通道），总计约 1.0 MB。
+- 前端 `tileEl()` 已是 `<img src="tiles/{n}{suit}.png">`，换图零代码改动。
+- `.tile` CSS 自带象牙白牌身（图集只有透明文字层，叠白底 = 官方观感）。
+- 财神（baida）走 `.caishen`：金色呼吸光晕 `@keyframes` + 右上角金「财」徽（纯 CSS，未做骨骼动画）。
+
 ## 注意事项
 
 - `stable/` 目录需要在 Python 路径中（relay 自动处理，确保项目根目录结构完整）

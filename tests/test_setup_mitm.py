@@ -17,10 +17,14 @@ from remote.noconfig.hijack.setup_mitm import (
 
 
 class SetupMitmManifestPatchTest(unittest.TestCase):
-    def make_assets(self):
+    def make_assets(self, file_url_mode="official"):
         assets = object.__new__(MitmAssets)
         assets.bump_version = "9.9.9.103"
         assets.version = "9.9.9.103"
+        assets.self_host = "8.136.37.136"
+        assets.ecs_ip = "8.136.37.136"
+        assets.tls_port = 443
+        assets.file_url_mode = file_url_mode
         assets.served_md5 = "netconf-md5"
         assets.served_size = 100
         assets.served_name = "aa/netconf.luac"
@@ -85,6 +89,66 @@ class SetupMitmManifestPatchTest(unittest.TestCase):
         self.assertEqual(file_list[RESCHECKER_FILE_KEY]["md5"], "old")
         self.assertEqual(file_list["subgame/main.luac"]["md5"], "keep")
 
+    def _lobby_manifest_with_update_url(self):
+        return {
+            "version": "1.0.0.1",
+            "file_url": ["https://gxb-oss.hzxuanming.com/yj/files/",
+                         "https://gxb-cos.hzxuanming.com/yj/files/"],
+            "update_url": [
+                "https://gxb-api.hzxuanming.com/hotfix_update?env=1&appid=1073&version=1.0.0.59",
+                "https://gxb-api-tx.hzxuanming.com/hotfix_update?env=1&appid=1073&version=1.0.0.59",
+            ],
+            "file_list": {
+                "src/app/config/NetConf.luac": {"md5": "old", "size": 1, "name": "old/net.luac"},
+                "subgame/main.luac": {"md5": "keep", "size": 4, "name": "keep/main.luac"},
+            },
+        }
+
+    def test_project_manifest_rewrites_update_url_to_ecs(self):
+        """★PR2：project.manifest 的 update_url host 改写为 ECS、path=/hotfix_update、
+        保留原 query（appid/version 等），原 list 条数保持。"""
+        from urllib.parse import urlsplit
+        assets = self.make_assets()
+        manifest = self._lobby_manifest_with_update_url()
+        patched = json.loads(
+            assets.patch_real_project_manifest(json.dumps(manifest).encode("utf-8")).decode("utf-8")
+        )
+
+        ecs_base = assets._ecs_base()
+        uu = patched["update_url"]
+        # 原 list 条数保持
+        self.assertEqual(len(uu), 2)
+        for orig, new in zip(manifest["update_url"], uu):
+            # host=ECS、path=/hotfix_update
+            self.assertTrue(new.startswith(ecs_base + "/hotfix_update"), new)
+            self.assertEqual(urlsplit(new).hostname, "8.136.37.136")
+            # 保留原 query 参数
+            self.assertEqual(urlsplit(new).query, urlsplit(orig).query)
+            self.assertIn("appid=1073", new)
+            self.assertIn("version=1.0.0.59", new)
+
+    def test_project_manifest_file_url_official_mode_preserved(self):
+        """official 模式（默认）：file_url 保持官方原样（官方文件 4G 直连官方 CDN）。"""
+        assets = self.make_assets(file_url_mode="official")
+        manifest = self._lobby_manifest_with_update_url()
+        patched = json.loads(
+            assets.patch_real_project_manifest(json.dumps(manifest).encode("utf-8")).decode("utf-8")
+        )
+        self.assertEqual(patched["file_url"], manifest["file_url"])
+
+    def test_project_manifest_file_url_ecs_mode_rewritten(self):
+        """ecs 模式（验收）：file_url 改写为 ECS file base。"""
+        from urllib.parse import urlsplit
+        assets = self.make_assets(file_url_mode="ecs")
+        manifest = self._lobby_manifest_with_update_url()
+        patched = json.loads(
+            assets.patch_real_project_manifest(json.dumps(manifest).encode("utf-8")).decode("utf-8")
+        )
+        ecs_base = assets._ecs_base()
+        self.assertEqual(len(patched["file_url"]), 1)
+        self.assertTrue(patched["file_url"][0].startswith(ecs_base), patched["file_url"])
+        self.assertEqual(urlsplit(patched["file_url"][0]).hostname, "8.136.37.136")
+
     def test_non_lobby_manifest_passes_through_unchanged(self):
         assets = self.make_assets()
         manifest_bytes = json.dumps({
@@ -131,10 +195,25 @@ class SetupMitmManifestPatchTest(unittest.TestCase):
         self.assertEqual(patched["project_md5"], "")
         self.assertNotIn("diff_zip", patched)
         self.assertNotIn("zip_url", patched)
+        # ★PR2：manifest_url 改写到 ECS（host 换 ECS、保留官方 path+query），原 list 条数不变
+        ecs_base = assets._ecs_base()
+        self.assertEqual(
+            patched["manifest_url"],
+            [
+                ecs_base + "/yj/proj/project_10001.manifest?appid=10001",
+                ecs_base + "/yj/manifests/1073/1.0.0.16/198/project-1.0.0.16.manifest",
+            ],
+        )
+        # 同时仍记录真实官方 path（供 project handler 回源官方）
         self.assertIn("/yj/proj/project_10001.manifest", assets.real_manifest_paths)
         self.assertIn(
             "/yj/manifests/1073/1.0.0.16/198/project-1.0.0.16.manifest",
             assets.real_manifest_paths,
+        )
+        # 仍记录真实官方 host（按 path）
+        self.assertEqual(
+            assets.real_manifest_hosts_by_path["/yj/proj/project_10001.manifest"],
+            "gxb-oss.hzxuanming.com",
         )
 
     def test_real_version_falls_back_to_manifest_url_filename(self):
@@ -155,7 +234,7 @@ class SetupMitmManifestPatchTest(unittest.TestCase):
         self.assert_dominates(patched["version"], "1.0.1.1776")
 
     def test_served_version_dominates_and_triggers(self):
-        """4 段缓冲支配版本：与官方同段数，每段 +缓冲(1,5,9,1000) > 官方对应段
+        """4 段缓冲支配版本：与官方同段数，每段 +缓冲(1,5,9,3000) > 官方对应段
         （4G 判 NOUPDATE）且首分量更大（热点必触发）。"""
         assets = self.make_assets()
         # 真实版未知 → 静态兜底 4 段支配版本
@@ -163,13 +242,83 @@ class SetupMitmManifestPatchTest(unittest.TestCase):
         # 真实版已知 → 每段 +缓冲偏移，4 段与官方一致
         assets.real_online_version = "1.0.1.1776"
         served = assets._served_version()
-        self.assertEqual(served, "2.5.10.2776")  # 1.0.1.1776 → 2.5.10.2776
+        self.assertEqual(served, "2.5.10.4776")  # 1.0.1.1776 → 2.5.10.4776 (offset +3000)
         self.assert_dominates(served, "1.0.1.1776")
         # 关键回归：每段都 > 官方对应段，否则 versionLessThan 逐段 bug 会在 4G 误触发
         sv = [int(x) for x in served.split(".")]
         rv = [1, 0, 1, 1776]
         for s, r in zip(sv, rv):
             self.assertGreater(s, r, (served, "1.0.1.1776"))
+
+    def test_served_version_build_offset_env_override(self):
+        """MITM_BUILD_OFFSET 覆盖 build 段偏移（仅第 4 段，前 3 段不变）。
+
+        用途：临时设 3001 使 served 比 harbor 高 1 → 触发手机一次更新检查
+        （scenario 3 验证 NetConf 不被重下）。非法值回退默认 3000。
+        """
+        assets = self.make_assets()
+        assets.real_online_version = "1.0.1.1782"
+        # env 未设 → 默认 3000：1.0.1.1782 → 2.5.10.4782
+        self.assertEqual(assets._served_version(), "2.5.10.4782")
+        # MITM_BUILD_OFFSET=3001 → 仅 build 段 1782+3001，前 3 段不变
+        with mock.patch.dict(os.environ, {"MITM_BUILD_OFFSET": "3001"}):
+            self.assertEqual(assets._served_version(), "2.5.10.4783")
+        # 非法值 → 回退默认 3000
+        with mock.patch.dict(os.environ, {"MITM_BUILD_OFFSET": "abc"}):
+            self.assertEqual(assets._served_version(), "2.5.10.4782")
+        # patch.dict 退出后自动还原 → 仍默认
+        self.assertEqual(assets._served_version(), "2.5.10.4782")
+
+    def make_hotspot_assets(self, file_url_mode="official"):
+        """PC 热点设置形态：self_host=热点网关 IP（4G 够不着），ecs_ip=ECS 公网 IP。
+
+        现有 make_assets 里 self_host==ecs_ip==8.136.37.136，掩盖了"_ecs_base 误用
+        self_host"的 bug。这里构造 self_host≠ecs_ip 暴露它。
+        """
+        assets = self.make_assets(file_url_mode=file_url_mode)
+        assets.self_host = "192.168.137.1"   # 热点网关 IP，4G 下手机够不着
+        assets.ecs_ip = "8.136.37.136"        # ECS 公网 IP，永久重定向目标
+        return assets
+
+    def test_ecs_base_uses_ecs_ip_not_self_host(self):
+        """★回归：写进 harbor 的永久重定向基址必须是 ECS 公网 IP（ecs_ip），
+        而非设置期 serve manifest 的 self_host（PC 热点下=热点网关 192.168.137.1）。
+        否则 4G 手机据热点网关 IP 直连够不着 → 永久重定向失效。"""
+        assets = self.make_hotspot_assets()
+        base = assets._ecs_base()
+        self.assertIn("8.136.37.136", base)
+        self.assertNotIn("192.168.137.1", base)
+
+    def test_update_url_rewrite_targets_ecs_ip_under_hotspot(self):
+        """★回归：PC 热点设置时 patch_real_project_manifest 写入的 update_url host
+        必须是 ECS 公网 IP，不能是热点网关 IP。"""
+        from urllib.parse import urlsplit
+        assets = self.make_hotspot_assets()
+        manifest = self._lobby_manifest_with_update_url()
+        patched = json.loads(
+            assets.patch_real_project_manifest(json.dumps(manifest).encode("utf-8")).decode("utf-8")
+        )
+        for new in patched["update_url"]:
+            self.assertEqual(urlsplit(new).hostname, "8.136.37.136", new)
+            self.assertNotEqual(urlsplit(new).hostname, "192.168.137.1", new)
+
+    def test_manifest_url_rewrite_targets_ecs_ip_under_hotspot(self):
+        """★回归：PC 热点设置时 patch_real_version_manifest 写入的 manifest_url host
+        必须是 ECS 公网 IP，不能是热点网关 IP。"""
+        from urllib.parse import urlsplit
+        assets = self.make_hotspot_assets()
+        version_bytes = json.dumps({
+            "version": "1.0.0.51",
+            "manifest_url": [
+                "https://gxb-oss.hzxuanming.com/yj/proj/project_10001.manifest?appid=10001",
+            ],
+            "file_url": ["https://gxb-oss.hzxuanming.com/yj/files/"],
+            "project_md5": "deadbeef",
+        }).encode("utf-8")
+        patched = json.loads(assets.patch_real_version_manifest(version_bytes).decode("utf-8"))
+        for new in patched["manifest_url"]:
+            self.assertEqual(urlsplit(new).hostname, "8.136.37.136", new)
+            self.assertNotEqual(urlsplit(new).hostname, "192.168.137.1", new)
 
 
 class SetupMitmOriginFetchTest(unittest.TestCase):

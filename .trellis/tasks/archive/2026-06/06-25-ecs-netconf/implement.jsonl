@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/remote-access.md", "reason": "热更 MITM/version.manifest/project.manifest/hotfix_update 链路与 ECS 部署约束的现有规范"}
+{"file": ".trellis/spec/backend/game-protocol.md", "reason": "游戏协议与热更资源格式背景，避免改动破坏既有链路"}

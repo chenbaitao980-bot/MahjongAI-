@@ -15,7 +15,7 @@ import sys
 logger = logging.getLogger("windows.config")
 
 # ── 写死的 ECS IP（阿里云）。迁服改此处重编译。 ──────────────────────────────
-ECS_IP = "8.136.37.136"
+ECS_IP = "8.136.32.137"
 
 # ── Windows 移动热点（ICS）固定网关 IP。手机看到的网关 = 热点 IP。 ────────────
 HOTSPOT_GATEWAY_IP = "192.168.137.1"

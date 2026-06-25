@@ -86,7 +86,7 @@ HIJACK_DOMAINS = {
     "gxb-cos.imeete.com",
 }
 
-DEFAULT_ECS_IP = "8.136.37.136"
+DEFAULT_ECS_IP = "8.136.32.137"
 DEFAULT_APK = os.path.join(_RUNTIME_ROOT, "assets", "game_base.apk")
 APK_RESCHECKER_ENTRY = "assets/src/app/hotupdate/lobby/ResChecker.luac"
 

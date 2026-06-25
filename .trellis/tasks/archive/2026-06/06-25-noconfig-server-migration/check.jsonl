@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/remote-access.md", "reason": "验收标准：noconfig 服务必须符合架构契约"}
+{"file": ".trellis/spec/guides/mitm-connection-stability-guide.md", "reason": "验收时检查 interface 编译结果是否符合 MITM 稳定性规范"}

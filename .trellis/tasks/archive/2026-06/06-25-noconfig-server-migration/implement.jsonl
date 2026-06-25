@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/backend/remote-access.md", "reason": "noconfig 三件套架构契约，部署时需理解服务边界"}
+{"file": ".trellis/spec/guides/mitm-connection-stability-guide.md", "reason": "MITM 热更连接稳定性指南，interface 编译需遵守"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "项目目录规范，部署路径对齐"}

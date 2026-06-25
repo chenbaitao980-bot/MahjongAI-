@@ -310,3 +310,37 @@ bootstrap 三件套到新服务器 8.136.32.137（私网 172.20.133.250），CN2
 ### Next Steps
 
 - None - task complete
+
+
+## Session 10: noconfig 迁移华纳云 HK + 443 冲突排查
+
+**Date**: 2026-06-25
+**Task**: noconfig 迁移华纳云 HK + 443 冲突排查
+**Branch**: `master`
+
+### Summary
+
+ECS 从阿里云旧服迁移到华纳云 HK（8.136.32.137），三服务全部部署到位；排查出旧 python.exe 残留进程抢占 443 导致热更写入旧 NetConf、手机始终连旧服的根因；发现需要在 Windows exe 和 OpenWrt ipk 启动时自动清理 443 端口冲突。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `40cdfc3` | (see git log) |
+| `bdec012` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

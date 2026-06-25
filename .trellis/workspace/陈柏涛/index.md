@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 9
+- **Total Sessions**: 10
 - **Last Active**: 2026-06-25
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~312 | Active |
+| `journal-1.md` | ~346 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 10 | 2026-06-25 | noconfig 迁移华纳云 HK + 443 冲突排查 | `40cdfc3`, `bdec012` | `master` |
 | 9 | 2026-06-25 | 迁移 noconfig 服务到华纳云 HK 8.136.32.137 | `40cdfc3` | `master` |
 | 8 | 2026-06-23 | noconfig 本地 MITM 打包成 Windows 托盘 exe | `3a6aba8` | `master` |
 | 7 | 2026-06-16 | 修bug：前端白板/红中显示颠倒 | `442c899` | `master` |

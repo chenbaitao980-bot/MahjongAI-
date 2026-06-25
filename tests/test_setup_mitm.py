@@ -234,7 +234,7 @@ class SetupMitmManifestPatchTest(unittest.TestCase):
         self.assert_dominates(patched["version"], "1.0.1.1776")
 
     def test_served_version_dominates_and_triggers(self):
-        """4 段缓冲支配版本：与官方同段数，每段 +缓冲(1,5,9,3000) > 官方对应段
+        """4 段缓冲支配版本：与官方同段数，每段 +缓冲(1,5,9,3001) > 官方对应段
         （4G 判 NOUPDATE）且首分量更大（热点必触发）。"""
         assets = self.make_assets()
         # 真实版未知 → 静态兜底 4 段支配版本
@@ -242,7 +242,7 @@ class SetupMitmManifestPatchTest(unittest.TestCase):
         # 真实版已知 → 每段 +缓冲偏移，4 段与官方一致
         assets.real_online_version = "1.0.1.1776"
         served = assets._served_version()
-        self.assertEqual(served, "2.5.10.4776")  # 1.0.1.1776 → 2.5.10.4776 (offset +3000)
+        self.assertEqual(served, "2.5.10.4777")  # 1.0.1.1776 → 2.5.10.4777 (offset +3001)
         self.assert_dominates(served, "1.0.1.1776")
         # 关键回归：每段都 > 官方对应段，否则 versionLessThan 逐段 bug 会在 4G 误触发
         sv = [int(x) for x in served.split(".")]
@@ -253,21 +253,21 @@ class SetupMitmManifestPatchTest(unittest.TestCase):
     def test_served_version_build_offset_env_override(self):
         """MITM_BUILD_OFFSET 覆盖 build 段偏移（仅第 4 段，前 3 段不变）。
 
-        用途：临时设 3001 使 served 比 harbor 高 1 → 触发手机一次更新检查
-        （scenario 3 验证 NetConf 不被重下）。非法值回退默认 3000。
+        用途：临时设值使 served 比 harbor 高/低以触发或抑制更新检查
+        （scenario 3 验证 NetConf 不被重下）。非法值回退默认 3001。
         """
         assets = self.make_assets()
         assets.real_online_version = "1.0.1.1782"
-        # env 未设 → 默认 3000：1.0.1.1782 → 2.5.10.4782
-        self.assertEqual(assets._served_version(), "2.5.10.4782")
-        # MITM_BUILD_OFFSET=3001 → 仅 build 段 1782+3001，前 3 段不变
+        # env 未设 → 默认 3001：1.0.1.1782 → 2.5.10.4783
+        self.assertEqual(assets._served_version(), "2.5.10.4783")
+        # MITM_BUILD_OFFSET=3001 → 仅 build 段 1782+3001，前 3 段不变（与默认一致）
         with mock.patch.dict(os.environ, {"MITM_BUILD_OFFSET": "3001"}):
             self.assertEqual(assets._served_version(), "2.5.10.4783")
-        # 非法值 → 回退默认 3000
+        # 非法值 → 回退默认 3001
         with mock.patch.dict(os.environ, {"MITM_BUILD_OFFSET": "abc"}):
-            self.assertEqual(assets._served_version(), "2.5.10.4782")
+            self.assertEqual(assets._served_version(), "2.5.10.4783")
         # patch.dict 退出后自动还原 → 仍默认
-        self.assertEqual(assets._served_version(), "2.5.10.4782")
+        self.assertEqual(assets._served_version(), "2.5.10.4783")
 
     def make_hotspot_assets(self, file_url_mode="official"):
         """PC 热点设置形态：self_host=热点网关 IP（4G 够不着），ecs_ip=ECS 公网 IP。

@@ -362,25 +362,26 @@ class MitmAssets:
     #   +3000 (06-19) 注入 LOCAL_TCP_LIST_50[5045]=ECS,钉死 NetEngine _50 分支跳过
     #         srslist{5045}.json 缓存随机污染(实机根因:重进几次才连上 ECS);bump 让
     #         已热更过 +2000 版本的手机重下新 NetConf,否则本地 NOUPDATE 继续被 srslist 污染。
+    #   +3001 (06-25) scenario3 真机验证后定版为当前支配偏移(零漏更); NetConf 内容未变, 仅作版本支配基准
     #   未来 NetConf 内容变化时必须再 bump build 偏移,否则手机感知不到。
-    _VERSION_SEGMENT_OFFSETS = (1, 5, 9, 3000)
+    _VERSION_SEGMENT_OFFSETS = (1, 5, 9, 3001)
     # 拿不到真实线上版本时的静态兜底支配版本（4 段、每段都远大于任何现实版本）。
     _FALLBACK_DOMINATE_VERSION = "99.99.99.9999"
 
     @staticmethod
     def _build_offset() -> int:
-        """build 段（第 4 段）偏移，默认 3000，可被环境变量 MITM_BUILD_OFFSET 覆盖。
+        """build 段（第 4 段）偏移，默认 3001，可被环境变量 MITM_BUILD_OFFSET 覆盖。
 
-        用途：官方未真正出新版时，临时设 MITM_BUILD_OFFSET=3001 使下发版本比 harbor
-        高 1 → 触发手机一次 4G 更新检查（验证 scenario 3 的 NetConf 不被重下）。
-        非法值（无法 int 解析）回退默认 3000。call-time 读取，便于 systemd 进程级
+        用途：scenario 3 真机验证后定版的当前生产支配偏移（零漏更）。临时设其它值
+        可让下发版本比 harbor 高/低以触发或抑制更新检查。
+        非法值（无法 int 解析）回退默认 3001。call-time 读取，便于 systemd 进程级
         env 生效及单测在 import 后改 env。
         """
         import os
         try:
-            return int(os.environ.get("MITM_BUILD_OFFSET", "3000"))
+            return int(os.environ.get("MITM_BUILD_OFFSET", "3001"))
         except ValueError:
-            return 3000
+            return 3001
 
     def _served_version(self) -> str:
         """对外下发 / 写进 harbor 的版本号：4 段缓冲支配版本（与官方同段数，每段略高）。
@@ -393,7 +394,7 @@ class MitmAssets:
 
         关键：游戏 `Manifest.versionLessThan` 逐分量只检查 `a[i] < b[i]` 就返回 true，
         不会因前面 `a[j] > b[j]` 提前判否。所以下发版本在**每一个分量**上都 >= 真实线上版本
-        即可永久支配。这里取每段 +小幅缓冲（(1,5,9,1000)），分量数与官方一致（4 段），
+        即可永久支配。这里取每段 +小幅缓冲（(1,5,9,3001)），分量数与官方一致（4 段），
         位数贴近官方；拿不到真实版才回退静态支配版本。
         """
         real = self.real_online_version
@@ -404,9 +405,8 @@ class MitmAssets:
             return self._FALLBACK_DOMINATE_VERSION
         # 前 N 段叠加缓冲偏移（分量数不足时只对已有分量加偏移）。
         # 前 3 段（major+1/minor+5/patch+9）固定用 _VERSION_SEGMENT_OFFSETS[:3]，
-        # 保持支配语义不变；第 4 段（build）改用 _build_offset()——默认 3000、行为不变，
-        # 临时设 MITM_BUILD_OFFSET=3001 可让 served 比 harbor 高 1 触发一次更新检查
-        # （scenario 3 验证 NetConf 不被重下）。
+        # 保持支配语义不变；第 4 段（build）改用 _build_offset()——默认 3001（scenario 3
+        # 真机验证后定版的当前生产支配偏移，零漏更）；临时设其它值可调触发/抑制更新检查。
         offsets = list(self._VERSION_SEGMENT_OFFSETS[:3]) + [self._build_offset()]
         bumped = [
             c + offsets[i]
@@ -1377,9 +1377,9 @@ def _selftest() -> None:
         "zip_url": ["y"],
     }, ensure_ascii=False).encode("utf-8")
     patched_vm = json.loads(assets.patch_real_version_manifest(fake_vm).decode("utf-8"))
-    # 下发版本 = 4 段缓冲支配版本：真实线上版每段 +缓冲偏移(1,5,9,3000)，段数与官方一致
+    # 下发版本 = 4 段缓冲支配版本：真实线上版每段 +缓冲偏移(1,5,9,3001)，段数与官方一致
     assert assets.real_online_version == "1.0.0.51", assets.real_online_version
-    assert patched_vm["version"] == "2.5.9.3051", patched_vm["version"]  # 1.0.0.51 → 2.5.9.3051
+    assert patched_vm["version"] == "2.5.9.3052", patched_vm["version"]  # 1.0.0.51 → 2.5.9.3052
     _sv = [int(x) for x in patched_vm["version"].split(".")]
     _rv = [int(x) for x in "1.0.0.51".split(".")]
     assert len(_sv) == len(_rv) and all(a >= b for a, b in zip(_sv, _rv)) and any(a > b for a, b in zip(_sv, _rv)), patched_vm["version"]

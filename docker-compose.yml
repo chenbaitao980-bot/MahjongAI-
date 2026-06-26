@@ -1,0 +1,81 @@
+version: "3.8"
+
+services:
+  # ─── 热点模式 relay (Port 8000) ────────────────────────────
+  relay-hotspot:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./remote/relay/config_hotspot.yaml:/app/relay/config_hotspot.yaml:rw
+    environment:
+      - TZ=Asia/Shanghai
+    command: python relay/main.py --mode hotspot --host 0.0.0.0 --port 8000
+    restart: unless-stopped
+    networks:
+      - mahjong-net
+
+  # ─── VPN模式 relay (Port 8001) ─────────────────────────────
+  relay-vpn:
+    build: .
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./remote/relay/config_vpn.yaml:/app/relay/config_vpn.yaml:rw
+    environment:
+      - TZ=Asia/Shanghai
+    command: python relay/main.py --mode vpn --host 0.0.0.0 --port 8001
+    restart: unless-stopped
+    # 需要 host 网络模式以访问 VPN 接口抓包（可选，视部署方式而定）
+    # network_mode: host
+    networks:
+      - mahjong-net
+
+  # ─── 无配置模式 relay (Port 8002) ──────────────────────────
+  relay-noconfig:
+    build: .
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./remote/relay/config_noconfig.yaml:/app/relay/config_noconfig.yaml:rw
+      # 日志持久化
+      - ./logs:/app/logs
+    environment:
+      - TZ=Asia/Shanghai
+      - RELAY_URL=http://127.0.0.1:8002
+    command: python relay/main.py --mode noconfig --host 0.0.0.0 --port 8002
+    restart: unless-stopped
+    networks:
+      - mahjong-net
+
+  # ─── SRS Spectator（无配置模式专用，Port 8001 保留兼容）────
+  srs-spectator:
+    build: .
+    ports:
+      - "8001"
+    volumes:
+      - ./remote/relay/config_noconfig.yaml:/app/relay/config_noconfig.yaml:ro
+    environment:
+      - TZ=Asia/Shanghai
+      - RELAY_URL=http://relay-noconfig:8002
+      - BIND_PORT=8001
+    command: >
+      python -c "
+      import os, sys, yaml
+      cfg = yaml.safe_load(open('/app/relay/config_noconfig.yaml'))
+      os.environ['AUTH_TOKEN_12B'] = cfg.get('auth_token_12b', '')
+      os.environ['HANDSHAKE_BLOB'] = cfg.get('handshake_blob', '')
+      os.environ['SRS_SESSIONID'] = cfg.get('srs_sessionid', '')
+      os.environ['API_TOKEN'] = cfg.get('api_token', '')
+      sys.path.insert(0, '/app')
+      import uvicorn
+      from spectator.main import app
+      uvicorn.run(app, host='0.0.0.0', port=8001)
+      "
+    restart: unless-stopped
+    networks:
+      - mahjong-net
+
+networks:
+  mahjong-net:
+    driver: bridge

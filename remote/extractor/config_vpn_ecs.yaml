@@ -1,0 +1,9 @@
+# VPN模式 extractor 配置 — 运行在 ECS 上，抓取 VPN 接口流量
+# 用法: python remote/extractor/main.py --mode tcpdump --interface ipsec0 --config remote/extractor/config_vpn_ecs.yaml
+
+relay_url: http://127.0.0.1:8001
+api_token: 8f2e7c91b4d53a6f10e9c827
+game_port: 7777
+
+# VPN 接口抓包配置
+vpn_interface: ipsec0

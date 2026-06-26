@@ -1,0 +1,57 @@
+49: { module = XH.netEngine, eventName = XH.SRSProtocol.RespSRSLoad.event_key, callBack = "onRespSRSLoad" },
+50: { module = XH.netEngine, eventName = XH.SRSProtocol.RespSRSAddr.event_key, callBack = "onRespSRSAddr" },
+136: function LoginModule:changeGroupSessionLogin(srsGroupID)
+142: self:reqPlayerChangeGroupSessionLogin(XH.SRSProtocol.PlayerConnect.USERTYPE.SESSION,sessionInfo.userid,sessionInfo.password,srsGroupID)
+246: local srsGroupID = XH.areaData:getSrsGroupID()
+247: XH.netEngine:removeSRS(srsGroupID)
+267: local srsGroupID = XH.areaData:getSrsGroupID()
+268: self:startReq("ReqSessionLoginIn", userType,loginName,loginPasswd,areaID,lobbyID,configGameID,nil,srsGroupID,5) --5012
+271: function LoginModule:reqChangeGroupSessionLoginIn(userType,loginName,loginPasswd,srsGroupID)
+275: self:startReq("ReqChangeGroupSessionLoginIn", userType,loginName,loginPasswd,areaID,lobbyID,configGameID,nil,srsGroupID,3) --5012
+279: local srsGroupID = XH.areaData:getSrsGroupID()
+280: XH.netEngine:removeSRS(srsGroupID)
+286: function LoginModule:reqPlayerChangeGroupSessionLogin(userType,loginName,loginPasswd,srsGroupID)
+287: XH.netEngine:removeSRS(srsGroupID)
+289: self:reqChangeGroupSessionLoginIn(userType,loginName,loginPasswd,srsGroupID)
+295: local srsGroupID = XH.areaData:getSrsGroupID()
+296: XH.netEngine:removeSRS(srsGroupID)
+348: local srsGroupID = XH.areaData:getSrsGroupID()
+349: XH.netEngine:reLinkSRS(srsGroupID)
+370: self:dispatchEvent({name = LoginModule.EVENT_LOGIN_SUCCESS_CHANGE_GROUP , msg = { srsGroupID = data.srsGroupID }})
+373: self:changeGroupSessionLogin(transmit._srsGroupID)
+375: self:changeGroupSessionLogin(transmit._srsGroupID)
+447: local srsGroupID = XH.areaData:getSrsGroupID()
+448: XH.netEngine:reLinkSRS(srsGroupID)
+647: local srsGroupID = XH.areaData:getSrsGroupID()
+648: XH.netEngine:removeSRS(srsGroupID)
+810: XH.lobby:getModule("Replugin"):getPluginsInfo(json.encode(data))
+828: local jsonStr = json.encode(jsonData)
+853: self._remoteList = {}       --远程策略组srs，key为区srsGroupID
+860: self:sendReqSRSLoad()
+863: function LoginModule:sendReqSRSLoad()
+864: local reqSRSLoad = XH.SRSProtocol.ReqSRSLoad:new()
+867: XH.netEngine:sendProtocol(reqSRSLoad,XH.SRSProtocol.ReqSRSLoad.processid,0,srsGroupId)
+870: function LoginModule:onRespSRSLoad(event)
+871: local respData =  XH.SRSProtocol.RespSRSLoad:new()
+875: self._remoteList[wid] = {}
+877: self._remoteList[wid] = respData.SRSLoad
+886: if not self._remoteList[wid][i] or not self._remoteList[wid][i].nAppID then
+889: self._remoteList[wid][i].szIP = ""
+890: self._remoteList[wid][i].sPort = 0
+891: local reqSRSAddr = XH.SRSProtocol.ReqSRSAddr:new()
+892: reqSRSAddr.nAppID = self._remoteList[wid][i].nAppID
+894: XH.netEngine:sendProtocol(reqSRSAddr,XH.SRSProtocol.ReqSRSAddr.processid,0,srsGroupId)
+897: function LoginModule:onRespSRSAddr(event)
+898: local respData =  XH.SRSProtocol.RespSRSAddr:new()
+904: if self._remoteList[wid] then
+905: for i=1, #self._remoteList[wid] do
+906: if self._remoteList[wid][i].nAppID == respData.nAppID then
+907: self._remoteList[wid][i].szIP = respData.szIP
+908: self._remoteList[wid][i].sPort = respData.sPort
+914: local len = #self._remoteList[wid]
+916: local srsText = json.encode(self._remoteList[wid])
+917: local txtFile = io.open(string.format("%s%s%d.json",cc.FileUtils:getInstance():getWritablePath(),"srslist", wid),"wb")
+975: local srsGroupID = XH.areaData:getSrsGroupID()
+976: self:startReq("ReqSetHeadAndNickname", type, areaID, numID, head, nickname, srsGroupID, XH.KW_CONFIG_LOGIC_TIME_OUT)
+1177: local srsGroupID = XH.areaData:getGoldSrsGroupID()
+1181: XH.netEngine:sendProtocol(reqJoin, XH.MatchLinkProtocol.ReqInvite.processid, XH.areaData:getMatchLinkAppID() or 0, srsGroupID)

@@ -1,0 +1,11 @@
+#!/bin/sh
+# postinst — router-probe 装包后置脚本
+
+[ -n "${IPKG_INSTROOT}" ] && exit 0
+
+chmod 755 /usr/bin/probe
+
+echo "router-probe: running environment check..."
+/usr/bin/python3 /usr/bin/probe 2>&1 | logger -t router-probe -s
+
+exit 0

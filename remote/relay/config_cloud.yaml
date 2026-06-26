@@ -1,0 +1,17 @@
+# ─── 云端玩家模式配置 (Port 8003) ────────────────────────────────
+# 云端以玩家身份连游戏服，接收手牌帧后推送到此端口
+mode: cloud
+port: 8003
+
+# API 鉴权令牌（与 cloud_player.py --api-token 保持一致）
+api_token: cloudmode2026
+
+# 游戏服务器
+game_server_ip: 47.96.0.227
+game_server_port: 7777
+
+# extractor 离线检测超时（秒）
+push_timeout: 15
+
+# 不使用 spectator 子进程
+spectator_url: ''

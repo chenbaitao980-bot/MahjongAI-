@@ -1,0 +1,6 @@
+2026-06-12 20:26:47,900 [INFO] remote.relay.core: [HOTSPOT] RelayApp 已创建: port=8000, push_timeout=10.0s, spectator_url=(not set)
+2026-06-12 20:26:47,901 [INFO] remote.relay: [子进程] HOTSPOT 启动: port=8000
+2026-06-12 20:26:48,476 [INFO] remote.relay.core: [VPN] RelayApp 已创建: port=8001, push_timeout=10.0s, spectator_url=(not set)
+2026-06-12 20:26:48,476 [INFO] remote.relay: [子进程] VPN 启动: port=8001
+2026-06-12 20:26:48,893 [INFO] remote.relay.core: [NOCONFIG] RelayApp 已创建: port=8002, push_timeout=5.0s, spectator_url=http://localhost:8003
+2026-06-12 20:26:48,894 [INFO] remote.relay: [子进程] NOCONFIG 启动: port=8002

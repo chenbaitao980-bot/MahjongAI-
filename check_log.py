@@ -1,0 +1,11 @@
+import paramiko
+c = paramiko.SSHClient()
+c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+c.connect('8.136.37.136', username='root', password='Ysydxhyz111', timeout=10, allow_agent=False, look_for_keys=False)
+si, so, se = c.exec_command("journalctl -u mahjong-tcp-proxy --since '1 hour ago' --no-pager 2>/dev/null | grep -iE 'baida|baida_raw|财神|0x4[5-7]|0x5[1-3]' | tail -30")
+print("=== tcp-proxy log ===")
+print(so.read().decode()[-3000:])
+si, so, se = c.exec_command("journalctl -u mahjong-tcp-proxy --since '1 hour ago' --no-pager 2>/dev/null | tail -50")
+print("=== recent log ===")
+print(so.read().decode()[-3000:])
+c.close()

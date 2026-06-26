@@ -1,0 +1,22 @@
+# ─── VPN模式配置 (Port 8001) ──────────────────────────────────
+# 手机配置IPSec VPN连云端 → 云端ECS抓包(vpn接口) → 推送到此端口
+mode: vpn
+port: 8001
+
+# API 鉴权令牌
+api_token: 8f2e7c91b4d53a6f10e9c827
+
+# 游戏服务器
+game_server_ip: 47.96.0.227
+game_server_port: 7777
+
+# 持久化凭证（extractor 注册后自动填充，首次留空）
+handshake_blob: ''
+auth_token_12b: ''
+srs_sessionid: ''
+
+# extractor 离线检测超时（秒）
+push_timeout: 10
+
+# SRS spectator 地址（VPN模式不使用）
+spectator_url: ''

@@ -1,0 +1,45 @@
+2026-06-14 20:57:47,380 [INFO] remote.noconfig.hijack.setup_mitm: MITM assets built: version=9.9.9.99 netconf=13485B served_name=f6/f6ab237237afae433a4193fb079bc4bd.luac md5=f6ab237237afae433a4193fb079bc4bd
+2026-06-14 20:57:47,409 [INFO] remote.noconfig.hijack.setup_mitm: HTTPS MITM server on 0.0.0.0:443
+2026-06-14 20:57:47,410 [INFO] remote.noconfig.hijack.setup_mitm: DNS responder on 192.168.137.1:53 -> hijack ['gxb-api-tx.hzxuanming.com', 'gxb-api.hzxuanming.com', 'gxb-cos.hzxuanming.com', 'gxb-oss.hzxuanming.com'] as 192.168.137.1
+2026-06-14 21:17:46,750 [INFO] remote.noconfig.hijack.setup_mitm: [origin] resolved gxb-api.hzxuanming.com -> 121.40.48.133 (via 119.29.29.29)
+2026-06-14 21:17:47,042 [WARNING] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api.hzxuanming.com version.manifest patch failed: '线上 version.manifest 缺少 manifest_url' → fallback static
+2026-06-14 21:17:49,086 [ERROR] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api.hzxuanming.com project.manifest origin fetch status=404 → 502 (不回退 APK 静态，避免 91 文件)
+2026-06-14 21:17:49,394 [ERROR] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api.hzxuanming.com project.manifest origin fetch status=404 → 502 (不回退 APK 静态，避免 91 文件)
+2026-06-14 21:17:49,619 [INFO] remote.noconfig.hijack.setup_mitm: [origin] resolved gxb-api-tx.hzxuanming.com -> 43.180.150.189 (via 119.29.29.29)
+2026-06-14 21:17:49,905 [WARNING] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api-tx.hzxuanming.com version.manifest patch failed: '线上 version.manifest 缺少 manifest_url' → fallback static
+2026-06-14 21:17:52,363 [ERROR] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api.hzxuanming.com project.manifest origin fetch status=404 → 502 (不回退 APK 静态，避免 91 文件)
+2026-06-14 21:17:52,694 [ERROR] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api.hzxuanming.com project.manifest origin fetch status=404 → 502 (不回退 APK 静态，避免 91 文件)
+2026-06-14 21:17:53,081 [WARNING] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api-tx.hzxuanming.com version.manifest patch failed: '线上 version.manifest 缺少 manifest_url' → fallback static
+2026-06-14 21:17:53,388 [ERROR] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api.hzxuanming.com project.manifest origin fetch status=404 → 502 (不回退 APK 静态，避免 91 文件)
+2026-06-14 21:17:53,695 [ERROR] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api.hzxuanming.com project.manifest origin fetch status=404 → 502 (不回退 APK 静态，避免 91 文件)
+2026-06-14 21:17:54,106 [WARNING] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api.hzxuanming.com version.manifest patch failed: '线上 version.manifest 缺少 manifest_url' → fallback static
+2026-06-14 21:17:55,231 [ERROR] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api.hzxuanming.com project.manifest origin fetch status=404 → 502 (不回退 APK 静态，避免 91 文件)
+2026-06-14 21:17:55,538 [ERROR] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api.hzxuanming.com project.manifest origin fetch status=404 → 502 (不回退 APK 静态，避免 91 文件)
+2026-06-14 21:17:56,972 [WARNING] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api.hzxuanming.com version.manifest patch failed: '线上 version.manifest 缺少 manifest_url' → fallback static
+2026-06-14 21:17:57,382 [ERROR] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api.hzxuanming.com project.manifest origin fetch status=404 → 502 (不回退 APK 静态，避免 91 文件)
+2026-06-14 21:17:57,803 [ERROR] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api.hzxuanming.com project.manifest origin fetch status=404 → 502 (不回退 APK 静态，避免 91 文件)
+2026-06-14 22:04:19,451 [WARNING] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api-tx.hzxuanming.com version.manifest patch failed: '线上 version.manifest 缺少 manifest_url' → fallback static
+2026-06-14 22:04:20,285 [ERROR] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api.hzxuanming.com project.manifest origin fetch status=404 → 502 (不回退 APK 静态，避免 91 文件)
+2026-06-14 22:04:20,577 [ERROR] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api.hzxuanming.com project.manifest origin fetch status=404 → 502 (不回退 APK 静态，避免 91 文件)
+2026-06-14 22:04:20,987 [WARNING] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api.hzxuanming.com version.manifest patch failed: '线上 version.manifest 缺少 manifest_url' → fallback static
+2026-06-14 22:04:21,500 [ERROR] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api.hzxuanming.com project.manifest origin fetch status=404 → 502 (不回退 APK 静态，避免 91 文件)
+2026-06-14 22:04:21,806 [ERROR] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api.hzxuanming.com project.manifest origin fetch status=404 → 502 (不回退 APK 静态，避免 91 文件)
+2026-06-14 22:04:22,339 [WARNING] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api-tx.hzxuanming.com version.manifest patch failed: '线上 version.manifest 缺少 manifest_url' → fallback static
+2026-06-14 22:04:22,833 [ERROR] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api.hzxuanming.com project.manifest origin fetch status=404 → 502 (不回退 APK 静态，避免 91 文件)
+2026-06-14 22:04:23,139 [ERROR] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api.hzxuanming.com project.manifest origin fetch status=404 → 502 (不回退 APK 静态，避免 91 文件)
+2026-06-14 22:04:23,548 [WARNING] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api.hzxuanming.com version.manifest patch failed: '线上 version.manifest 缺少 manifest_url' → fallback static
+2026-06-14 22:04:27,132 [ERROR] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api.hzxuanming.com project.manifest origin fetch status=404 → 502 (不回退 APK 静态，避免 91 文件)
+2026-06-14 22:04:27,452 [ERROR] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api.hzxuanming.com project.manifest origin fetch status=404 → 502 (不回退 APK 静态，避免 91 文件)
+2026-06-14 22:04:27,850 [WARNING] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api.hzxuanming.com version.manifest patch failed: '线上 version.manifest 缺少 manifest_url' → fallback static
+2026-06-14 22:04:28,872 [ERROR] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api.hzxuanming.com project.manifest origin fetch status=404 → 502 (不回退 APK 静态，避免 91 文件)
+2026-06-14 22:04:29,180 [ERROR] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api.hzxuanming.com project.manifest origin fetch status=404 → 502 (不回退 APK 静态，避免 91 文件)
+2026-06-14 22:04:31,843 [WARNING] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api.hzxuanming.com version.manifest patch failed: '线上 version.manifest 缺少 manifest_url' → fallback static
+2026-06-14 22:04:32,458 [ERROR] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api.hzxuanming.com project.manifest origin fetch status=404 → 502 (不回退 APK 静态，避免 91 文件)
+2026-06-14 22:04:32,770 [ERROR] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api.hzxuanming.com project.manifest origin fetch status=404 → 502 (不回退 APK 静态，避免 91 文件)
+2026-06-14 22:04:33,996 [WARNING] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api-tx.hzxuanming.com version.manifest patch failed: '线上 version.manifest 缺少 manifest_url' → fallback static
+2026-06-14 22:04:35,633 [ERROR] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api.hzxuanming.com project.manifest origin fetch status=404 → 502 (不回退 APK 静态，避免 91 文件)
+2026-06-14 22:04:35,954 [ERROR] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.67 host=gxb-api.hzxuanming.com project.manifest origin fetch status=404 → 502 (不回退 APK 静态，避免 91 文件)
+2026-06-14 22:06:25,420 [WARNING] remote.noconfig.hijack.setup_mitm: [origin] resolve 192.168.137.1: no A record in response
+2026-06-14 22:06:25,423 [WARNING] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.1 host=192.168.137.1 version.manifest origin fetch status=502 → fallback static
+2026-06-14 22:10:08,487 [INFO] remote.noconfig.hijack.setup_mitm: [origin] real version.manifest manifest_url=https://gxb-oss.imeete.com/other/manifests/1051/v3.17/7128/project-1.0.0.158.manifest?t=1637847055 (host=gxb-oss.imeete.com path=/other/manifests/1051/v3.17/7128/project-1.0.0.158.manifest?t=1637847055)
+2026-06-14 22:10:08,489 [INFO] remote.noconfig.hijack.setup_mitm: [mitm] 192.168.137.1 host=gxb-api.hzxuanming.com → version.manifest (origin-patched, v=9.9.9.99, 297B) real_manifest_url host=gxb-oss.imeete.com

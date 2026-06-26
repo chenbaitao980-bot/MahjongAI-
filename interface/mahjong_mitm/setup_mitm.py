@@ -192,6 +192,19 @@ def _resolve_real_ip(host: str) -> str | None:
     cached = _resolve_cache.get(host)
     if cached:
         return cached
+    # R1: IP 地址跳过 DNS 查询（扫描器直接访问 ECS IP 时避免 UDP DNS 超时）
+    try:
+        socket.inet_pton(socket.AF_INET, host)
+        _resolve_cache[host] = host
+        return host
+    except OSError:
+        pass
+    try:
+        socket.inet_pton(socket.AF_INET6, host)
+        _resolve_cache[host] = host
+        return host
+    except OSError:
+        pass
     try:
         query = _build_dns_query(host)
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -277,17 +290,23 @@ def _origin_fetch(host: str, path: str) -> tuple[int, bytes, str]:
         # Ignore host/system proxy settings so hotspot MITM origin fetches
         # always go straight to the real CDN.
         session.trust_env = False
+        # R3: 拆分 connect/read timeout，防止 TCP 建连阶段也挂死
         r = session.get(
             url,
             headers={"Host": host},
             verify=False,
-            timeout=ORIGIN_TIMEOUT,
+            timeout=(3.05, ORIGIN_TIMEOUT),
         )
         ctype = r.headers.get("Content-Type", "application/octet-stream")
         return r.status_code, r.content, ctype
     except Exception as exc:
         logger.warning("[origin] fetch %s%s failed: %s", host, path, exc)
         return 502, b"", ""
+    finally:
+        try:
+            session.close()
+        except Exception:
+            pass
 
 
 # ─── 资产构建（manifest + 改过的 NetConf）────────────────────────────────────
@@ -808,12 +827,54 @@ def _downgrade_version_in_path(raw_path: str) -> str:
 
 # ─── HTTPS 处理器 ────────────────────────────────────────────────────────────
 
+# R2: 扫描器路径黑名单（在 do_GET 最前端快速拒绝，不进 origin fetch）
+_SCANNER_PATH_BLACKLIST = frozenset({
+    "/", "/favicon.ico", "/sitemap.xml", "/robots.txt",
+    "/.git/config", "/.env", "/.env.example", "/.env.prod", "/.env.local",
+    "/HNAP1", "/ReportServer", "/nmap", "/evox/about",
+})
+_SCANNER_PATH_PREFIXES = (
+    "/nmap", "/evox/", "/cgi-bin/", "/api/", "/admin/", "/wp-",
+    "/phpmyadmin", "/manager/html", "/actuator", "/.git/",
+    "/console", "/jmx-console", "/invoker/", "/solr/",
+)
+
+def _is_scanner_path(path: str) -> bool:
+    """判断是否为常见扫描器探测路径。"""
+    if path in _SCANNER_PATH_BLACKLIST:
+        return True
+    low = path.lower()
+    for prefix in _SCANNER_PATH_PREFIXES:
+        if low.startswith(prefix):
+            return True
+    return False
+
+
 def make_http_handler(assets: MitmAssets, enable_origin: bool = True):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
         def log_message(self, fmt, *args):
             pass  # 由 do_GET 统一打日志，避免重复
+
+        # R4: 确保异常路径也能关闭 wfile，避免 CLOSE-WAIT 堆积
+        def setup(self):
+            super().setup()
+
+        def finish(self):
+            try:
+                super().finish()
+            except Exception:
+                pass
+            finally:
+                try:
+                    self.wfile.close()
+                except Exception:
+                    pass
+                try:
+                    self.rfile.close()
+                except Exception:
+                    pass
 
         def _send(self, body: bytes, ctype="application/octet-stream", code=200):
             self.send_response(code)
@@ -830,6 +891,18 @@ def make_http_handler(assets: MitmAssets, enable_origin: bool = True):
             host = self._req_host()
             raw_path = self.path
             path = raw_path.split("?", 1)[0]
+
+            # R5: 健康检查端点（轻量，用于负载均衡/监控）
+            if path == "/healthz":
+                self._send(b'{"status":"ok"}', "application/json")
+                return
+
+            # R2: 扫描器请求快速拒绝（不进入 origin fetch，避免 UDP DNS 超时挂线程）
+            if _is_scanner_path(path):
+                logger.info("[mitm] %s host=%s → %s (scanner reject, 404)",
+                            client_ip, host, path)
+                self._send(b"", code=404)
+                return
 
             # 1) version.manifest / hotfix_update → 回源真实 version.manifest + 最小改写
             if path == PATH_VERSION or path.endswith("/hotfix_update"):

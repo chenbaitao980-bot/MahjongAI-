@@ -1,0 +1,22 @@
+# ─── 热点模式配置 (Port 8000) ────────────────────────────────
+# 手机连PC共享热点 → PC运行extractor抓包 → 推送到此端口
+mode: hotspot
+port: 8000
+
+# API 鉴权令牌（与 extractor/config.yaml 中的 api_token 一致）
+api_token: acec67bfa9e518b5906d3e6a
+
+# 游戏服务器
+game_server_ip: 47.96.0.227
+game_server_port: 7777
+
+# 持久化凭证（extractor 注册后自动填充，首次留空）
+handshake_blob: ''
+auth_token_12b: ''
+srs_sessionid: ''
+
+# extractor 离线检测超时（秒）。超过此时间无 /push 即认为离线
+push_timeout: 10
+
+# SRS spectator 地址（同机部署，热点模式不使用）
+spectator_url: ''

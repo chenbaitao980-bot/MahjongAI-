@@ -5,10 +5,10 @@
 
 用法：
   python remote/noconfig/hijack/ecs_run.py
-  python remote/noconfig/hijack/ecs_run.py --relay-url http://localhost:8002 --ecs-ip 8.136.37.136
+  python remote/noconfig/hijack/ecs_run.py --relay-url http://localhost:8002 --ecs-ip 8.136.32.137
 
 环境变量：
-  ECS_IP        代理改写用的 ECS IP（默认 8.136.37.136）
+  ECS_IP        代理改写用的 ECS IP（默认 8.136.32.137）
   RELAY_URL     手牌快照推送目标（默认 http://localhost:8002）
   API_TOKEN     relay api_token（可选，默认空）
 """
@@ -41,7 +41,7 @@ from remote.noconfig.hijack.tcp_proxy import (
 
 logger = logging.getLogger("remote.noconfig.hijack.ecs_run")
 
-DEFAULT_ECS_IP = os.environ.get("ECS_IP", "8.136.37.136")
+DEFAULT_ECS_IP = os.environ.get("ECS_IP", "8.136.32.137")
 DEFAULT_RELAY_URL = os.environ.get("RELAY_URL", "http://localhost:8002")
 DEFAULT_API_TOKEN = os.environ.get("API_TOKEN", "")
 

@@ -16,7 +16,7 @@ chcp 65001 >nul 2>&1
 :: discipline in CLAUDE.md.
 :: =============================================
 
-set ECS_HOST=root@8.136.37.136
+set ECS_HOST=root@8.136.32.137
 
 echo ============================================
 echo   START ECS services after failover drill
@@ -42,10 +42,10 @@ echo.
 echo [2/2] Probe ECS public ports (expect success) ...
 echo.
 echo   - HTTPS hotupdate MITM (TCP/443):
-curl --max-time 5 -ksS -o NUL -w "     status=%%{http_code} time=%%{time_total}s\n" https://8.136.37.136:443/ 2>&1
+curl --max-time 5 -ksS -o NUL -w "     status=%%{http_code} time=%%{time_total}s\n" https://8.136.32.137:443/ 2>&1
 echo.
 echo   - noconfig relay (TCP/8002):
-curl --max-time 5 -sS -o NUL -w "     status=%%{http_code} time=%%{time_total}s\n" http://8.136.37.136:8002/ 2>&1
+curl --max-time 5 -sS -o NUL -w "     status=%%{http_code} time=%%{time_total}s\n" http://8.136.32.137:8002/ 2>&1
 echo.
 echo   - SRS lobby + game proxy listeners:
 ssh %ECS_HOST% "ss -ltn | grep -E ':5748|:5749|:5767|:5768|:443|:8002' || echo     none listening"

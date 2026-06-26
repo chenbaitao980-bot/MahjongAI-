@@ -974,7 +974,7 @@ def _selftest_resp_srs_addr() -> None:
     再用同密钥解回，断言 IP 变了、其余字段不变、payload_len 头随之变化。
     """
     session_key = bytes.fromhex("00112233445566778899aabbccddeeff")  # 16B 假会话密钥
-    real_ip, ecs_ip = "47.96.0.227", "8.136.37.136"  # 11B vs 12B，变长
+    real_ip, ecs_ip = "47.96.0.227", "8.136.32.137"  # 11B vs 12B，变长
     n_app_id, s_port = 7, 12345
 
     # 1) 服务器侧构造加密帧（fresh-from-IV）
@@ -1013,7 +1013,7 @@ def _selftest_resp_srs_addr() -> None:
 def _selftest_handshake_key_learn() -> None:
     """单元测试：S→C 流里 HandshakeRsp 后跟 RespSRSAddr，验证改写器自动学密钥并改写。"""
     session_key = bytes.fromhex("aabbccddeeff00112233445566778899")
-    real_ip, ecs_ip = "47.96.0.227", "8.136.37.136"
+    real_ip, ecs_ip = "47.96.0.227", "8.136.32.137"
 
     # 服务器：HandshakeRsp(默认密钥, fresh-IV) payload=keylen(16)+key
     srv_default = SRSCrypto(key=SRS_DEFAULT_KEY)
@@ -1215,7 +1215,7 @@ def _make_lobby_connect_reporter(presence_reporter):
     return _report
 
 
-def run_proxies(ecs_ip: str = "8.136.37.136",
+def run_proxies(ecs_ip: str = "8.136.32.137",
                 listen_host: str = "0.0.0.0",
                 real_lobby_ip: str = REAL_LOBBY_IP,
                 real_game_ip: str = REAL_GAME_IP,
@@ -1308,7 +1308,7 @@ def main() -> None:
   python tcp_proxy.py --ecs-ip 0.0.0.0 --no-push   # 不推 relay，仅解码到日志
         """)
     ap.add_argument("--selftest", action="store_true", help="跑离线自测后退出")
-    ap.add_argument("--ecs-ip", default="8.136.37.136",
+    ap.add_argument("--ecs-ip", default="8.136.32.137",
                     help="RespSRSAddr 改写目标=ECS 公网 IP（手机据此连 ECS 游服 7777）")
     ap.add_argument("--listen-host", default="0.0.0.0",
                     help="代理监听地址（默认 0.0.0.0 绑所有网卡）")

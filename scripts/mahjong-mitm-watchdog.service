@@ -1,0 +1,21 @@
+[Unit]
+Description=MahjongAI MITM Service Watchdog (probe /healthz + /mode, auto-restart on hang)
+# watchdog 必须晚于被监督服务启动（避免误判"未起来"为"挂掉"）
+After=mahjong-mitm-hotupdate.service mahjong-tcp-proxy.service mahjong-relay-noconfig.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/mahjong-mitm-watchdog.sh
+# watchdog 自身崩了要能自启（daemon 监督 daemon 模式）
+Restart=always
+RestartSec=10
+# 软上限：连续 5 次失败 / 120s 内 → 停一会再启（避免疯狂重启风暴）
+StartLimitIntervalSec=120
+StartLimitBurst=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

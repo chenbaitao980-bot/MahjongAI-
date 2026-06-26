@@ -10,7 +10,7 @@
 
 用法：
   python remote/noconfig/hijack/ecs_proxy.py
-  python remote/noconfig/hijack/ecs_proxy.py --ecs-ip 8.136.37.136 --relay-port 8002
+  python remote/noconfig/hijack/ecs_proxy.py --ecs-ip 8.136.32.137 --relay-port 8002
 
 环境变量（优先于命令行，便于 Docker/systemd）：
   ECS_IP          覆盖 --ecs-ip
@@ -52,7 +52,7 @@ from remote.noconfig.hijack.tcp_proxy import (
 
 logger = logging.getLogger("remote.noconfig.hijack.ecs_proxy")
 
-DEFAULT_ECS_IP = os.environ.get("ECS_IP", "8.136.37.136")
+DEFAULT_ECS_IP = os.environ.get("ECS_IP", "8.136.32.137")
 DEFAULT_RELAY_PORT = int(os.environ.get("RELAY_PORT", "8002"))
 DEFAULT_RELAY_CONFIG = os.environ.get(
     "RELAY_CONFIG",

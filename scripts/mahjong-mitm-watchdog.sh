@@ -20,14 +20,15 @@
 
 set -u  # 不用 -e：探测失败是预期路径，不能让脚本退出
 
-# ─── 可调参数 ────────────────────────────────────────────────────
-HEALTH_URL="https://127.0.0.1:443/healthz"
-RELAY_URL="http://127.0.0.1:8002/mode"
-PROBE_INTERVAL=30                  # 探测间隔（秒）
-FAIL_THRESHOLD=3                   # 连续失败次数阈值 → 升级为两服务重启
-COOLDOWN_SECONDS=300               # 同一服务两次 restart 最小间隔（5 分钟）
-STATE_DIR="/var/lib/mahjong-mitm-watchdog"
-LOG_FILE="/var/log/mahjong-mitm-watchdog.log"
+# ─── 可调参数（环境变量可覆盖，便于故障注入测试）────────────────
+: "${HEALTH_URL:=https://127.0.0.1:443/healthz}"
+: "${RELAY_URL:=http://127.0.0.1:8002/mode}"
+: "${PROBE_INTERVAL:=30}"            # 探测间隔（秒）
+: "${FAIL_THRESHOLD:=3}"             # 连续失败次数阈值 → 升级为两服务重启
+: "${COOLDOWN_SECONDS:=300}"         # 同一服务两次 restart 最小间隔（5 分钟）
+: "${STATE_DIR:=/var/lib/mahjong-mitm-watchdog}"
+: "${LOG_FILE:=/var/log/mahjong-mitm-watchdog.log}"
+: "${SYSTEMCTL_CMD:=systemctl}"      # 测试时可指向 mock 脚本（不真 restart）
 
 WATCH_SERVICES=(
     "mahjong-mitm-hotupdate"
@@ -73,9 +74,17 @@ set_last_restart() {
 
 # ─── 健康探测 ───────────────────────────────────────────────────
 # 探测一个 URL，返回 0=ok / 1=fail
+#
+# 检查 HTTP 状态码而非 curl 退出码，因为：
+#   - Windows MSYS 上 curl -o /dev/null 即使 200 也可能返回非零("client
+#     returned ERROR on write of N bytes")，用 -w "%{http_code}" 取真实状态
+#   - 语义更对:"服务是否返回 2xx" 而不是 "curl 是否成功"
+#   - 跨平台一致(Windows / Linux / macOS 都正确)
 probe_url() {
     local url="$1"
-    curl --max-time 5 -ksS -o /dev/null "$url" 2>/dev/null
+    local code
+    code=$(curl --max-time 5 -ksS -o /dev/null -w '%{http_code}' "$url" 2>/dev/null)
+    [[ "$code" =~ ^[23] ]]
 }
 
 probe_all_health() {
@@ -98,7 +107,7 @@ restart_service() {
         return 1
     fi
     log "RESTART $svc (cooldown ok, since last = ${since}s)"
-    systemctl restart "$svc"
+    "$SYSTEMCTL_CMD" restart "$svc"
     local rc=$?
     set_last_restart "$svc" "$now"
     set_counter "$svc" 0
@@ -113,8 +122,8 @@ while true; do
 
     # 1) 三个 unit 自身 active 状态（systemd 自身的健康）
     for svc in "${WATCH_SERVICES[@]}"; do
-        if ! systemctl is-active --quiet "$svc" 2>/dev/null; then
-            log "ALERT $svc not active: $(systemctl is-active "$svc" 2>&1)"
+        if ! "$SYSTEMCTL_CMD" is-active --quiet "$svc" 2>/dev/null; then
+            log "ALERT $svc not active: $("$SYSTEMCTL_CMD" is-active "$svc" 2>&1)"
             restart_service "$svc" || true
         fi
         # 注意：active 状态下**不**重置 counter —— counter 由下方 health probe

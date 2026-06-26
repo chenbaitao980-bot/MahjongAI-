@@ -23,7 +23,8 @@ These guides help you **ask the right questions before coding**.
 |-------|---------|-------------|
 | [Code Reuse Thinking Guide](./code-reuse-thinking-guide.md) | Identify patterns and reduce duplication | When you notice repeated patterns |
 | [Cross-Layer Thinking Guide](./cross-layer-thinking-guide.md) | Think through data flow across layers | Features spanning multiple layers |
-| [MITM 连接稳定性与排查方法论](./mitm-connection-stability-guide.md) | noconfig 热更 MITM 5 条铁律 + 间歇性连接失败排查链 | 改 NetConf/大厅地址；排查 admin 丢用户、手机"重进几次才连上" |
+| [Meta-System Testing Thinking Guide](./meta-system-testing-thinking-guide.md) | 监督/保护/恢复机制本身的故障注入测试 | 装 watchdog / circuit-breaker / retry / 限流 / 降级 |
+| [MITM 连接稳定性与排查方法论](./mitm-connection-stability-guide.md) | noconfig 热更 MITM 7 条铁律 + 间歇性连接失败排查链 | 改 NetConf/大厅地址；排查 admin 丢用户、手机"重进几次才连上"、4G 卡校验 |
 
 ---
 
@@ -57,6 +58,15 @@ These guides help you **ask the right questions before coding**.
 - [ ] You're about to trust a "应该已经修了" comment without实机复现
 
 → Read [MITM 连接稳定性与排查方法论](./mitm-connection-stability-guide.md)
+
+### When to Think About Meta-System Testing
+
+- [ ] You're adding/modifying a **watchdog / circuit-breaker / retry / rate-limit / fallback**
+- [ ] You're tempted to write "已部署" or "Restart=always" as Acceptance Criteria
+- [ ] Your code's job is to "watch something and recover when it breaks"
+- [ ] The code path you're adding lives in `scripts/*watchdog*` / `*/health*` / `*/retry*` / `*/circuit*`
+
+→ Read [Meta-System Testing Thinking Guide](./meta-system-testing-thinking-guide.md)
 
 ---
 

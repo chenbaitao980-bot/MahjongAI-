@@ -67,6 +67,56 @@ if len > 1 then return list[math.random(1, len)] end  -- ★ 在 [ECS,ECS,真服
 
 `research/path-y-vs-ecs-only.md` 曾下结论"当前 HEAD 已无随机直连真服"，但未经实机验证就写进 PRD，导致排查方向跑偏半天。**诊断结论必须标"待实机验证"**；任何"应该已经解决了"的注释，排查时一律当未解决对待，直到实机坐实。
 
+### 铁律 6：监督/保护/恢复机制本身必须有"故障注入测试"
+
+> 2026-06-26 4G 校验卡回归真因(第二次 4G/MITM 回归)。脚本 [`scripts/mahjong-mitm-watchdog.sh`](../../scripts/mahjong-mitm-watchdog.sh) 装上 3 小时就因 counter reset bug 永远卡 1，到不了 FAIL_THRESHOLD=3 永不 restart。`06-26-mitm-stability-check` PRD 风险段**识别了**"watchdog 自身可能 bug 死循环"但**没加测试**——24 个 setup_mitm 测试全测被监督者，0 个测试监督者。
+
+**为什么**：监督/保护/恢复机制(进程看门狗/重试/熔断/限流/降级)的失败模式跟普通业务代码不一样——它失败时**正是它该救的场景**。业务代码失败通常返回 500/404，可观察；监督代码失败时系统**表现完全正常**(表面看一切好)但其实救不了。**没有故障注入测试 = 监督代码等于没装**。
+
+**怎么做**：
+- **故障注入测试必须存在**：能造一个"被监督者真坏"的场景(进程死/端口挂/handler 死但主线程活)，跑监督者，看它**真触发恢复动作**(systemctl restart / 切流量 / 报警)
+- **测试覆盖三类故障**：
+  1. 进程崩溃（systemd is-active=false）—— 最简单
+  2. 端口不再监听(socket closed)
+  3. **进程活但不响应**（主线程活 / handler 死 / CPU 0%）—— **这才是 watchdog 想抓的，测试必含**
+- **PRD 的 Acceptance Criteria 必须有"故障注入测试通过"这条**，不能只有"安装确认"(文件存在/服务 active/Restart=always)
+- 测试不能放生产上跑(自己恢复的副作用大)，要本地化：被监督者用 `nc -l` 假端口 / 假服务进程 / SIGSTOP 暂停主线程 等手段
+
+> 警惕写法：PRD 写"watchdog 部署到 ECS"/"watchdog 自身崩溃能自启"——这只是**安装确认**，不是**功能确认**。后者必须有"真故障 → 真恢复"端到端测试。
+
+### 铁律 7：Counter 类自愈逻辑的 reset 条件必须严于 trigger 条件
+
+> 紧接铁律 6，watchdog counter 永远卡 1 的具体根因。
+
+**为什么**：counter 累加机制(reset vs trigger)如果 reset 路径**比 trigger 路径更宽松**，就等于"无 reset 永不升级"或"trigger 一次 reset 一次"两种死循环。本次 bug 形态：
+
+```bash
+# 错误写法(实际发生 bug 的代码)
+for svc in "${WATCH_SERVICES[@]}"; do
+    if ! systemctl is-active --quiet "$svc"; then
+        restart_service "$svc"     # 死 → 救 + reset
+    else
+        set_counter "$svc" 0       # ★ active → 立即 reset(!!)
+    fi
+done
+fails=$(probe_all_health)        # 然后才真探测
+if (( fails == 0 )); then continue
+for svc in "${CO_RESTART_PAIR[@]}"; do
+    cnt=$((cnt + 1))             # 只累加一次 → 1
+done
+```
+
+`is-active` 看主线程活就 reset(对 hotupdate 来说总是 true,因为 setup_mitm 用 `threading.Event().wait()` 主线程不退出)→ /healthz 失败时只把 counter 0→1 → 下一轮又 reset → **永远到不了 3,永不 restart**。
+
+**正确写法**(已修,commit 9be8998):counter 重置**只**在 health probe 成功(0 fails)时,is-active 路径不再 reset。
+
+**反模式清单**：
+- reset 路径独立于 trigger 路径(本次 bug)
+- reset 条件 = "trigger 条件的子集"(本例:active ⊇ healthz-fail)
+- reset 与 trigger 用同一个观察源(本例:active 路径与 healthz 路径观察的是不同维度但都被 reset)
+
+**铁律 7 的速记**:**reset 严于 trigger**——reset 必须要求"两次 trigger 条件都消失"或"业务真恢复正常",不能"仅仅是看起来没坏"。
+
 ---
 
 ## 二、排查方法论：间歇性连接失败的标准链
@@ -135,5 +185,8 @@ if len > 1 then return list[math.random(1, len)] end  -- ★ 在 [ECS,ECS,真服
 | `remote/noconfig/hijack/setup_mitm.py` | 热更 MITM，铁律 2/3 的实现 |
 | `remote/noconfig/hijack/tcp_proxy.py` | 大厅/游服代理，铁律 4 的诊断日志 |
 | `apk_research/decrypted-lua/app/Net/NetEngine.lua` | 地址选取源码，铁律 1 的依据 |
-| 记忆 `noconfig-srslist-random-pollution-fix` | 本次根因与修法 |
+| `scripts/mahjong-mitm-watchdog.sh` | 服务监督者，铁律 6/7 的实现 |
+| `scripts/mahjong-mitm-watchdog.service` | watchdog 自身 systemd unit |
+| 记忆 `noconfig-srslist-random-pollution-fix` | 根因 srslist 随机污染 |
 | 记忆 `ecs-mitm-dns-bind-public` | DNS 绑公网 |
+| 记忆 `watchdog-counter-reset-bug-2026-06-26` | counter 卡 1 永不 restart 真因 |

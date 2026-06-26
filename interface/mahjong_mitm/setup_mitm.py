@@ -113,6 +113,8 @@ OFFICIAL_FILE_HOST = "gxb-oss.imeete.com"
 #   "ecs"（验收用）：file_url 改写为 ECS file base，所有官方文件经 ECS 透传，日志全可见。
 FILE_URL_MODE_OFFICIAL = "official"
 FILE_URL_MODE_ECS = "ecs"
+MANIFEST_URL_MODE_LOCAL = "local"
+MANIFEST_URL_MODE_ECS = "ecs"
 
 # 路由路径（HTTPS）
 PATH_VERSION = "/hotfix_update"            # update_url 落点
@@ -295,7 +297,8 @@ class MitmAssets:
 
     def __init__(self, apk_path: str, ecs_ip: str, self_host: str, tls_port: int = 443,
                  bump_version: str = "9.9.9.103",
-                 file_url_mode: str = FILE_URL_MODE_OFFICIAL):
+                 file_url_mode: str = FILE_URL_MODE_OFFICIAL,
+                 manifest_url_mode: str = MANIFEST_URL_MODE_ECS):
         self.apk_path = apk_path
         self.ecs_ip = ecs_ip
         self.self_host = self_host        # 手机看到的我们的主机名（被劫持域名，如 gxb-oss.hzxuanming.com）
@@ -303,6 +306,8 @@ class MitmAssets:
         self.bump_version = bump_version
         # file_url 改写模式（"official" 默认 / "ecs" 验收）。见 FILE_URL_MODE_* 常量。
         self.file_url_mode = file_url_mode
+        # manifest_url 改写模式："ecs" 写到 ECS；"local" 保留官方 host 走热点本地 MITM。
+        self.manifest_url_mode = manifest_url_mode
         # 真实线上版本号（从回源到的真实 version.manifest 的 version 字段 / manifest_url
         # 文件名动态捕获）。对外下发的版本号优先用它，而非伪造的 bump_version——
         # 否则手机本地版本被写成"未来版本"(9.9.9.103)，切到 4G 用本地版本请求真服
@@ -582,13 +587,18 @@ class MitmAssets:
         #    project.manifest 时直接打到 ECS，而非真官方（避免官方 NetConf md5≠harbor
         #    导致重下官方 NetConf 把覆盖冲掉）。
         #    path 保持官方原样 → 仍命中 real_manifest_paths → project handler 据此回源官方。
-        ecs_base = self._ecs_base()
-        rewritten_manifest_urls = []
-        for url in manifest_urls:
-            parts = urlsplit(url)
-            path_q = parts.path + (("?" + parts.query) if parts.query else "")
-            rewritten_manifest_urls.append(ecs_base + path_q)
-        vm["manifest_url"] = rewritten_manifest_urls
+        rewritten_manifest_urls = None
+        if self.manifest_url_mode == MANIFEST_URL_MODE_LOCAL:
+            vm["manifest_url"] = manifest_urls
+            logger.info("[patch] keep manifest_url on official hosts for local hotspot bootstrap")
+        else:
+            ecs_base = self._ecs_base()
+            rewritten_manifest_urls = []
+            for url in manifest_urls:
+                parts = urlsplit(url)
+                path_q = parts.path + (("?" + parts.query) if parts.query else "")
+                rewritten_manifest_urls.append(ecs_base + path_q)
+            vm["manifest_url"] = rewritten_manifest_urls
         # 若 file_url 缺失（"无需更新"响应），也注入一个官方原样兜底
         if not vm.get("file_url"):
             vm["file_url"] = [
@@ -1185,7 +1195,8 @@ def run(host_ip: str, ecs_ip: str = DEFAULT_ECS_IP, apk_path: str = DEFAULT_APK,
         tls_port: int = 443, dns_port: int = 53, no_dns: bool = False,
         cert_dir: str = None, enable_origin: bool = True,
         bump_version: str = "9.9.9.103", dns_listen_host: str | None = None,
-        file_url_mode: str = FILE_URL_MODE_OFFICIAL):
+        file_url_mode: str = FILE_URL_MODE_OFFICIAL,
+        manifest_url_mode: str = MANIFEST_URL_MODE_ECS):
     """启动热更 MITM（HTTPS manifest 服务 + DNS 劫持）。
 
     host_ip: 写进 DNS 应答 / NetConf / manifest 的地址（手机据此连本服务的 443）。
@@ -1200,7 +1211,7 @@ def run(host_ip: str, ecs_ip: str = DEFAULT_ECS_IP, apk_path: str = DEFAULT_APK,
     key_path = os.path.join(cert_dir, "mitm_key.pem")
 
     assets = MitmAssets(apk_path, ecs_ip, host_ip, tls_port=tls_port, bump_version=bump_version,
-                        file_url_mode=file_url_mode)
+                        file_url_mode=file_url_mode, manifest_url_mode=manifest_url_mode)
     httpd = start_https_server(assets, "0.0.0.0", tls_port, cert_path, key_path,
                                enable_origin=enable_origin)
 

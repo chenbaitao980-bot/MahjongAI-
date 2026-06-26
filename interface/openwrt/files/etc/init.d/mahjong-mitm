@@ -46,6 +46,10 @@ start_service() {
 	local args="--host-ip $host_ip --ecs-ip $ecs_ip --tls-port $tls_port --dns-port $dns_port"
 	[ -n "$dns_listen_host" ] && args="$args --dns-listen-host $dns_listen_host"
 
+	# 清理旧实例残留的 443 占用，避免新实例 bind 失败。
+	fuser -k 443/tcp 2>/dev/null || lsof -ti:443 2>/dev/null | xargs -r kill -9 2>/dev/null || true
+	sleep 0.5
+
 	procd_open_instance
 	procd_set_param command "$PYTHON" -m mahjong_mitm $args
 	procd_set_param env PYTHONPATH="$PROG_DIR"

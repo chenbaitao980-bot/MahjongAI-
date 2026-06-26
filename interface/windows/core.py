@@ -17,6 +17,75 @@ from typing import Optional
 logger = logging.getLogger("windows.core")
 
 
+def kill_port_conflicts(*ports: int) -> None:
+    """Best-effort cleanup for stale listeners that would block MITM startup."""
+    if not ports:
+        return
+
+    try:
+        import os
+        import psutil
+    except Exception as exc:
+        logger.warning("[port-guard] skipped conflict scan for %s: %s", sorted(set(ports)), exc)
+        return
+
+    own_pid = os.getpid()
+    wanted_ports = {int(port) for port in ports}
+    conflicts: dict[int, set[int]] = {}
+
+    try:
+        for conn in psutil.net_connections(kind="inet"):
+            laddr = getattr(conn, "laddr", None)
+            port = getattr(laddr, "port", None)
+            pid = getattr(conn, "pid", None)
+            status = getattr(conn, "status", "")
+            if port not in wanted_ports or not pid or pid == own_pid:
+                continue
+            if status not in ("LISTEN", "NONE", ""):
+                continue
+            conflicts.setdefault(pid, set()).add(port)
+    except Exception as exc:
+        logger.warning("[port-guard] failed to inspect local listeners for %s: %s",
+                       sorted(wanted_ports), exc)
+        return
+
+    for pid, pid_ports in sorted(conflicts.items()):
+        try:
+            proc = psutil.Process(pid)
+        except psutil.NoSuchProcess:
+            continue
+        except Exception as exc:
+            logger.warning("[port-guard] unable to inspect PID=%s on ports=%s: %s",
+                           pid, sorted(pid_ports), exc)
+            continue
+
+        try:
+            name = proc.name()
+        except Exception:
+            name = "<unknown>"
+        try:
+            cmdline = proc.cmdline()
+        except Exception:
+            cmdline = []
+
+        logger.info("[port-guard] ports=%s conflict: kill %s(PID=%s) cmdline=%s",
+                    sorted(pid_ports), name, pid, cmdline)
+        try:
+            proc.kill()
+            proc.wait(timeout=2)
+        except psutil.NoSuchProcess:
+            continue
+        except psutil.AccessDenied as exc:
+            logger.warning("[port-guard] kill denied for PID=%s ports=%s: %s",
+                           pid, sorted(pid_ports), exc)
+        except psutil.TimeoutExpired as exc:
+            logger.warning("[port-guard] PID=%s did not exit within 2s for ports=%s: %s",
+                           pid, sorted(pid_ports), exc)
+        except Exception as exc:
+            logger.warning("[port-guard] kill failed for PID=%s ports=%s: %s",
+                           pid, sorted(pid_ports), exc)
+
+
 @dataclass
 class MitmHandles:
     """start_all() 返回的运行句柄，供停止/状态查询使用。"""
@@ -46,12 +115,14 @@ def start_all(host_ip: str, ecs_ip: str, apk_path: str | None = None, *,
     from mahjong_mitm import setup_mitm
 
     apk_path = apk_path or setup_mitm.DEFAULT_APK
+    kill_port_conflicts(443, 53)
     logger.info("启动本地热更 MITM：host_ip=%s ecs_ip=%s divert=%s no_dns=%s",
                 host_ip, ecs_ip, enable_divert, no_dns)
 
     assets, httpd, dns = setup_mitm.run(
         host_ip, ecs_ip=ecs_ip, apk_path=apk_path,
         no_dns=no_dns, enable_origin=enable_origin,
+        manifest_url_mode=setup_mitm.MANIFEST_URL_MODE_LOCAL,
     )
 
     divert = None

@@ -84,6 +84,14 @@ if len > 1 then return list[math.random(1, len)] end  -- ★ 在 [ECS,ECS,真服
 
 > 警惕写法：PRD 写"watchdog 部署到 ECS"/"watchdog 自身崩溃能自启"——这只是**安装确认**，不是**功能确认**。后者必须有"真故障 → 真恢复"端到端测试。
 
+**新增被监督服务的 checklist**：
+- [ ] `WATCH_SERVICES` 数组是否包含新服务？
+- [ ] 新服务是否有独立的 health probe endpoint？
+- [ ] `CO_RESTART_PAIR` 或独立 counter 逻辑是否覆盖新服务？
+- [ ] 故障注入测试是否包含新服务的"进程活但不响应"场景？
+
+> 本次 relay-noconfig 被遗漏：新加了服务但 watchdog 只监督 `/healthz`，`/mode` 失败时 counter 永不累加 relay-noconfig，永远到不了 threshold。
+
 ### 铁律 7：Counter 类自愈逻辑的 reset 条件必须严于 trigger 条件
 
 > 紧接铁律 6，watchdog counter 永远卡 1 的具体根因。
@@ -116,6 +124,32 @@ done
 - reset 与 trigger 用同一个观察源(本例:active 路径与 healthz 路径观察的是不同维度但都被 reset)
 
 **铁律 7 的速记**:**reset 严于 trigger**——reset 必须要求"两次 trigger 条件都消失"或"业务真恢复正常",不能"仅仅是看起来没坏"。
+
+### 铁律 8：关键 HTTP server 必须运行在主线程（或至少能被主线程感知死亡）
+
+> 2026-06-26 handler 死锁真因。`setup_mitm.py` 用 `threading.Thread(target=httpd.serve_forever, daemon=True).start()` + 主线程 `threading.Event().wait()`，handler thread 异常退出时主线程完全无感。
+
+**为什么**：`BaseHTTPServer.serve_forever()` 内部是 `while not shutdown: selector.select(); handle_request()`。当 SSL `wrap_socket` 遇到损坏 client hello、或 `selector.select()` 遇到损坏 fd（`OSError EBADF`）、或底层 TCP 栈异常时，`serve_forever` 抛出异常退出。如果 `serve_forever` 跑在 **daemon thread** 中：
+- 异常不传播到主线程
+- 主线程继续 `Event().wait()` 永远阻塞
+- systemd 看到 PID 还在 → `is-active=true`
+- **服务实际不可用，但没有任何人知道**
+
+daemon thread 的语义是"主线程退出时自动收掉"，不是"线程退出时通知主线程"。这是 Python threading 的设计，不是 bug，但**把关键服务放在 daemon thread 中是架构级错误**。
+
+**正确写法**(已修,commit d1b4e1a):
+```python
+# Before (dangerous: serve_forever in daemon thread)
+threading.Thread(target=httpd.serve_forever, daemon=True).start()
+threading.Event().wait()
+
+# After (safe: main thread runs serve_forever)
+httpd.serve_forever()  # 异常 → raise → 进程退出 → systemd Restart=always 自动拉起
+```
+
+**适用场景**：任何被 systemd `Restart=always` 监督的 Python HTTP server（`BaseHTTPServer` / `ThreadingHTTPServer` / `wsgiref` 等）。
+
+**不适用场景**：PC 本地临时运行（非 systemd 监督，daemon thread 方便 Ctrl+C 退出）。这类场景用 `blocking=False` 参数区分。
 
 ---
 
@@ -187,6 +221,9 @@ done
 | `apk_research/decrypted-lua/app/Net/NetEngine.lua` | 地址选取源码，铁律 1 的依据 |
 | `scripts/mahjong-mitm-watchdog.sh` | 服务监督者，铁律 6/7 的实现 |
 | `scripts/mahjong-mitm-watchdog.service` | watchdog 自身 systemd unit |
+| `scripts/ecs_stability_test.sh` | 回归+极端稳定性测试脚本（铁律 6 验证工具） |
 | 记忆 `noconfig-srslist-random-pollution-fix` | 根因 srslist 随机污染 |
 | 记忆 `ecs-mitm-dns-bind-public` | DNS 绑公网 |
 | 记忆 `watchdog-counter-reset-bug-2026-06-26` | counter 卡 1 永不 restart 真因 |
+| 记忆 `4g-mitm-ecs-meta-pattern-5-regressions` | 11 天 5 次回归 meta-pattern |
+| 任务 `06-26-hotupdate-4g-stall-recurrent` | 本次 handler 死锁 + relay-noconfig 覆盖修复 |

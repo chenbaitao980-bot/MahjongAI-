@@ -85,6 +85,7 @@
 3. **"is-active=健康"** — 对"主线程活(handler 死)"的进程**永远不成立**,这个假设等于"我监督我自己"
 4. **"反正挂了用户会报"** — 用户报 = 你的监督者**没救**;救回来 = 监督者工作正常
 5. **测试放生产** — 自己恢复的副作用大;在 staging 跑;本地化用 `nc -l` 假端口 / SIGSTOP 模拟
+6. **daemon thread 跑关键服务 + 主线程空等** — `threading.Thread(target=serve_forever, daemon=True).start()` 后 `Event().wait()`。serve_forever 异常退出 = 线程静默死亡 = 主线程继续空等 = systemd 认为进程 alive = **监督者形同虚设**。关键服务必须跑在主线程，或至少能被主线程感知死亡。
 
 ---
 
@@ -99,6 +100,8 @@
     □ 每类故障有故障注入测试吗?
     □ PRD Acceptance Criteria 有"功能确认"而非只是"安装确认"吗?
     □ counter 类逻辑(如有)过完 Step 4 清单了吗?
+    □ 新增被监督服务时,WATCH_SERVICES / CO_RESTART_PAIR / counter 逻辑同步更新了吗?
+    □ 被监督者跑在 daemon thread 中吗?如是,异常退出时主线程能感知吗?
   → 任何一个 □ 没勾,这 PR 不合
 ```
 
@@ -113,9 +116,23 @@
 | PRD Acceptance | ✓ "watchdog 部署到 ECS / 自身崩溃能自启" | ✗ **缺"counter 累加到 3 真触发 restart"** |
 | Counter reset 逻辑 | 写在 is-active 路径(错) | ✗ Step 4 清单没走 |
 | 3 小时后 hotupdate handler 死 | watchdog counter 0→1→reset→0→1... → 永不到 3 → 不救 | ✗ 故障注入测试早该发现 |
+| 新增 relay-noconfig 服务 | ✓ 部署了 :8002 独立 relay | ✗ **watchdog CO_RESTART_PAIR 没含它，/mode 失败无人管** |
+| serve_forever 跑 daemon thread | ✓ `threading.Thread(...daemon=True).start()` + `Event().wait()` | ✗ handler 异常退出 = 线程静默死亡，主线程永远空等 |
 | 用户报"4G 又卡了" | 第二次 4G/MITM 回归(11 天 5 次) | ✗ |
 
-**教训**:**5 次回归,每次都在客户端→ECS 链路上加新东西(新服务/新配置/新监控),每次新层没端到端测试,新层救不了下次同层 bug**。**Meta-system 必须 self-test**。
+**三层根因**：
+1. **战术层（直接触发）**: watchdog counter reset 条件过松 + relay-noconfig 未被覆盖
+2. **战略层（系统缺陷）**: 监督代码无故障注入测试 + PRD 只有安装确认无功能确认
+3. **哲学层（思维模式）**: "加了新层就安全了"——每次加新层不做端到端测试，新层救不了同层 bug；daemon thread 中跑关键服务是架构级错误
+
+**修复后验证**（commit d1b4e1a, ec48754）：
+- SIGSTOP handler 死锁 → counter 1→2→3 → RESTART → 105s 自动恢复 ✅
+- SIGSTOP relay-noconfig → counter 1→2→3 → RESTART → 105s 自动恢复 ✅
+- 100 并发风暴 → CLOSE-WAIT=0，线程/fd 无泄漏 ✅
+- 500 DNS 洪水 → 100% 响应 ✅
+- serve_forever 已移到主线程（线程栈验证 `do_poll`）✅
+
+**教训**:**5 次回归,每次都在客户端→ECS 链路上加新东西(新服务/新配置/新监控),每次新层没端到端测试,新层救不了下次同层 bug**。**Meta-system 必须 self-test**。daemon thread 中跑关键 HTTP server = 自杀。
 
 ---
 

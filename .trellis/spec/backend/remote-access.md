@@ -89,7 +89,7 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│                    ECS 云服务器 (8.136.37.136)                 │
+│                    ECS 云服务器 (8.136.32.137)                 │
 │                                                              │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │
 │  │ 热点 relay   │  │ VPN relay   │  │ 无配置 relay │          │
@@ -271,8 +271,8 @@ VPN 模块的 `app.py` 包含以下额外端点（不属于 hotspot 和 noconfig
 ```yaml
 # remote/extractor/config.yaml
 relay_urls:
-  - http://8.136.37.136:8000   # 热点模式
-  - http://8.136.37.136:8001   # VPN模式
+  - http://8.136.32.137:8000   # 热点模式
+  - http://8.136.32.137:8001   # VPN模式
 ```
 
 向后兼容：`relay_url`（单字符串）仍可用，`relay_urls` 优先。
@@ -757,7 +757,7 @@ msg = FakeMsg(
                             │ NpcapCapture 嗅探热点网卡
                             │ extractor → POST /register + /push
                             ↓ HTTP
-                     ECS 云服务器 (8.136.37.136)
+                     ECS 云服务器 (8.136.32.137)
                      relay :8000 (hotspot mode)
                      GET / → 手牌展示页 (static/index.html)
                      GET /state?token=... → JSON 牌局数据
@@ -771,10 +771,10 @@ tar -cf ecs-update.tar --exclude=".git" --exclude=".venv" --exclude="__pycache__
     --exclude="*.pyc" --exclude="logs" --exclude="dist" --exclude=".obsidian" \
     --exclude=".trellis" --exclude=".claude" --exclude="*.spec" \
     remote/ stable/ game/ config/ deploy_ecs.sh e2e_test.py
-scp ecs-update.tar root@8.136.37.136:/tmp/mahjong-update.tar
+scp ecs-update.tar root@8.136.32.137:/tmp/mahjong-update.tar
 
 # 2. SSH 登录 ECS
-ssh root@8.136.37.136
+ssh root@8.136.32.137
 
 # 3. 解压代码
 mkdir -p /opt/mahjong-remote
@@ -845,7 +845,7 @@ spectator_url: ''
 ```yaml
 # remote/extractor/config.yaml
 api_token: acec67bfa9e518b5906d3e6a  # 必须与 relay config_hotspot.yaml 一致
-relay_url: http://8.136.37.136:8000   # ECS 公网 IP + 端口
+relay_url: http://8.136.32.137:8000   # ECS 公网 IP + 端口
 game_port: 7777
 spectator_forensic_all_heads: true
 ```
@@ -1374,15 +1374,15 @@ python test_remote.py           # 13/13 必须全 pass
 python e2e_test.py --temp       # 3/3 必须全 pass
 
 # 3. ECS 部署验证
-scp 修改的文件 root@8.136.37.136:/opt/mahjong-remote/对应路径/
-ssh root@8.136.37.136 "systemctl restart mahjong-relay-hotspot"
+scp 修改的文件 root@8.136.32.137:/opt/mahjong-remote/对应路径/
+ssh root@8.136.32.137 "systemctl restart mahjong-relay-hotspot"
 sleep 2
-curl -s http://8.136.37.136:8000/mode    # {"mode":"hotspot"}
-curl -s http://8.136.37.136:8000/ | head -5  # 手牌展示页 HTML
+curl -s http://8.136.32.137:8000/mode    # {"mode":"hotspot"}
+curl -s http://8.136.32.137:8000/ | head -5  # 手牌展示页 HTML
 
 # 4. 实机验证
 # 手机连热点 → 双击 5_extractor_hotspot.bat → 手机进游戏打牌
-# 看 http://8.136.37.136:8000/ 是否有手牌数据
+# 看 http://8.136.32.137:8000/ 是否有手牌数据
 ```
 
 ---
@@ -1405,7 +1405,7 @@ curl -s http://8.136.37.136:8000/ | head -5  # 手牌展示页 HTML
 
 ```bash
 # 1. 把服务器代码拉回本地（覆盖本地工作目录）
-scp root@8.136.37.136:/opt/mahjong-remote/<差异文件> <本地对应路径>
+scp root@8.136.32.137:/opt/mahjong-remote/<差异文件> <本地对应路径>
 
 # 2. 本地 git diff 看清楚到底差了什么
 git diff -- <差异文件>
@@ -1453,13 +1453,13 @@ git commit -m "sync: pull <文件> back from server"
 ```bash
 # 单文件对比
 LOCAL=$(md5sum remote/noconfig/hijack/tcp_proxy.py | awk '{print $1}')
-REMOTE=$(ssh root@8.136.37.136 'md5sum /opt/mahjong-remote/remote/noconfig/hijack/tcp_proxy.py' | awk '{print $1}')
+REMOTE=$(ssh root@8.136.32.137 'md5sum /opt/mahjong-remote/remote/noconfig/hijack/tcp_proxy.py' | awk '{print $1}')
 [ "$LOCAL" = "$REMOTE" ] && echo "OK in sync" || echo "DIFF! pull server back first"
 
 # 整个 noconfig 目录批量对比
 for f in $(cd remote/noconfig && find . -name '*.py'); do
   L=$(md5sum "remote/noconfig/$f" 2>/dev/null | awk '{print $1}')
-  R=$(ssh root@8.136.37.136 "md5sum /opt/mahjong-remote/remote/noconfig/$f 2>/dev/null" | awk '{print $1}')
+  R=$(ssh root@8.136.32.137 "md5sum /opt/mahjong-remote/remote/noconfig/$f 2>/dev/null" | awk '{print $1}')
   [ "$L" != "$R" ] && echo "DIFF: $f (local=$L  remote=$R)"
 done
 ```
@@ -1628,14 +1628,14 @@ bat / systemctl 命令**必须用以下实际部署单元名**，不要照抄 PR
 **Wrong**——钉死单点（ECS 一挂金币局必死）：
 
 ```lua
-[5067] = { {id=0, ip="8.136.37.136", port=5767} }
+[5067] = { {id=0, ip="8.136.32.137", port=5767} }
 ```
 
 **Correct**——ECS 在前抓凭证、真服在后做兜底：
 
 ```lua
 [5067] = {
-    {id=0, ip="8.136.37.136", port=5767},
+    {id=0, ip="8.136.32.137", port=5767},
     {id=0, ip="srs-zj.tt2kj.com", port=7777},
 }
 ```

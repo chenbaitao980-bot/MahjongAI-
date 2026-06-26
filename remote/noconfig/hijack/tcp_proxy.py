@@ -247,6 +247,7 @@ class LobbyS2CRewriter:
         self._tap_port = tap_port
         self._source_host = source_host or ""
         self._user_id = ""
+        self._sessionid = ""
 
     def feed(self, data: bytes) -> bytes:
         """喂入 S→C 原始字节，返回（可能改写后的）应转发给手机的字节。
@@ -375,14 +376,17 @@ class LobbyS2CRewriter:
                 if info and not info.get("error") and info.get("sessionid"):
                     self._player_data_fired = True
                     sid = info.get("sessionid")
-                    self._user_id = sid.hex() if isinstance(sid, (bytes, bytearray)) else str(sid)
+                    numid = info.get("numid", 0)
+                    # user_id 用稳定的 numid（同一账号不变），sessionid 单独保存
+                    self._user_id = str(numid) if numid else ""
+                    self._sessionid = sid.hex() if isinstance(sid, (bytes, bytearray)) else str(sid)
                     if self._lobby_tap is not None:
                         try:
-                            self._lobby_tap.set_user_id(self._user_id)
+                            self._lobby_tap.set_user_id(self._user_id, self._sessionid)
                         except Exception as exc:
                             logger.debug("[lobby] tap user_id bind failed: %s", exc)
                     if self.game_proxy_manager is not None:
-                        self.game_proxy_manager.set_user_id(self._user_id)
+                        self.game_proxy_manager.set_user_id(self._user_id, self._sessionid)
                     info = dict(info)
                     if self._source_host:
                         info.setdefault("source_host", self._source_host)
@@ -521,6 +525,7 @@ class DynamicGameProxyManager:
         self.api_token = api_token
         self.on_player_data = on_player_data
         self._user_id = ""
+        self._sessionid = ""
         self._taps: list = []
         # port -> (orig_ip, orig_port) 映射
         self._addr_map: dict[int, tuple[str, int]] = {}
@@ -528,12 +533,13 @@ class DynamicGameProxyManager:
         self._proxies: dict[int, TcpProxy] = {}
         self._lock = threading.Lock()
 
-    def set_user_id(self, user_id: str) -> None:
+    def set_user_id(self, user_id: str, sessionid: str = "") -> None:
         """设置 user_id 并传播到所有已有的 game tap"""
         self._user_id = user_id or ""
+        self._sessionid = sessionid or ""
         for tap in self._taps:
             try:
-                tap.set_user_id(self._user_id)
+                tap.set_user_id(self._user_id, self._sessionid)
             except Exception:
                 pass
         logger.info("[game-mgr] user_id set to %s, propagated to %d taps",
@@ -567,7 +573,7 @@ class DynamicGameProxyManager:
                                  server_port=orig_port,
                                  relay_push_url=self.relay_push_url,
                                  api_token=self.api_token)
-            tap.set_user_id(self._user_id)
+            tap.set_user_id(self._user_id, self._sessionid)
             self._taps.append(tap)
             decryptor = GameS2CDecryptor(on_player_data=self.on_player_data)
 
@@ -655,9 +661,11 @@ class GameTapDecoder:
         self._api_token = api_token
         self._last_push_hand = None  # 去重：手牌没变就不重复 push
         self._user_id = ""
+        self._sessionid = ""
 
-    def set_user_id(self, user_id: str) -> None:
+    def set_user_id(self, user_id: str, sessionid: str = "") -> None:
         self._user_id = user_id or ""
+        self._sessionid = sessionid or ""
 
     @staticmethod
     def _extract_local_hand(snapshot: dict) -> list[str]:
@@ -715,6 +723,8 @@ class GameTapDecoder:
             body = {"snapshot": snap, "api_token": self._api_token}
             if self._user_id:
                 body["user_id"] = self._user_id
+            if self._sessionid:
+                body["srs_sessionid"] = self._sessionid
             _req.post(
                 self._relay_push_url,
                 json=body,
@@ -925,7 +935,7 @@ def build_game_proxy(listen_host: str, listen_port: int,
                              server_port=listen_port,
                              relay_push_url=relay_push_url, api_token=api_token)
         if game_proxy_manager is not None:
-            tap.set_user_id(game_proxy_manager._user_id)
+            tap.set_user_id(game_proxy_manager._user_id, game_proxy_manager._sessionid)
             game_proxy_manager._taps.append(tap)
         # SRS 游服流量是加密的：S→C 需先学会话密钥（HandshakeRsp）再解 payload。
         decryptor = GameS2CDecryptor(on_player_data=on_player_data)

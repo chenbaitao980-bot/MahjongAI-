@@ -69,18 +69,21 @@ def make_presence_reporter(relay_url: str, api_token: str):
     import requests
 
     def _report(info: dict) -> None:
-        sid = info.get("sessionid", b"")
-        if not sid:
+        numid = info.get("numid", 0)
+        if not numid:
             return
-        user_id = sid.hex() if isinstance(sid, (bytes, bytearray)) else str(sid)
+        user_id = str(numid)
         name = info.get("nickname", "") or ""
+        sid = info.get("sessionid", b"")
+        srs_sid = sid.hex() if isinstance(sid, (bytes, bytearray)) else str(sid)
         try:
             requests.post(
                 f"{relay_url}/presence",
-                json={"api_token": api_token, "user_id": user_id, "name": name},
+                json={"api_token": api_token, "user_id": user_id, "name": name,
+                      "srs_sessionid": srs_sid},
                 timeout=3,
             )
-            logger.info("[presence] 上报在线: user=%s name=%s", user_id[:12], name)
+            logger.info("[presence] 上报在线: user=%s name=%s", user_id, name)
         except Exception as e:
             logger.debug("[presence] 上报失败: %s", e)
 

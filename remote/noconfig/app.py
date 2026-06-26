@@ -116,15 +116,15 @@ class PushRequest(BaseModel):
     snapshot: Dict[str, Any]
     api_token: str
     user_id: str = ""  # 多用户场景下，extractor 推送时带 user_id
+    srs_sessionid: str = ""  # 游戏服务器下发的 sessionid（hex）
 
 
 class PresenceRequest(BaseModel):
-    """presence 信号：手机进大厅/进游戏时由 ecs_proxy 上报，按 srs_sessionid 分用户。"""
+    """presence 信号：手机进大厅/进游戏时由 ecs_proxy 上报，按 user_id(=numid) 分用户。"""
     api_token: str
-    user_id: str  # 用户唯一标识（通常是 srs_sessionid 的 hex）
+    user_id: str  # 用户唯一标识（稳定的 numid）
     name: str = ""  # 玩家昵称（从 PlayerData 解出，可选）
-
-
+    srs_sessionid: str = ""  # 游戏服务器下发的 sessionid（hex，每次登录变）
     provisional: bool = False
     source_host: str = ""
 
@@ -488,8 +488,8 @@ async def push(req: PushRequest):
     if user is None:
         # 自动创建用户（如果 extractor 推送时用户不存在）
         user = user_store.add_user(target_user_id, name=target_user_id)
-    # 确保用户有凭证（重启后用户可能丢失凭证）
-    _auto_fill_credentials(user, fallback_srs_sid=target_user_id)
+    # 确保用户有凭证（重启后用户可能丢失凭证），用 push 里的 sessionid
+    _auto_fill_credentials(user, fallback_srs_sid=req.srs_sessionid or target_user_id)
 
     was_offline = user.state_store.should_use_game_client()
     user.on_push(req.snapshot)
@@ -528,8 +528,8 @@ async def presence(req: PresenceRequest):
     # 若带了更可信的昵称（PlayerData 解出），更新显示名
     if req.name and user.name in ("", user.user_id):
         user.name = req.name
-    # 自动补全凭证（从 default 复制 handshake/auth，srs_sessionid 用 user_id）
-    _auto_fill_credentials(user, fallback_srs_sid=req.user_id)
+    # 自动补全凭证（从 default 复制 handshake/auth，srs_sessionid 用 presence 里的）
+    _auto_fill_credentials(user, fallback_srs_sid=req.srs_sessionid or req.user_id)
     user.touch_presence()
     _LOGGER.info("[NOCONFIG] presence: user=%s name=%s 标记在线", user.user_id, user.name)
     return {"status": "ok", "mode": "noconfig", "user_id": user.user_id, "online": True}

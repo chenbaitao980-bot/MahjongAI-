@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 10
-- **Last Active**: 2026-06-25
+- **Total Sessions**: 11
+- **Last Active**: 2026-06-26
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~346 | Active |
+| `journal-1.md` | ~380 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 11 | 2026-06-26 | ECS MITM 热更服务僵死修复：socket泄漏+origin fetch超时 | `744f0a7`, `7a67ac4` | `master` |
 | 10 | 2026-06-25 | noconfig 迁移华纳云 HK + 443 冲突排查 | `40cdfc3`, `bdec012` | `master` |
 | 9 | 2026-06-25 | 迁移 noconfig 服务到华纳云 HK 8.136.32.137 | `40cdfc3` | `master` |
 | 8 | 2026-06-23 | noconfig 本地 MITM 打包成 Windows 托盘 exe | `3a6aba8` | `master` |

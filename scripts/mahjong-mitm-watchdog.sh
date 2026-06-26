@@ -38,6 +38,8 @@ WATCH_SERVICES=(
 # /healthz 失败时同时 restart 的服务对（hotupdate 是健康检查被探测的目标，
 # tcp_proxy 共享同一进程空间内 ifdown/网络/资源问题，关联性强）
 CO_RESTART_PAIR=("mahjong-mitm-hotupdate" "mahjong-tcp-proxy")
+# /mode 失败时 restart 的服务（relay-noconfig 独立监督，不与其他服务捆绑）
+RELAY_SVC="mahjong-relay-noconfig"
 
 # ─── 初始化 ─────────────────────────────────────────────────────
 mkdir -p "$STATE_DIR" 2>/dev/null || STATE_DIR="/tmp/mahjong-mitm-watchdog"
@@ -88,10 +90,10 @@ probe_url() {
 }
 
 probe_all_health() {
-    local fail=0
-    probe_url "$HEALTH_URL" || fail=$((fail + 1))
-    probe_url "$RELAY_URL"  || fail=$((fail + 1))
-    echo "$fail"
+    local h_fail=0 r_fail=0
+    probe_url "$HEALTH_URL" || h_fail=1
+    probe_url "$RELAY_URL"  || r_fail=1
+    echo "$h_fail $r_fail"
 }
 
 # 重启服务（带冷却保护）
@@ -132,26 +134,46 @@ while true; do
     done
 
     # 2) /healthz + /mode 健康探测（捕获"进程活但不响应"）
-    fails=$(probe_all_health)
-    if (( fails == 0 )); then
+    read -r h_fail r_fail <<< "$(probe_all_health)"
+    if (( h_fail == 0 && r_fail == 0 )); then
         # 探测全部成功 → 重置所有 counter（只有成功才算"恢复"）
-        for svc in "${CO_RESTART_PAIR[@]}"; do
+        for svc in "${CO_RESTART_PAIR[@]}" "$RELAY_SVC"; do
             set_counter "$svc" 0
         done
         continue
     fi
 
-    log "HEALTH probe failed: $fails/2 endpoints down"
+    if (( h_fail == 1 && r_fail == 1 )); then
+        log "HEALTH probe failed: 2/2 endpoints down (healthz + mode)"
+    elif (( h_fail == 1 )); then
+        log "HEALTH probe failed: 1/2 endpoint down (healthz)"
+    else
+        log "HEALTH probe failed: 1/2 endpoint down (mode)"
+    fi
 
-    # 累加 hotupdate / tcp_proxy 的失败计数（noconfig 只看 /mode 自己管自己）
-    for svc in "${CO_RESTART_PAIR[@]}"; do
-        cnt=$(get_counter "$svc")
+    # /healthz 失败 → 累加 hotupdate / tcp_proxy counter
+    if (( h_fail == 1 )); then
+        for svc in "${CO_RESTART_PAIR[@]}"; do
+            cnt=$(get_counter "$svc")
+            cnt=$((cnt + 1))
+            set_counter "$svc" "$cnt"
+            log "  $svc fail counter = $cnt"
+
+            if (( cnt >= FAIL_THRESHOLD )); then
+                restart_service "$svc" || true
+            fi
+        done
+    fi
+
+    # /mode 失败 → 累加 relay-noconfig counter
+    if (( r_fail == 1 )); then
+        cnt=$(get_counter "$RELAY_SVC")
         cnt=$((cnt + 1))
-        set_counter "$svc" "$cnt"
-        log "  $svc fail counter = $cnt"
+        set_counter "$RELAY_SVC" "$cnt"
+        log "  $RELAY_SVC fail counter = $cnt"
 
         if (( cnt >= FAIL_THRESHOLD )); then
-            restart_service "$svc" || true
+            restart_service "$RELAY_SVC" || true
         fi
-    done
+    fi
 done

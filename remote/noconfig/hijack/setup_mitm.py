@@ -1136,18 +1136,16 @@ def generate_self_signed_cert(cert_path: str, key_path: str, cn: str = "gxb.hzxu
         f.write(cert.public_bytes(serialization.Encoding.PEM))
 
 
-def start_https_server(assets: MitmAssets, host: str, port: int,
-                       cert_path: str, key_path: str,
-                       enable_origin: bool = True) -> ThreadingHTTPServer:
+def start_https_server(handler_class, host: str, port: int,
+                       cert_path: str, key_path: str) -> ThreadingHTTPServer:
+    """创建并配置 HTTPS MITM server（不启动 serve_forever，由调用方决定运行方式）。"""
     import ssl
     if not (os.path.exists(cert_path) and os.path.exists(key_path)):
         generate_self_signed_cert(cert_path, key_path)
-    httpd = ThreadingHTTPServer((host, port), make_http_handler(assets, enable_origin))
+    httpd = ThreadingHTTPServer((host, port), handler_class)
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     ctx.load_cert_chain(cert_path, key_path)
     httpd.socket = ctx.wrap_socket(httpd.socket, server_side=True)
-    threading.Thread(target=httpd.serve_forever, daemon=True).start()
-    logger.info("HTTPS MITM server on %s:%d", host, port)
     return httpd
 
 
@@ -1265,7 +1263,8 @@ def run(host_ip: str, ecs_ip: str = DEFAULT_ECS_IP, apk_path: str = DEFAULT_APK,
         tls_port: int = 443, dns_port: int = 53, no_dns: bool = False,
         cert_dir: str = None, enable_origin: bool = True,
         bump_version: str = "9.9.9.103", dns_listen_host: str | None = None,
-        file_url_mode: str = FILE_URL_MODE_OFFICIAL):
+        file_url_mode: str = FILE_URL_MODE_OFFICIAL,
+        blocking: bool = False):
     """启动热更 MITM（HTTPS manifest 服务 + DNS 劫持）。
 
     host_ip: 写进 DNS 应答 / NetConf / manifest 的地址（手机据此连本服务的 443）。
@@ -1273,6 +1272,9 @@ def run(host_ip: str, ecs_ip: str = DEFAULT_ECS_IP, apk_path: str = DEFAULT_APK,
     dns_listen_host: DNS 响应器实际 bind 的本机地址。None 时默认 = host_ip。
              ECS 在 NAT 后，公网 IP 不是本机网卡可绑地址，需显式传 eth0 私网 IP
              （如 172.16.x.x），应答里仍返回 host_ip(公网)。
+    blocking: False = daemon thread 启动 serve_forever（PC 热点/_selftest 用）；
+              True  = 返回未启动的 httpd，由调用方在主线程 serve_forever
+                      （ECS systemd 用，serve_forever 异常退出 = 进程退出 = 自动重启）。
     """
     cert_dir = cert_dir or os.path.join(_REPO_ROOT, "data", "mitm")
     os.makedirs(cert_dir, exist_ok=True)
@@ -1281,8 +1283,14 @@ def run(host_ip: str, ecs_ip: str = DEFAULT_ECS_IP, apk_path: str = DEFAULT_APK,
 
     assets = MitmAssets(apk_path, ecs_ip, host_ip, tls_port=tls_port, bump_version=bump_version,
                         file_url_mode=file_url_mode)
-    httpd = start_https_server(assets, "0.0.0.0", tls_port, cert_path, key_path,
-                               enable_origin=enable_origin)
+    handler_class = make_http_handler(assets, enable_origin)
+    httpd = start_https_server(handler_class, "0.0.0.0", tls_port, cert_path, key_path)
+
+    if blocking:
+        logger.info("HTTPS MITM server on %s:%d (blocking, main thread)", "0.0.0.0", tls_port)
+    else:
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        logger.info("HTTPS MITM server on %s:%d (daemon thread)", "0.0.0.0", tls_port)
 
     dns = None
     if not no_dns:
@@ -1548,15 +1556,20 @@ def main() -> None:
     if not args.host_ip:
         ap.error("--host-ip 必填（除非 --selftest）")
 
-    run(args.host_ip, ecs_ip=args.ecs_ip, apk_path=args.apk,
+    assets, httpd, dns = run(
+        args.host_ip, ecs_ip=args.ecs_ip, apk_path=args.apk,
         tls_port=args.tls_port, dns_port=args.dns_port, no_dns=args.no_dns,
         enable_origin=not args.no_origin, dns_listen_host=args.dns_listen_host,
-        file_url_mode=args.file_url_mode)
+        file_url_mode=args.file_url_mode, blocking=True)
     logger.info("MITM 设置期服务已启动；手机连热点开游戏触发热更即可。Ctrl+C 退出。")
+    # blocking=True: 主线程运行 serve_forever，异常退出 = 进程退出 = systemd 自动重启
+    # 这是 2026-06-26 handler 死锁真因的修复：daemon thread 中的 serve_forever
+    # 异常退出不会被任何人感知，主线程 Event().wait() 永远阻塞。
     try:
-        threading.Event().wait()
-    except KeyboardInterrupt:
-        pass
+        httpd.serve_forever()
+    except Exception as exc:
+        logger.exception("HTTP server died unexpectedly: %s", exc)
+        raise
 
 
 if __name__ == "__main__":

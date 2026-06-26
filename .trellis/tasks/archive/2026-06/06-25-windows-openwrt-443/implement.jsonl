@@ -1,0 +1,3 @@
+{"file": ".trellis/tasks/06-25-windows-openwrt-443/prd.md", "reason": "完整需求和技术方案，含代码片段"}
+{"file": "interface/windows/core.py", "reason": "Windows 端修改目标：start_all() 前插入 kill_port_conflicts()"}
+{"file": "interface/openwrt/files/etc/init.d/mahjong-mitm", "reason": "OpenWrt 端修改目标：start_service() 前插入 fuser -k"}

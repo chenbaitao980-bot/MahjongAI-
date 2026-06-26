@@ -1,96 +1,105 @@
-# SSH Remote Server Ops — 远程服务器运维模板
+# SSH Remote Server Ops — MahjongAI ECS 运维
 
-Connect to and operate a remote server for MahjongAI services.
+Connect to and operate the MahjongAI ECS server.
 
-> **Usage**: Replace `$HOST`, `$USER`, and paths with actual values from the project context or user-provided credentials.
+## Server Configuration (Fixed)
 
-## Prerequisites
+| Key | Value |
+|-----|-------|
+| Host | `8.136.32.137` |
+| User | `root` |
+| Auth | SSH key `~/.ssh/id_ed25519` (passwordless) |
+| Project root | `/opt/mahjong-remote` |
+| Services prefix | `mahjong-` |
 
-Before connecting, you need:
-- Server IP/hostname (`$HOST`)
-- SSH user (`$USER`, typically `root` for cloud VPS)
-- Authentication method (password or key)
+> **Always use `-o StrictHostKeyChecking=no`** to avoid interactive prompts.
 
-## Quick Connect
+## Quick Connect (No Password)
 
 ```bash
-ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 $USER@$HOST "<command>"
+ssh -o StrictHostKeyChecking=no root@8.136.32.137 "<command>"
 ```
 
-## Common Operations (Template)
+## Server Read-Only Git Sync Discipline
 
-Replace `$HOST`, `$USER`, and service names as needed.
+> **CRITICAL**: Server is read-only mirror of local git. Never edit code directly on server.
 
-### Service Status
+```
+Local modify → git commit → deploy via scp + ssh restart → server
+                              ↑
+                           one-way only
+```
+
+If server code differs from local git:
+1. `scp root@8.136.32.137:/opt/mahjong-remote/<rel_path> <local_path>` — pull back
+2. `git diff -- <file>` — review differences
+3. `git add <file> && git commit -m "sync: pull <file> from server"`
+4. Re-deploy via normal script
+
+## File Transfer (No Password)
+
+### Upload file to server
 ```bash
-ssh -o StrictHostKeyChecking=no $USER@$HOST "systemctl status <service> --no-pager -l"
+ssh -o StrictHostKeyChecking=no root@8.136.32.137 "cat > /opt/mahjong-remote/remote/noconfig/<file>" < <local_file>
 ```
 
-### Restart Service
+### Download file from server
 ```bash
-ssh -o StrictHostKeyChecking=no $USER@$HOST "systemctl restart <service>"
+ssh -o StrictHostKeyChecking=no root@8.136.32.137 "cat /opt/mahjong-remote/<rel_path>" > <local_file>
 ```
 
-### Check Logs (last 30 lines)
+## Service Operations
+
+| Service | Description |
+|---------|-------------|
+| `mahjong-mitm-hotupdate` | 443 + DNS 热更 MITM |
+| `mahjong-tcp-proxy` | 大厅 + 金币游服 SRS 代理 |
+| `mahjong-relay-noconfig` | :8002 spectator relay |
+| `mahjong-relay-hotspot` | :8000 热点模式 relay |
+| `mahjong-relay-vpn` | :8001 VPN 模式 relay |
+| `mahjong-spectator` | :8003 SRS spectator |
+| `mjx-vpn` | VPN extractor |
+
+### Status
 ```bash
-ssh -o StrictHostKeyChecking=no $USER@$HOST "journalctl -u <service> --no-pager -n 30"
+ssh -o StrictHostKeyChecking=no root@8.136.32.137 \
+  "systemctl status <service> --no-pager -l"
 ```
 
-### Check Logs (last 5 minutes)
+### Restart
 ```bash
-ssh -o StrictHostKeyChecking=no $USER@$HOST "journalctl -u <service> --since '5 minutes ago' --no-pager"
+ssh -o StrictHostKeyChecking=no root@8.136.32.137 \
+  "systemctl restart <service>"
 ```
 
-### Check Network Connections
+### Logs (last 30 lines)
 ```bash
-ssh -o StrictHostKeyChecking=no $USER@$HOST "ss -tn | head -20"
+ssh -o StrictHostKeyChecking=no root@8.136.32.137 \
+  "journalctl -u <service> --no-pager -n 30"
 ```
 
-### Check CLOSE-WAIT Count
+### Logs (last 5 minutes)
 ```bash
-ssh -o StrictHostKeyChecking=no $USER@$HOST "ss -tn | grep CLOSE-WAIT | wc -l"
+ssh -o StrictHostKeyChecking=no root@8.136.32.137 \
+  "journalctl -u <service> --since '5 minutes ago' --no-pager"
 ```
 
-### Health Check via localhost
-```bash
-ssh -o StrictHostKeyChecking=no $USER@$HOST "curl -sk https://127.0.0.1/healthz"
-```
-
-### Test Scanner Reject
-```bash
-ssh -o StrictHostKeyChecking=no $USER@$HOST "curl -sk -w '%{http_code}' -o /dev/null https://127.0.0.1/.git/config"
-```
-
-### Test Normal Request
-```bash
-ssh -o StrictHostKeyChecking=no $USER@$HOST "curl -sk -w '%{http_code}' -o /dev/null 'https://127.0.0.1/hotfix_update?env=1&appid=1073&version=1.0.0.50'"
-```
-
-## File Transfer
-
-### Upload file to remote server
-```bash
-scp -o StrictHostKeyChecking=no <local_path> $USER@$HOST:<remote_path>
-```
-
-### Download file from remote server
-```bash
-scp -o StrictHostKeyChecking=no $USER@$HOST:<remote_path> <local_path>
-```
-
-## Deploy & Restart (Template)
+## Deploy & Restart
 
 Full deploy flow after code change:
 
 ```bash
-# 1. Upload changed files
-scp -o StrictHostKeyChecking=no <local_file> $USER@$HOST:<remote_deploy_path>/<file>
+# 1. Upload changed files (example: tcp_proxy.py)
+ssh -o StrictHostKeyChecking=no root@8.136.32.137 \
+  "cat > /opt/mahjong-remote/remote/noconfig/hijack/tcp_proxy.py" < remote/noconfig/hijack/tcp_proxy.py
 
 # 2. Restart service
-ssh -o StrictHostKeyChecking=no $USER@$HOST "systemctl restart <service>"
+ssh -o StrictHostKeyChecking=no root@8.136.32.137 \
+  "systemctl restart <service>"
 
-# 3. Verify (wait 2s then check)
-ssh -o StrictHostKeyChecking=no $USER@$HOST "sleep 2 && systemctl is-active <service> && curl -sk https://127.0.0.1/healthz"
+# 3. Verify
+ssh -o StrictHostKeyChecking=no root@8.136.32.137 \
+  "sleep 2 && systemctl is-active <service>"
 ```
 
 ## Troubleshooting Checklist
@@ -104,40 +113,13 @@ ssh -o StrictHostKeyChecking=no $USER@$HOST "sleep 2 && systemctl is-active <ser
 | Backlog full | `ss -tn \| awk '$2>0'` | Empty recv-q |
 | Health check | `curl -sk https://127.0.0.1/healthz` | `{"status":"ok"}` |
 
-## Project-Specific Service Names
-
-| Service | Description |
-|---------|-------------|
-| `mahjong-mitm-hotupdate` | 443 + DNS 热更 MITM |
-| `mahjong-tcp-proxy` | 大厅 + 金币游服 SRS 代理 |
-| `mahjong-relay-noconfig` | :8002 spectator relay |
-| `mahjong-relay-hotspot` | :8000 热点模式 relay |
-| `mahjong-relay-vpn` | :8001 VPN 模式 relay |
-| `mahjong-spectator` | :8003 SRS spectator |
-| `mjx-vpn` | VPN extractor |
-
-## Code-Sync Discipline
-
-> **CRITICAL**: Server is read-only mirror of local git. Never edit code directly on server.
-
-```
-Local modify → git commit → deploy script → server
-                              ↑
-                           one-way only
-```
-
-If server code differs from local git:
-1. `scp $USER@$HOST:/opt/<path>/<file> <local_path>` — pull back
-2. `git diff -- <file>` — review differences
-3. `git add <file> && git commit -m "sync: pull <file> from server"`
-4. Re-deploy via normal script
-
 ## Typical Deploy Paths
 
 | Component | Remote Path |
 |-----------|-------------|
 | MITM setup_mitm.py | `/opt/mahjong-remote/remote/noconfig/hijack/setup_mitm.py` |
 | tcp_proxy.py | `/opt/mahjong-remote/remote/noconfig/hijack/tcp_proxy.py` |
+| ecs_proxy.py | `/opt/mahjong-remote/remote/noconfig/hijack/ecs_proxy.py` |
+| app.py | `/opt/mahjong-remote/remote/noconfig/app.py` |
 | relay core | `/opt/mahjong-remote/remote/relay/` |
 | APK | `/opt/mahjong-remote/apk/game_base.apk` |
-| extractor (VPN) | `/opt/mahjong-extractor/` |

@@ -858,7 +858,9 @@ def make_http_handler(assets: MitmAssets, enable_origin: bool = True):
             pass  # 由 do_GET 统一打日志，避免重复
 
         # R4: 确保异常路径也能关闭 wfile，避免 CLOSE-WAIT 堆积
+        # R7: 设置连接超时，防止扫描器建立连接后不发数据挂住线程
         def setup(self):
+            self.request.settimeout(10.0)
             super().setup()
 
         def finish(self):
@@ -1251,15 +1253,21 @@ class DnsResponder:
         return header + question + answer
 
     def _forward_upstream(self, query: bytes) -> bytes | None:
+        up = None
         try:
             up = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             up.settimeout(2.0)
             up.sendto(query, (self.upstream, 53))
             resp, _ = up.recvfrom(2048)
-            up.close()
             return resp
         except Exception:
             return None
+        finally:
+            if up:
+                try:
+                    up.close()
+                except Exception:
+                    pass
 
 
 # ─── 顶层启动 ────────────────────────────────────────────────────────────────

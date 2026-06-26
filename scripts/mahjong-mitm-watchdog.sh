@@ -116,15 +116,19 @@ while true; do
         if ! systemctl is-active --quiet "$svc" 2>/dev/null; then
             log "ALERT $svc not active: $(systemctl is-active "$svc" 2>&1)"
             restart_service "$svc" || true
-        else
-            # active → 清零计数
-            set_counter "$svc" 0
         fi
+        # 注意：active 状态下**不**重置 counter —— counter 由下方 health probe
+        # 决定成功/累加，避免「主线程活但 handler thread 全死」场景下 counter
+        # 被 is-active 路径重置导致永不触发 restart（2026-06-26 4G 卡校验真因）。
     done
 
     # 2) /healthz + /mode 健康探测（捕获"进程活但不响应"）
     fails=$(probe_all_health)
     if (( fails == 0 )); then
+        # 探测全部成功 → 重置所有 counter（只有成功才算"恢复"）
+        for svc in "${CO_RESTART_PAIR[@]}"; do
+            set_counter "$svc" 0
+        done
         continue
     fi
 

@@ -1167,10 +1167,15 @@ def _make_presence_reporter(presence_url: str, api_token: str):
                     int(info.get("listen_port", 0) or 0),
                 )
             else:
-                sid = info.get("sessionid", b"")
-                if not sid:
-                    return
-                user_id = sid.hex() if isinstance(sid, (bytes, bytearray)) else str(sid)
+                # 优先使用稳定的 numid 作为 user_id，sessionid 仅作为 fallback
+                numid = info.get("numid", 0)
+                if numid:
+                    user_id = str(numid)
+                else:
+                    sid = info.get("sessionid", b"")
+                    if not sid:
+                        return
+                    user_id = sid.hex() if isinstance(sid, (bytes, bytearray)) else str(sid)
         name = info.get("nickname", "") or info.get("name", "") or ""
         provisional = bool(info.get("provisional"))
         source_host = info.get("source_host", "") or ""

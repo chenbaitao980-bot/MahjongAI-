@@ -157,18 +157,48 @@ class UserStore:
 
     def add_user(self, user_id: str, name: str = "", srs_sessionid: str = "",
                  handshake_blob: str = "", auth_token_12b: str = "") -> User:
-        """添加用户，如果已存在则更新"""
+        """添加用户，如果已存在则更新。
+
+        去重策略（按优先级）：
+        1. user_id 已存在 → 更新该用户
+        2. srs_sessionid 已存在 → 更新该用户（同一设备/会话不应创建多个用户）
+        3. name 已存在且为有效名称 → 更新该用户（游戏内昵称唯一，兜底去重）
+        4. 否则创建新用户
+        """
         with self._users_lock:
+            # 1. user_id 精确匹配
             if user_id in self._users:
                 user = self._users[user_id]
                 user.name = name or user.name
                 user.update_credentials(handshake_blob, auth_token_12b, srs_sessionid)
                 _LOGGER.info("[UserStore] 更新用户: %s (%s)", user_id, user.name)
-            else:
-                user = User(user_id, name, srs_sessionid, handshake_blob, auth_token_12b)
-                user.state_store.push_timeout = self._push_timeout
-                self._users[user_id] = user
-                _LOGGER.info("[UserStore] 新增用户: %s (%s)", user_id, user.name)
+                return user
+
+            # 2. srs_sessionid 匹配（同一 session 不应重复）
+            if srs_sessionid:
+                for existing in self._users.values():
+                    if existing.srs_sessionid and existing.srs_sessionid == srs_sessionid:
+                        existing.name = name or existing.name
+                        existing.update_credentials(handshake_blob, auth_token_12b, srs_sessionid)
+                        _LOGGER.info("[UserStore] 按 srs_sessionid 合并用户: %s -> %s (%s)",
+                                     user_id, existing.user_id, existing.name)
+                        return existing
+
+            # 3. name 匹配兜底（游戏内昵称唯一）
+            effective_name = name or user_id
+            if effective_name and effective_name != user_id and effective_name != "default":
+                for existing in self._users.values():
+                    if existing.name and existing.name == effective_name:
+                        existing.update_credentials(handshake_blob, auth_token_12b, srs_sessionid)
+                        _LOGGER.info("[UserStore] 按名称合并用户: %s -> %s (%s)",
+                                     user_id, existing.user_id, existing.name)
+                        return existing
+
+            # 4. 创建新用户
+            user = User(user_id, name, srs_sessionid, handshake_blob, auth_token_12b)
+            user.state_store.push_timeout = self._push_timeout
+            self._users[user_id] = user
+            _LOGGER.info("[UserStore] 新增用户: %s (%s)", user_id, user.name)
             return user
 
     def remove_user(self, user_id: str) -> bool:

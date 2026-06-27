@@ -8,10 +8,8 @@ HOST_IP="${2:-192.168.6.1}"
 FAIL_COUNT=0
 FAIL_THRESHOLD=3
 
-# gxb DNAT retry state
+# gxb DNAT retry state (retry forever since watchdog is long-running)
 GXB_DNAT_APPLIED=0
-GXB_RETRIES=0
-GXB_MAX_RETRIES=10
 
 _apply_gxb_dnat() {
 	# Check if rules already exist
@@ -48,13 +46,12 @@ while true; do
 		fi
 	fi
 
-	# --- gxb DNAT retry (every ~2 min, not applied yet, retries left) ---
-	if [ "$GXB_DNAT_APPLIED" -eq 0 ] && [ "$GXB_RETRIES" -lt "$GXB_MAX_RETRIES" ] && [ $((ITER % 4)) -eq 0 ]; then
-		GXB_RETRIES=$((GXB_RETRIES + 1))
+	# --- gxb DNAT check (every ~2 min, retry forever until applied) ---
+	if [ "$GXB_DNAT_APPLIED" -eq 0 ] && [ $((ITER % 4)) -eq 0 ]; then
 		if _apply_gxb_dnat; then
 			GXB_DNAT_APPLIED=1
 		else
-			logger -t mahjong-mitm "watchdog: gxb DNAT retry $GXB_RETRIES/$GXB_MAX_RETRIES"
+			logger -t mahjong-mitm "watchdog: gxb DNAT still not resolved, will retry"
 		fi
 	fi
 done

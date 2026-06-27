@@ -88,7 +88,7 @@ Loaded automatically by `fw4 reload` (OpenWrt 22.03+ fw4 includes `/etc/nftables
 |---|---|---|
 | Python | `procd_open_instance` (auto-respawn 3600/5/5) | `procd` SIGTERM via init.d stop |
 | Watchdog | `setsid sh /usr/lib/mahjong-mitm/watchdog.sh "$tls_port" </dev/null >/dev/null 2>&1 &` | `kill $(cat /var/run/mahjong-mitm-watchdog.pid)` + busybox-compatible `ps | grep | awk | kill` 兜底 |
-| gxb DNAT | `apply_gxb_dnat` 在每次 start 时跑 `resolve-gxb.sh` → 解析 6 个 gxb-* 域名 → `nft add rule` 注入 | 随服务 stop 不主动删（下次 start 时 `fw4 reload` 清空再重灌） |
+| gxb DNAT | `apply_gxb_dnat` 在每次 start 时跑 `resolve-gxb.sh` → 解析 6 个 gxb-* 域名 → `nft add rule` 注入。失败后 init.d 后台重试 60 次 × 30s（30 分钟）；watchdog 无限兜底 | 随服务 stop 不主动删（下次 start 时 `fw4 reload` 清空再重灌） |
 
 ### 4. Validation & Error Matrix
 

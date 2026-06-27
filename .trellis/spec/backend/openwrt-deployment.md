@@ -105,6 +105,7 @@ Loaded automatically by `fw4 reload` (OpenWrt 22.03+ fw4 includes `/etc/nftables
 | 手机有 DNS 缓存的真实 CDN IP | DNS redirect 不生效（手机不查 DNS）→ MITM 拿不到请求 | `resolve-gxb.sh` 在 start 时把 gxb-* 真实 IP 加进 DNAT 链 |
 | 手机开了 Private DNS (DoT 853 / DoH) | UDP 53 完全没流量，MITM 拿不到请求 | `mahjong_mitm_block_doh` 链 reject DoT/DoH |
 | origin fetch 失败 fallback static | 手机 harbor 写入伪版本 9.9.9.103 → 下次跳过热更 | 修 origin fetch 根因；用户清游戏数据/重装才能恢复 |
+| **冷启动 WAN 未就绪，gxb 解析失败** | **开机后 logread 无 `gxb DNAT` 消息 → 手机有 DNS 缓存时热更不触发** | **init.d 后台重试（30s×10）+ watchdog setsid 兜底** |
 
 ### 5. Good / Base / Bad Cases
 
@@ -116,10 +117,12 @@ Loaded automatically by `fw4 reload` (OpenWrt 22.03+ fw4 includes `/etc/nftables
 #### Base
 - 手机连 WiFi 后只看到 DNS 命中（5353 counter > 0），但 443 入站为 0 → DoH 没拦完，或手机 DNS 缓存了
 - procd crash 1~2 次后稳定（443 抢占被旧 python 占着，next-respawn 清干净）
+- gxb DNAT 初始解析失败，后台重试 ~5 分钟内自动恢复 → logread 出现 `gxb DNAT applied after retry #N`
 
 #### Bad
 - procd "in a crash loop 6 crashes" 不再 respawn → init.d disable 后清残留 python 再 start
 - /healthz timeout 但 python3 进程在 → 证书路径不对 / TLS 监听到 127.0.0.1 而非 0.0.0.0 → 看启动日志
+- gxb DNAT 10 次重试全部失败（`all 10 retries exhausted`）→ WAN 不通或 DNS 解析器 119.29.29.29 不可达
 
 ### 6. Tests Required
 
@@ -287,6 +290,7 @@ setsid sh "$WATCHDOG_SCRIPT" &
 - [ ] `netstat -tlnp 2>/dev/null | grep -E ':(443|5353)\s'` → 443 + 5353 都 listen
 - [ ] `wget --no-check-certificate -q -O- https://127.0.0.1:443/healthz` → `{"status":"ok"}`
 - [ ] `nft list chain inet fw4 mahjong_mitm_dns` → DNS redirect + DNAT rules 都在
+- [ ] `nft list chain inet fw4 mahjong_mitm_dns | grep mahjong-gxb-dnat` → gxb DNAT 规则存在（29+ CDN IPs）
 - [ ] `nft list chain inet fw4 mahjong_mitm_block_doh` → DoT/DoH/IPv6 reject 都在
 - [ ] `cat /tmp/mahjong-gxb-resolve.log` → 6 个域名解析成功，IPs 非空
 - [ ] `ls /etc/mahjong-mitm/` → mitm_cert.pem + mitm_key.pem 存在（postinst 持久化）

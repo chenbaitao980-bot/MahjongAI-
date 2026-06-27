@@ -31,14 +31,36 @@ apply_gxb_dnat() {
 	# 解析 gxb-* 真实 CDN IP 并把它们的 :443 流量 DNAT 到本机。
 	# 必须在 fw4 reload 之后执行（fw4 reload 会清空动态规则）。
 	# 用途：手机 DNS 缓存了真实 IP 时，仍能被透明劫持到 MITM。
+	#
+	# 启动时 WAN 可能未就绪（DHCP/PPPoE 未完成），nslookup 会空返回。
+	# 首次失败后 fork 后台重试（每 30s × 10 次 ≈ 5 分钟），确保 WAN 就绪后规则落地。
+	# 兜底：watchdog.sh 也会在 setsid 长驻进程里重试，不受 init.d 退出影响。
 	local resolver="$PROG_DIR/resolve-gxb.sh"
 	[ -x "$resolver" ] || return 0
-	sh "$resolver" "$host_ip" 2>/tmp/mahjong-gxb-resolve.log | while read -r line; do
-		[ -z "$line" ] && continue
-		# 跳过 '#' 注释
-		case "$line" in '#'*) continue ;; esac
-		nft "$line" 2>>/tmp/mahjong-gxb-resolve.log || true
-	done
+
+	sh "$resolver" "$host_ip" 2>/tmp/mahjong-gxb-resolve.log >/tmp/mahjong-gxb-rules.nft
+	if grep -q '^add rule' /tmp/mahjong-gxb-rules.nft 2>/dev/null; then
+		nft -f /tmp/mahjong-gxb-rules.nft 2>>/tmp/mahjong-gxb-resolve.log || true
+		logger -t mahjong-mitm "gxb DNAT: $(wc -l < /tmp/mahjong-gxb-rules.nft) rule(s) applied"
+		return 0
+	fi
+
+	logger -t mahjong-mitm "gxb DNAT: initial resolve failed, background retry"
+
+	# 后台重试：每 30s × 10 次
+	(
+		for i in 1 2 3 4 5 6 7 8 9 10; do
+			sleep 30
+			sh "$resolver" "$host_ip" 2>/tmp/mahjong-gxb-resolve.log >/tmp/mahjong-gxb-rules.nft
+			if grep -q '^add rule' /tmp/mahjong-gxb-rules.nft 2>/dev/null; then
+				nft -f /tmp/mahjong-gxb-rules.nft 2>>/tmp/mahjong-gxb-resolve.log || true
+				logger -t mahjong-mitm "gxb DNAT: $(wc -l < /tmp/mahjong-gxb-rules.nft) rule(s) applied after retry #$i"
+				return 0
+			fi
+			logger -t mahjong-mitm "gxb DNAT: retry #$i still no CDN IPs"
+		done
+		logger -t mahjong-mitm "gxb DNAT: all 10 retries exhausted"
+	) &
 }
 
 clear_nft() {
@@ -81,7 +103,7 @@ start_service() {
 	# ⚠ 必须 setsid 完全脱离父 shell，否则父 init.d 进程永不返回（阻塞 start/stop/restart）
 	WATCHDOG_BIN="$PROG_DIR/watchdog.sh"
 	if [ -x "$WATCHDOG_BIN" ]; then
-		setsid sh "$WATCHDOG_BIN" "$tls_port" </dev/null >/dev/null 2>&1 &
+		setsid sh "$WATCHDOG_BIN" "$tls_port" "$host_ip" </dev/null >/dev/null 2>&1 &
 		echo $! > /var/run/mahjong-mitm-watchdog.pid
 	fi
 }

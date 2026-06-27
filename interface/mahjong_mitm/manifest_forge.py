@@ -82,6 +82,12 @@ class MultiForgeResult:
     served: dict[str, tuple[str, str, int]] = field(default_factory=dict)
 
 
+def load_manifest_from_file(manifest_path: str) -> dict:
+    with open(manifest_path, "rb") as f:
+        raw = f.read()
+    return json.loads(raw.decode("utf-8"))
+
+
 def load_real_manifest(apk_path: str) -> dict:
     with zipfile.ZipFile(apk_path) as z:
         raw = z.read(APK_LOBBY_MANIFEST_ENTRY)
@@ -108,6 +114,51 @@ def forge_manifest(
         bump_version=bump_version, netconf_key=netconf_key,
     )
     return res.manifest_json_bytes, res.served_name
+
+
+def forge_manifest_full_from_file(
+    manifest_path: str,
+    served_netconf_bytes: bytes,
+    ecs_self_base_url: str,
+    *,
+    bump_version: str = DEFAULT_BUMP_VERSION,
+    netconf_key: str = NETCONF_FILE_KEY,
+) -> ForgeResult:
+    """同 forge_manifest_full，但从独立 manifest JSON 文件加载（无需 APK）。"""
+    manifest = load_manifest_from_file(manifest_path)
+    forged = copy.deepcopy(manifest)
+
+    file_list = forged.get("file_list")
+    if not isinstance(file_list, dict) or netconf_key not in file_list:
+        raise KeyError(f"真实 manifest 缺少 NetConf 条目 {netconf_key!r}")
+
+    forged["version"] = bump_version
+    if not ecs_self_base_url.endswith("/"):
+        ecs_self_base_url += "/"
+    forged["file_url"] = [ecs_self_base_url]
+    forged["forbid_zip"] = True
+    forged.pop("diff_zip", None)
+    forged.pop("zip_url", None)
+
+    md5_hex = _md5(served_netconf_bytes)
+    size = len(served_netconf_bytes)
+    served_name = _served_name(md5_hex)
+    entry = dict(file_list[netconf_key])
+    entry["md5"] = md5_hex
+    entry["size"] = size
+    entry["name"] = served_name
+    file_list[netconf_key] = entry
+
+    manifest_json_bytes = json.dumps(forged, ensure_ascii=False).encode("utf-8")
+
+    return ForgeResult(
+        manifest_json_bytes=manifest_json_bytes,
+        served_name=served_name,
+        served_md5=md5_hex,
+        served_size=size,
+        version=bump_version,
+        file_count=len(file_list),
+    )
 
 
 def forge_manifest_full(

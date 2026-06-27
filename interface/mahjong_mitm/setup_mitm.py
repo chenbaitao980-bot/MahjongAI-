@@ -52,10 +52,20 @@ PC 做热点网关时通过 DHCP 下发 DNS=PC 自己。手机用 PC 的 DNS →
 """
 from __future__ import annotations
 
+# ── OpenWrt python3-light 兼容层 ──────────────────────────
+# 注：`logging` 的 fake 模块由包 __init__.py 在 import 期注入到 sys.modules，
+# 因此这里 `import logging` 在 OpenWrt 上拿到的是 shim，PC 上是真模块。
+import logging
+
+try:
+    import requests
+    _HAS_REQUESTS = True
+except ImportError:
+    _HAS_REQUESTS = False
+
 import argparse
 import datetime
 import hashlib
-import logging
 import os
 import socket
 import struct
@@ -69,8 +79,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 _PKG_DIR = os.path.dirname(os.path.abspath(__file__))
 _RUNTIME_ROOT = os.path.dirname(_PKG_DIR)  # interface/
 
-from .manifest_forge import forge_manifest_full
-from .netconf_patch import patch_from_apk, wrap_luac, KEY
+from .manifest_forge import forge_manifest_full, forge_manifest_full_from_file
+from .netconf_patch import patch_from_apk, patch_from_file, wrap_luac, KEY
 
 logger = logging.getLogger("mahjong_mitm.setup_mitm")
 
@@ -266,6 +276,28 @@ def _parse_first_a(resp: bytes) -> str | None:
         return None
 
 
+# 回源结果缓存（path → (body, timestamp, content_type)）——减少重复回源，提升常驻稳定性
+_origin_cache: dict[str, tuple[bytes, float, str]] = {}
+_ORIGIN_CACHE_TTL = 3600  # 1 小时
+
+
+def _cached_origin_fetch(host: str, path: str) -> tuple[int, bytes, str]:
+    """带缓存的透明回源：命中缓存且未过期 → 直接返回；否则回源并写入缓存。"""
+    cache_key = f"{host}{path}"
+    now = datetime.datetime.now(datetime.timezone.utc).timestamp()
+    cached = _origin_cache.get(cache_key)
+    if cached:
+        body, ts, ctype = cached
+        if now - ts < _ORIGIN_CACHE_TTL:
+            logger.debug("[origin-cache] hit %s (age=%.0fs)", cache_key, now - ts)
+            return 200, body, ctype
+    status, body, ctype = _origin_fetch(host, path)
+    if status == 200 and body:
+        _origin_cache[cache_key] = (body, now, ctype)
+        logger.debug("[origin-cache] store %s (%dB)", cache_key, len(body))
+    return status, body, ctype
+
+
 def _origin_fetch(host: str, path: str) -> tuple[int, bytes, str]:
     """透明回源真实 CDN：用固定公共 DNS 解析 host → https://{real_ip}{path}（Host 头=host）。
 
@@ -275,38 +307,60 @@ def _origin_fetch(host: str, path: str) -> tuple[int, bytes, str]:
     而不是 split("?") 后的纯 path。
 
     返回 (status_code, body, content_type)。失败/异常返回 (502, b"", "")。
-    """
-    import urllib3
-    urllib3.disable_warnings()
 
+    OpenWrt python3-light 没有 requests，用 urllib.request + ssl 兜底。
+    """
     real_ip = _resolve_real_ip(host)
     if not real_ip:
         return 502, b"", ""
     url = f"https://{real_ip}{path}"
-    try:
-        import requests
 
-        session = requests.Session()
-        # Ignore host/system proxy settings so hotspot MITM origin fetches
-        # always go straight to the real CDN.
-        session.trust_env = False
-        # R3: 拆分 connect/read timeout，防止 TCP 建连阶段也挂死
-        r = session.get(
-            url,
-            headers={"Host": host},
-            verify=False,
-            timeout=(3.05, ORIGIN_TIMEOUT),
-        )
-        ctype = r.headers.get("Content-Type", "application/octet-stream")
-        return r.status_code, r.content, ctype
+    if _HAS_REQUESTS:
+        import urllib3
+        urllib3.disable_warnings()
+        session = None
+        try:
+            session = requests.Session()
+            session.trust_env = False
+            r = session.get(
+                url,
+                headers={"Host": host},
+                verify=False,
+                timeout=(3.05, ORIGIN_TIMEOUT),
+            )
+            ctype = r.headers.get("Content-Type", "application/octet-stream")
+            return r.status_code, r.content, ctype
+        except Exception as exc:
+            logger.warning("[origin] fetch %s%s failed: %s", host, path, exc)
+            return 502, b"", ""
+        finally:
+            try:
+                if session is not None:
+                    session.close()
+            except Exception:
+                pass
+
+    # urllib fallback (OpenWrt python3-light)
+    import urllib.request
+    import ssl
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    try:
+        req = urllib.request.Request(url, headers={"Host": host})
+        with urllib.request.urlopen(req, timeout=ORIGIN_TIMEOUT, context=ctx) as resp:
+            body = resp.read()
+            ctype = resp.headers.get("Content-Type", "application/octet-stream")
+            return resp.status, body, ctype
+    except urllib.error.HTTPError as exc:
+        try:
+            body = exc.read()
+        except Exception:
+            body = b""
+        return exc.code, body, exc.headers.get("Content-Type", "") if exc.headers else ""
     except Exception as exc:
         logger.warning("[origin] fetch %s%s failed: %s", host, path, exc)
         return 502, b"", ""
-    finally:
-        try:
-            session.close()
-        except Exception:
-            pass
 
 
 # ─── 资产构建（manifest + 改过的 NetConf）────────────────────────────────────
@@ -314,12 +368,14 @@ def _origin_fetch(host: str, path: str) -> tuple[int, bytes, str]:
 class MitmAssets:
     """一次性构建并缓存：改过的 NetConf.luac + 伪 project.manifest + 伪 version.manifest。"""
 
-    def __init__(self, apk_path: str, ecs_ip: str, self_host: str, tls_port: int = 443,
+    def __init__(self, apk_path: str = None, ecs_ip: str = None, self_host: str = None, tls_port: int = 443,
                  bump_version: str = "9.9.9.103",
                  file_url_mode: str = FILE_URL_MODE_OFFICIAL,
-                 manifest_url_mode: str = MANIFEST_URL_MODE_ECS):
+                 manifest_url_mode: str = MANIFEST_URL_MODE_ECS,
+                 assets_dir: str = None):
         self.apk_path = apk_path
-        self.ecs_ip = ecs_ip
+        self.assets_dir = assets_dir
+        self.ecs_ip = ecs_ip or DEFAULT_ECS_IP
         self.self_host = self_host        # 手机看到的我们的主机名（被劫持域名，如 gxb-oss.hzxuanming.com）
         self.tls_port = tls_port
         self.bump_version = bump_version
@@ -455,7 +511,11 @@ class MitmAssets:
 
     def _build(self) -> None:
         # 1) 改过的 NetConf.luac（台州 5045 → ECS）
-        patch = patch_from_apk(self.apk_path, self.ecs_ip)
+        if self.assets_dir:
+            netconf_path = os.path.join(self.assets_dir, "NetConf.luac")
+            patch = patch_from_file(netconf_path, self.ecs_ip)
+        else:
+            patch = patch_from_apk(self.apk_path, self.ecs_ip)
         self.netconf_luac = patch.new_luac
 
         # 2)+3) 修改版 ResEnsure/ResChecker（跳过 clean_res）——仅在 INJECT_LOBBY_CHECKER
@@ -478,6 +538,14 @@ class MitmAssets:
                 with open(reschecker_modified_path, "rb") as f:
                     self.reschecker_luac = f.read()
                 logger.info("Using modified ResChecker (skips validation): %s", reschecker_modified_path)
+            elif self.assets_dir:
+                rc_path = os.path.join(self.assets_dir, "ResChecker.luac")
+                if os.path.exists(rc_path):
+                    with open(rc_path, "rb") as f:
+                        self.reschecker_luac = f.read()
+                    logger.info("Using ResChecker from assets dir: %s", rc_path)
+                else:
+                    logger.warning("ResChecker not found in assets dir: %s", rc_path)
             else:
                 # Fallback to official version if modified file not found
                 self.reschecker_luac = _load_apk_entry_bytes(self.apk_path, APK_RESCHECKER_ENTRY)
@@ -493,10 +561,17 @@ class MitmAssets:
         file_base = self._base_url("gxb-oss.hzxuanming.com") + FILE_URL_PREFIXES[0]
 
         # 5) 伪 project.manifest（只改 NetConf 一条 + 顶高版本 + forbid_zip）
-        forge = forge_manifest_full(
-            self.apk_path, self.netconf_luac, file_base,
-            bump_version=self.bump_version,
-        )
+        if self.assets_dir:
+            manifest_path = os.path.join(self.assets_dir, "project.manifest.json")
+            forge = forge_manifest_full_from_file(
+                manifest_path, self.netconf_luac, file_base,
+                bump_version=self.bump_version,
+            )
+        else:
+            forge = forge_manifest_full(
+                self.apk_path, self.netconf_luac, file_base,
+                bump_version=self.bump_version,
+            )
         self.served_name = forge.served_name          # 如 "fe/feb4....luac"
         self.served_md5 = forge.served_md5
         self.served_size = forge.served_size          # = len(netconf_luac)
@@ -1001,7 +1076,7 @@ def make_http_handler(assets: MitmAssets, enable_origin: bool = True):
             status, body = 502, b""
             used_host = None
             for official_host in OFFICIAL_UPDATE_HOSTS:
-                status, body, _ = _origin_fetch(official_host, origin_path)
+                status, body, _ = _cached_origin_fetch(official_host, origin_path)
                 if status == 200 and body:
                     used_host = official_host
                     break
@@ -1053,7 +1128,7 @@ def make_http_handler(assets: MitmAssets, enable_origin: bool = True):
                 or assets.real_manifest_host
                 or OFFICIAL_MANIFEST_HOST
             )
-            status, body, _ = _origin_fetch(origin_host, raw_path)
+            status, body, _ = _cached_origin_fetch(origin_host, raw_path)
             if status == 200 and body:
                 try:
                     patched = assets.patch_real_project_manifest(body)
@@ -1099,7 +1174,7 @@ def make_http_handler(assets: MitmAssets, enable_origin: bool = True):
                 logger.warning("[mitm] %s host=%s → %s (no-origin-host, 404)", client_ip, host, path)
                 self._send(b"", code=404)
                 return
-            status, body, ctype = _origin_fetch(origin_host, path)
+            status, body, ctype = _cached_origin_fetch(origin_host, path)
             if status and status != 502:
                 logger.info("[mitm] %s host=%s → %s (origin %s, %dB)",
                             client_ip, origin_host, path, status, len(body))
@@ -1273,7 +1348,7 @@ class DnsResponder:
 # ─── 顶层启动 ────────────────────────────────────────────────────────────────
 
 def run(host_ip: str, ecs_ip: str = DEFAULT_ECS_IP, apk_path: str = DEFAULT_APK,
-        tls_port: int = 443, dns_port: int = 53, no_dns: bool = False,
+        assets_dir: str = None, tls_port: int = 443, dns_port: int = 53, no_dns: bool = False,
         cert_dir: str = None, enable_origin: bool = True,
         bump_version: str = "9.9.9.103", dns_listen_host: str | None = None,
         file_url_mode: str = FILE_URL_MODE_OFFICIAL,
@@ -1282,6 +1357,8 @@ def run(host_ip: str, ecs_ip: str = DEFAULT_ECS_IP, apk_path: str = DEFAULT_APK,
 
     host_ip: 写进 DNS 应答 / NetConf / manifest 的地址（手机据此连本服务的 443）。
              PC 热点场景 = 热点网关 IP；ECS 场景 = ECS 公网 IP。
+    assets_dir: 预提取 assets 目录（含 NetConf.luac + project.manifest.json）。
+                传此参数时不再依赖 --apk。
     dns_listen_host: DNS 响应器实际 bind 的本机地址。None 时默认 = host_ip。
              ECS 在 NAT 后，公网 IP 不是本机网卡可绑地址，需显式传 eth0 私网 IP
              （如 172.16.x.x），应答里仍返回 host_ip(公网)。
@@ -1291,7 +1368,8 @@ def run(host_ip: str, ecs_ip: str = DEFAULT_ECS_IP, apk_path: str = DEFAULT_APK,
     cert_path = os.path.join(cert_dir, "mitm_cert.pem")
     key_path = os.path.join(cert_dir, "mitm_key.pem")
 
-    assets = MitmAssets(apk_path, ecs_ip, host_ip, tls_port=tls_port, bump_version=bump_version,
+    assets = MitmAssets(apk_path=apk_path, assets_dir=assets_dir, ecs_ip=ecs_ip, self_host=host_ip,
+                        tls_port=tls_port, bump_version=bump_version,
                         file_url_mode=file_url_mode, manifest_url_mode=manifest_url_mode)
     httpd = start_https_server(assets, "0.0.0.0", tls_port, cert_path, key_path,
                                enable_origin=enable_origin)
@@ -1534,7 +1612,8 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="热更 MITM 设置期服务（DNS + 自签 HTTPS + 伪 manifest）")
     ap.add_argument("--host-ip", help="PC 热点 IP（手机看到的网关 IP），DNS 把游戏域名解析到它")
     ap.add_argument("--ecs-ip", default=DEFAULT_ECS_IP, help="ECS 公网 IP（写进 NetConf）")
-    ap.add_argument("--apk", default=DEFAULT_APK)
+    ap.add_argument("--apk", default=DEFAULT_APK, help="原始游戏 APK 路径（默认包内 assets/game_base.apk）")
+    ap.add_argument("--assets-dir", default=None, help="预提取 assets 目录（含 NetConf.luac + project.manifest.json），替代 --apk")
     ap.add_argument("--tls-port", type=int, default=443)
     ap.add_argument("--dns-port", type=int, default=53)
     ap.add_argument("--dns-listen-host", default=None,
@@ -1560,7 +1639,10 @@ def main() -> None:
     if not args.host_ip:
         ap.error("--host-ip 必填（除非 --selftest）")
 
-    run(args.host_ip, ecs_ip=args.ecs_ip, apk_path=args.apk,
+    if args.assets_dir and args.apk != DEFAULT_APK:
+        ap.error("--assets-dir 与 --apk 互斥，只能选一个")
+
+    run(args.host_ip, ecs_ip=args.ecs_ip, apk_path=args.apk, assets_dir=args.assets_dir,
         tls_port=args.tls_port, dns_port=args.dns_port, no_dns=args.no_dns,
         enable_origin=not args.no_origin, dns_listen_host=args.dns_listen_host,
         file_url_mode=args.file_url_mode)

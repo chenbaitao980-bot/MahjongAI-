@@ -1,0 +1,3 @@
+{"file": "interface/README.md", "reason": "打包/安装/使用文档，需同步更新 OpenWrt 安装步骤和体积说明"}
+{"file": ".trellis/spec/backend/remote-access.md", "reason": "noconfig 部署架构规范，含 ECS 代理/热更 MITM 部署约定（注意 §17 Path Y 已废弃）"}
+{"file": ".trellis/tasks/06-27-brainstorm-align-openwrt-ipk-with-windows-and-reduce-size-to-30mb/prd.md", "reason": "本次任务 PRD，含已确认的需求清单和决策"}

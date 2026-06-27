@@ -21,6 +21,7 @@ This directory contains guidelines for backend development. Fill in each file wi
 | [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels, side-path isolation | Partial |
 | [Game Protocol](./game-protocol.md) | Wire protocol, auth tokens, frame format, handshake, SRS spectator | ✅ Done |
 | [Remote Access](./remote-access.md) | extractor + relay architecture, API contracts, cross-platform, three-mode E2E, hotspot deploy guide, bat rules, gotchas, ECS failover (Path Y), client-Lua patch discipline | ✅ Done |
+| [OpenWrt Deployment](./openwrt-deployment.md) | python3-light compatibility shim (logging/idna/requests), BusyBox-safe shell, nftables DoT/DoH block, gxb DNAT for DNS-cache bypass, procd + setsid watchdog, ipk GNU_FORMAT, reboot persistence checklist | ✅ Done |
 
 ---
 

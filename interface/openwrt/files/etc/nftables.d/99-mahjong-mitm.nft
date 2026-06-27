@@ -1,24 +1,57 @@
 # 99-mahjong-mitm.nft — DNS 劫持规则（OpenWrt 替换 Windows dns_divert.py）
 #
-# 游戏热更阶段会用硬编码 DNS（119.29.29.29 / 223.5.5.5）绕过系统 DNS。
-# Windows 端用 WinDivert 拦截这些包；OpenWrt 用 nftables redirect 把
-# LAN 段所有目的端口 53 的流量（无论目标 IP）强制重定向到本机 DNS 响应器，
-# 这样硬编码 DNS 也逃不掉。
-#
-# 响应器监听 5353（不抢 dnsmasq 的 53），故重定向到 :5353。
-# 我们的响应器只劫持热更域名，其余转发上游（223.5.5.5），保证手机正常上网。
+# 三层防御让手机的 DNS 一定经过我们：
+#  1. 把 LAN 所有 UDP/TCP :53 重定向到本机 :5353（我们的 DNS 响应器）
+#     —— 覆盖普通 DNS + 硬编码 8.8.8.8/119.29.29.29 等
+#  2. 阻断 DoT（DNS-over-TLS, TCP/UDP :853），强迫 Android Private DNS 回退到普通 DNS
+#  3. 阻断 DoH（DNS-over-HTTPS）到常见公共解析器的 :443，让浏览器/Android 私人 DNS 失败回退
+#  4. 阻断 LAN 内 IPv6 :53（手机若优选 IPv6 DNS 会绕过 ipv4 规则）
 #
 # 由 fw4 通过 /etc/nftables.d/ include 机制加载（OpenWrt 22.03+）。
-# init.d 在启用时调用 `fw4 reload`，停用时本规则随服务停止后 reload 清空。
+# init.d 启用服务时 `fw4 reload` 生效，停用时连本规则一起卸载（恢复正常 DNS）。
 #
-# 注意：这会劫持 LAN 上**所有**设备的 DNS。setup-period 临时用，
-# 手机改完 NetConf 后停掉本服务（init.d stop）即恢复正常 DNS。
+# 注意：会劫持 LAN 上**所有**设备的 DNS 解析。setup-period 临时用；
+# 改完 NetConf 手机切走后路由器执行 `init.d stop` 即恢复。
 
+# ── 1) DNS 53 重定向到 5353（NAT prerouting）─────────────────────
 chain mahjong_mitm_dns {
 	type nat hook prerouting priority dstnat - 5; policy accept;
 
-	# 来自 LAN 接口的 53 查询（含硬编码 DNS 目标）→ 本机 5353 响应器。
-	# 不处理路由器自身发起的回源查询（回源在 OUTPUT 之外，走 119.29.29.29 直连）。
+	# LAN 接口的 UDP/TCP 53 → 本机 5353。无论目标 IP（含硬编码 DNS）。
 	meta nfproto ipv4 iifname { "br-lan", "wlan0", "wlan1" } udp dport 53 redirect to :5353
 	meta nfproto ipv4 iifname { "br-lan", "wlan0", "wlan1" } tcp dport 53 redirect to :5353
+}
+
+# ── 2) DoT / DoH / IPv6-DNS 阻断（filter forward）──────────────
+# 用 reject 而不是 drop，让客户端立刻看到 connection refused 然后秒级回退到 UDP 53。
+# drop 会导致客户端等 SYN 超时（数十秒），影响游戏热更检查。
+chain mahjong_mitm_block_doh {
+	type filter hook forward priority -10; policy accept;
+
+	# DoT：所有 TCP 853 出去 → reject。Android Private DNS "自动" 模式会走这里。
+	meta nfproto ipv4 iifname { "br-lan", "wlan0", "wlan1" } tcp dport 853 reject with tcp reset
+	meta nfproto ipv4 iifname { "br-lan", "wlan0", "wlan1" } udp dport 853 reject
+
+	# DoH：常见公共解析器的 :443 → reject。让 Private DNS / 浏览器 DoH 失败回退。
+	#   Google: 8.8.8.8, 8.8.4.4, dns.google = 216.239.32-38.{223,...}
+	#   Cloudflare: 1.1.1.1, 1.0.0.1
+	#   Quad9: 9.9.9.9, 149.112.112.112
+	#   AliDNS: 223.5.5.5, 223.6.6.6 (国内 DoH/DoT)
+	#   DNSPod: 119.29.29.29 (国内)
+	#   阿里 IPv6/腾讯: 略，常见已覆盖
+	meta nfproto ipv4 iifname { "br-lan", "wlan0", "wlan1" } ip daddr {
+		8.8.8.8, 8.8.4.4,
+		216.239.32.0/19,
+		1.1.1.1, 1.0.0.1,
+		9.9.9.9, 149.112.112.112,
+		223.5.5.5, 223.6.6.6,
+		119.29.29.29, 119.28.28.28,
+		114.114.114.114, 114.114.115.115
+	} tcp dport 443 reject with tcp reset
+
+	# IPv6 DNS（直接禁掉 LAN→任何 IPv6 :53，强迫手机回 IPv4）
+	meta nfproto ipv6 iifname { "br-lan", "wlan0", "wlan1" } udp dport 53 reject
+	meta nfproto ipv6 iifname { "br-lan", "wlan0", "wlan1" } tcp dport 53 reject
+	meta nfproto ipv6 iifname { "br-lan", "wlan0", "wlan1" } tcp dport 853 reject with tcp reset
+	meta nfproto ipv6 iifname { "br-lan", "wlan0", "wlan1" } udp dport 853 reject
 }

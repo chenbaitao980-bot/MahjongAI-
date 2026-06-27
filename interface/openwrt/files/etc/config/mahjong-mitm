@@ -12,10 +12,10 @@ config mahjong-mitm 'main'
 	# 手机看到的本路由器 LAN 网关 IP。DNS 把热更域名解析到它，
 	# 手机的 HTTPS 热更请求据此落到本机 443。
 	# OpenWrt 默认 LAN 网关通常是 192.168.8.1（GL.iNet）或 192.168.1.1。
-	option host_ip '192.168.8.1'
+	option host_ip '192.168.6.1'
 
 	# ECS 公网 IP——写进 NetConf 的台州 5045 替换目标。
-	option ecs_ip '8.136.37.136'
+	option ecs_ip '8.136.32.137'
 
 	# HTTPS 监听端口（一般不动）
 	option tls_port '443'

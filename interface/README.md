@@ -19,8 +19,8 @@
 
 ```
 mahjong_mitm/        Python 包（setup_mitm + netconf_patch + manifest_forge）
-assets/game_base.apk 资源源（XXTEA key/SIGN/原始 luac 取自此；不入库）
-openwrt/             ipk 打包（Makefile 留作 SDK 路径 / build_ipk.sh 手工打包）
+assets/              构建期从 game_base.apk 提取的最小资产（NetConf.luac + project.manifest.json）
+openwrt/             ipk 打包（Makefile 留作 SDK 路径 / build_ipk.py 跨平台手工打包）
 pc-dev/run_pc.py     Windows 本地直测入口
 tests/               XXTEA 往返 + 全链路离线自测
 ```
@@ -108,7 +108,7 @@ winpack\build_win.bat              # 自动装依赖 + PyInstaller
 
 ### 配置（写死 + 旁路兜底）
 
-- **ECS IP 写死** `8.136.37.136`（阿里云）在 `mahjong_mitm/setup_mitm.py::DEFAULT_ECS_IP`。
+- **ECS IP 写死** `8.136.32.137`（阿里云）在 `mahjong_mitm/setup_mitm.py::DEFAULT_ECS_IP`。
   迁服改此处重编译即可。
 - 免重编译换服：exe 同目录放 `ecs.txt`（单行写新 IP）即覆盖（`windows/config.py` sidecar 兜底）。
 - 热点网关恒为 `192.168.137.1`（Windows ICS 硬编码），无需配置。
@@ -137,29 +137,44 @@ winpack\build_win.bat              # 自动装依赖 + PyInstaller
 
 ```bash
 cd interface/openwrt
-sh build_ipk.sh 1.0.0
-# 产物: dist/mahjong-mitm_1.0.0_all.ipk
+python3 build_ipk.py 1.0.7
+# 产物: dist/mahjong-mitm_1.0.7_all.ipk  （约 110 KB，不再包含 85 MB APK）
 ```
 
 ### 装到路由器
 
 ```bash
-scp dist/mahjong-mitm_1.0.0_all.ipk root@192.168.8.1:/tmp/
+scp dist/mahjong-mitm_1.0.7_all.ipk root@192.168.6.1:/tmp/
 
-ssh root@192.168.8.1
+ssh root@192.168.6.1
 opkg update
 opkg install python3-light python3-urllib python3-openssl kmod-nft-nat
-opkg install /tmp/mahjong-mitm_1.0.0_all.ipk
+opkg install --force-architecture /tmp/mahjong-mitm_1.0.7_all.ipk
 # postinst 自动: 生成自签证书 + enable + start
 ```
+
+> `--force-architecture` 是因为 ipk 标 `Architecture: all`，纯 Python 与目标架构无关；
+> 部分 OpenWrt 构建未在 `arch.conf` 把 `all` 列为允许架构，需此开关绕过。
+>
+> 若 opkg 仍报 `Cannot satisfy the following dependencies` 或 `unknown package`，
+> 改用纯 tar 解包兜底（功能等价）：
+> ```bash
+> cd /tmp && mkdir _pkg && cd _pkg && tar -xzf /tmp/mahjong-mitm_1.0.7_all.ipk && tar -xzf data.tar.gz -C /
+> chmod +x /etc/init.d/mahjong-mitm /usr/lib/mahjong-mitm/watchdog.sh
+> # 首次需手动建自签证书（postinst 未跑）
+> mkdir -p /etc/mahjong-mitm
+> openssl req -x509 -newkey rsa:2048 -nodes -keyout /etc/mahjong-mitm/mitm_key.pem \
+>     -out /etc/mahjong-mitm/mitm_cert.pem -days 3650 -subj '/CN=mitm'
+> /etc/init.d/mahjong-mitm enable && /etc/init.d/mahjong-mitm start
+> ```
 
 ### 配置
 
 编辑 `/etc/config/mahjong-mitm`：
 
 ```
-option host_ip '192.168.8.1'       # 本路由器 LAN 网关 IP（手机看到的网关）
-option ecs_ip  '8.136.37.136'      # ECS 公网 IP
+option host_ip '192.168.6.1'       # 本路由器 LAN 网关 IP（手机看到的网关）
+option ecs_ip  '8.136.32.137'      # ECS 公网 IP
 ```
 
 改完 `/etc/init.d/mahjong-mitm restart`。
@@ -171,17 +186,33 @@ option ecs_ip  '8.136.37.136'      # ECS 公网 IP
 3. 手机切任意网络（4G/其他 WiFi），以后都连 ECS
 4. **setup 完成后停掉服务恢复正常 DNS**：`/etc/init.d/mahjong-mitm stop`
 
+### 服务监督（watchdog）
+
+`init.d` 启动时通过 `setsid` 脱离父 shell 拉起 `/usr/lib/mahjong-mitm/watchdog.sh`：
+每 30 秒 probe `https://127.0.0.1:443/healthz`（自签证书 `--no-check-certificate`），
+连续 3 次失败自动 `/etc/init.d/mahjong-mitm restart`。
+- 日志：`logread -f | grep mahjong-mitm`
+- 停服务时会一并停止 watchdog。
+
+### OpenWrt python3-light 兼容性
+
+包 `__init__.py` 自带兼容 shim，自动应对常见 OpenWrt 精简包：
+- 缺 `logging` 模块 → 注入轻量 `print()` shim；
+- 缺 `idna` codec（`http.server.server_bind()` 会触发） → 把 `socket.getfqdn` 重定义为原样返回；
+- 缺 `requests` → `setup_mitm._origin_fetch` 自动回退到 `urllib.request`（带 `ssl.CERT_NONE` 上下文）。
+PC 上一切照常使用真模块，没有副作用。
+
 ## 依赖
 
 | 依赖 | 用途 | 装法 |
 |---|---|---|
-| python3-light | 运行时 | opkg |
-| python3-urllib + requests | 透明回源真实 CDN | opkg / pip |
+| python3-light | 运行时（含 stdlib 基础） | opkg |
+| python3-urllib | 回源用 `urllib.request`（无 requests 时） | opkg |
 | python3-openssl | TLS server | opkg |
 | kmod-nft-nat | DNS redirect 规则 | opkg |
 | openssl(CLI) | postinst 生成自签证书 | OpenWrt 自带 |
 
-> 证书由 postinst 用 openssl 预生成，故运行时**不需要** Python `cryptography`。
+> 运行时不依赖 Python `requests` / `cryptography`；证书由 postinst 用 openssl CLI 预生成。
 
 ## 边界（诚实声明）
 

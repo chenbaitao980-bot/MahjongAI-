@@ -35,7 +35,26 @@ echo "[1/5] staging data tree..."
 PROG_DIR="$DATA/usr/lib/$PKG"
 mkdir -p "$PROG_DIR/mahjong_mitm" "$PROG_DIR/assets"
 cp "$RUNTIME_ROOT"/mahjong_mitm/*.py "$PROG_DIR/mahjong_mitm/"
-cp "$RUNTIME_ROOT"/assets/game_base.apk "$PROG_DIR/assets/"
+
+# 构建期从 APK 提取最小资产（替代打包完整 85MB APK）
+APK_PATH="$RUNTIME_ROOT/assets/game_base.apk"
+if [ -f "$APK_PATH" ]; then
+    python3 -c "
+import zipfile, os
+apk = '$APK_PATH'
+out = '$PROG_DIR/assets'
+with zipfile.ZipFile(apk) as z:
+    netconf = z.read('assets/src/app/Config/NetConf.luac')
+    with open(os.path.join(out, 'NetConf.luac'), 'wb') as f:
+        f.write(netconf)
+    manifest = z.read('assets/res/GameHotUpdate3/Lobby/project_10001.manifest')
+    with open(os.path.join(out, 'project.manifest.json'), 'wb') as f:
+        f.write(manifest)
+    print(f'[extract] NetConf.luac {len(netconf)}B + project.manifest.json {len(manifest)}B')
+"
+else
+    echo "WARNING: $APK_PATH not found; ipk will require --apk at runtime"
+fi
 
 # 配置 / init.d / nftables 规则
 mkdir -p "$DATA/etc/init.d" "$DATA/etc/config" "$DATA/etc/nftables.d"

@@ -39,7 +39,8 @@ define Package/mahjong-mitm/install
 	$(INSTALL_DIR) $(1)/usr/lib/$(PKG_NAME)/mahjong_mitm
 	$(INSTALL_DATA) ./mahjong_mitm/*.py $(1)/usr/lib/$(PKG_NAME)/mahjong_mitm/
 	$(INSTALL_DIR) $(1)/usr/lib/$(PKG_NAME)/assets
-	$(INSTALL_DATA) ./assets/game_base.apk $(1)/usr/lib/$(PKG_NAME)/assets/
+	$(INSTALL_DATA) ./assets/NetConf.luac $(1)/usr/lib/$(PKG_NAME)/assets/
+	$(INSTALL_DATA) ./assets/project.manifest.json $(1)/usr/lib/$(PKG_NAME)/assets/
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./openwrt/files/etc/init.d/$(PKG_NAME) $(1)/etc/init.d/$(PKG_NAME)
 	$(INSTALL_DIR) $(1)/etc/config

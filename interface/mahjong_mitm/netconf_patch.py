@@ -491,6 +491,12 @@ def _extract_block(source: str, group_id: int, prefer_ip: str | None = None) -> 
     return out[0] if out else ""
 
 
+def patch_from_file(luac_path: str, ecs_ip: str, **kw) -> PatchResult:
+    with open(luac_path, "rb") as f:
+        raw = f.read()
+    return patch_netconf(raw, ecs_ip, **kw)
+
+
 def patch_from_apk(apk_path: str, ecs_ip: str, **kw) -> PatchResult:
     with zipfile.ZipFile(apk_path) as z:
         raw = z.read(APK_NETCONF_ENTRY)

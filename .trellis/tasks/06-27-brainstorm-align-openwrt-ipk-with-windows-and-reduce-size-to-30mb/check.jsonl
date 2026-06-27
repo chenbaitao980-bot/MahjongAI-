@@ -1,0 +1,2 @@
+{"file": "interface/README.md", "reason": "验收：安装步骤文档正确，ipk 体积描述准确"}
+{"file": ".trellis/spec/backend/remote-access.md", "reason": "验收：ECS 代理部署规范一致，无 Path Y 残留"}

@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 12
-- **Last Active**: 2026-06-26
+- **Total Sessions**: 13
+- **Last Active**: 2026-06-27
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~428 | Active |
+| `journal-1.md` | ~461 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 13 | 2026-06-27 | OpenWrt ipk 对齐 Windows MITM (110KB + python3-light 兼容 + 三层 DNS 劫持) | `ac83289` | `master` |
 | 12 | 2026-06-26 | MITM 服务稳定性排查 + 独立 watchdog 部署 | `78865c2` | `master` |
 | 11 | 2026-06-26 | ECS MITM 热更服务僵死修复：socket泄漏+origin fetch超时 | `744f0a7`, `7a67ac4` | `master` |
 | 10 | 2026-06-25 | noconfig 迁移华纳云 HK + 443 冲突排查 | `40cdfc3`, `bdec012` | `master` |

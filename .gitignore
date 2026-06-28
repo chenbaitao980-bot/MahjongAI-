@@ -25,6 +25,9 @@ models/*.yaml
 build/
 dist/
 
+# MITM 构建产物 — 不进 git
+interface/dist_rebuild/*.zip
+
 frida/*.so
 frida/*.xz
 frida/frida-server

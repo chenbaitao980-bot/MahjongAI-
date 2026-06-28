@@ -83,8 +83,12 @@ class User:
         self.presence_ttl_seconds = ONLINE_TTL_SECONDS
 
     def last_seen_ts(self) -> float:
-        """最近一次活跃时间戳：取实际数据推送与 presence 信号的较大者。无则返回 0。"""
-        return max(self.state_store.last_push_time or 0.0, self.presence_ts or 0.0)
+        """最近一次活跃时间戳：取实际数据推送与 presence 信号的较大者。
+        兜底到 updated_at（持久化字段，能在服务器重启后保留最后在线时间）。"""
+        ts = max(self.state_store.last_push_time or 0.0, self.presence_ts or 0.0)
+        if ts > 0:
+            return ts
+        return self.updated_at
 
     def is_online(self) -> bool:
         """判断用户是否在线。

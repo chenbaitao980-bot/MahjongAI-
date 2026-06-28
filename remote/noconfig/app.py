@@ -56,6 +56,7 @@ from pydantic import BaseModel
 
 from state_store import StateStore
 from user_store import user_store, User
+from account_store import account_store, Account
 
 _LOGGER = logging.getLogger("remote.noconfig.app")
 
@@ -85,6 +86,11 @@ def configure(cfg: dict, cfg_path: str = "") -> None:
     _cfg = cfg or {}
     _cfg_path = cfg_path or ""
 
+    # 先初始化持久化目录（账户 + 用户），确保后续写入可用
+    data_dir = _cfg.get("accounts_data_dir", "") or os.path.dirname(_cfg_path) if _cfg_path else _ROOT
+    account_store.set_data_dir(data_dir)
+    user_store.set_data_dir(data_dir)
+
     hs = _cfg.get("handshake_blob", "")
     at = _cfg.get("auth_token_12b", "")
     srs_sid = _cfg.get("srs_sessionid", "")
@@ -98,6 +104,7 @@ def configure(cfg: dict, cfg_path: str = "") -> None:
             "[NOCONFIG] 默认用户已预填持久化凭证: hs=%d bytes, auth=%d bytes, srs_sid=%s",
             len(hs) // 2, len(at) // 2, "有" if srs_sid else "无",
         )
+
 
 
 # ─── 请求模型 ────────────────────────────────────────────────────
@@ -146,6 +153,20 @@ class AdminLoginRequest(BaseModel):
     remember: bool = False
 
 
+class CreateAccountRequest(BaseModel):
+    username: str
+    password: str
+    description: str = ""
+    allowed_user_ids: list[str] = []
+
+
+class UpdateAccountRequest(BaseModel):
+    username: str | None = None
+    password: str | None = None
+    description: str | None = None
+    allowed_user_ids: list[str] | None = None
+
+
 # ─── 内部工具 ────────────────────────────────────────────────────
 
 
@@ -171,9 +192,16 @@ def _is_admin_configured() -> bool:
     return bool(_admin_username() and _admin_password())
 
 
-def _make_admin_cookie_value(username: str, ttl_seconds: int) -> str:
+def _make_admin_cookie_value(identity: str, role: str, ttl_seconds: int) -> str:
+    """创建 admin cookie 值
+
+    Args:
+        identity: 管理员用户名 或 账户 ID
+        role: "admin" 或 "account"
+        ttl_seconds: 有效期（秒）
+    """
     expires_at = int(time.time()) + ttl_seconds
-    payload = f"{username}|{expires_at}"
+    payload = f"{identity}|{role}|{expires_at}"
     signature = hmac.new(
         _admin_cookie_secret().encode("utf-8"),
         payload.encode("utf-8"),
@@ -182,14 +210,31 @@ def _make_admin_cookie_value(username: str, ttl_seconds: int) -> str:
     return base64.urlsafe_b64encode(f"{payload}|{signature}".encode("utf-8")).decode("ascii")
 
 
-def _read_admin_cookie(request: Request) -> Optional[str]:
+def _read_admin_cookie(request: Request) -> Optional[dict]:
+    """读取并验证 admin cookie
+
+    返回: {"id": str, "role": str} | None
+        role = "admin" | "account"
+    """
     raw = request.cookies.get(_ADMIN_AUTH_COOKIE)
     if not raw:
         return None
     try:
         decoded = base64.urlsafe_b64decode(raw.encode("ascii")).decode("utf-8")
-        username, expires_at_text, signature = decoded.split("|", 2)
-        payload = f"{username}|{expires_at_text}"
+        parts = decoded.split("|")
+
+        if len(parts) == 4:
+            # 新格式: identity|role|expires_at|signature
+            identity, role, expires_at_text, signature = parts
+            payload = f"{identity}|{role}|{expires_at_text}"
+        elif len(parts) == 3:
+            # 旧格式向后兼容: username|expires_at|signature → 视为 admin
+            identity, expires_at_text, signature = parts
+            role = "admin"
+            payload = f"{identity}|{expires_at_text}"
+        else:
+            return None
+
         expected_signature = hmac.new(
             _admin_cookie_secret().encode("utf-8"),
             payload.encode("utf-8"),
@@ -199,18 +244,17 @@ def _read_admin_cookie(request: Request) -> Optional[str]:
             return None
         if int(expires_at_text) < int(time.time()):
             return None
-        if not secrets.compare_digest(username, _admin_username()):
-            return None
-        return username
+        return {"id": identity, "role": role}
     except Exception:
         return None
 
 
-def _set_admin_cookie(response: JSONResponse | RedirectResponse, username: str, remember: bool) -> None:
+def _set_admin_cookie(response, identity: str, role: str, remember: bool) -> None:
+    """设置 admin cookie"""
     ttl_seconds = _ADMIN_REMEMBER_TTL_SECONDS if remember else _ADMIN_SESSION_TTL_SECONDS
     response.set_cookie(
         key=_ADMIN_AUTH_COOKIE,
-        value=_make_admin_cookie_value(username, ttl_seconds),
+        value=_make_admin_cookie_value(identity, role, ttl_seconds),
         max_age=ttl_seconds if remember else None,
         httponly=True,
         samesite="lax",
@@ -583,13 +627,29 @@ async def get_mode():
 # ─── Admin API ─────────────────────────────────────────────────
 
 @app.get("/api/users")
-async def get_users(token: str = Query(..., description="鉴权 token")):
-    """获取所有用户列表"""
+async def get_users(
+    token: str = Query(..., description="鉴权 token"),
+    request: Request = None,
+):
+    """获取所有用户列表（子账户登录时按权限过滤）"""
     _check_api_token(token)
+
+    users = user_store.get_all_users()
+
+    # 子账户过滤：检查 admin cookie 中的角色
+    identity = _read_admin_cookie(request) if request else None
+    if identity and identity["role"] == "account":
+        account = account_store.get_account(identity["id"])
+        if account and account.allowed_user_ids:
+            allowed = set(account.allowed_user_ids)
+            users = [u for u in users if u["user_id"] in allowed]
+        else:
+            users = []
+
     return {
         "status": "ok",
-        "users": user_store.get_all_users(),
-        "total": user_store.get_user_count(),
+        "users": users,
+        "total": len(users),
     }
 
 
@@ -597,12 +657,25 @@ async def get_users(token: str = Query(..., description="鉴权 token")):
 async def search_users(
     token: str = Query(..., description="鉴权 token"),
     q: str = Query(..., description="搜索关键词"),
+    request: Request = None,
 ):
-    """按名称搜索用户"""
+    """按名称搜索用户（子账户登录时按权限过滤）"""
     _check_api_token(token)
+
+    users = user_store.search_users(q)
+
+    identity = _read_admin_cookie(request) if request else None
+    if identity and identity["role"] == "account":
+        account = account_store.get_account(identity["id"])
+        if account and account.allowed_user_ids:
+            allowed = set(account.allowed_user_ids)
+            users = [u for u in users if u["user_id"] in allowed]
+        else:
+            users = []
+
     return {
         "status": "ok",
-        "users": user_store.search_users(q),
+        "users": users,
         "query": q,
     }
 
@@ -621,9 +694,11 @@ async def update_user(user_id: str, req: UpdateUserRequest, token: str = Query(.
 
 @app.delete("/api/users/{user_id}")
 async def delete_user(user_id: str, token: str = Query(..., description="鉴权 token")):
-    """删除用户"""
+    """删除用户，同时清理所有登录账户的授权列表"""
     _check_api_token(token)
     if user_store.remove_user(user_id):
+        # 从所有登录账户的授权列表中移除该 user_id
+        account_store.remove_user_from_all(user_id)
         return {"status": "ok", "message": f"用户 {user_id} 已删除"}
     raise HTTPException(status_code=404, detail="用户不存在")
 
@@ -632,20 +707,30 @@ async def delete_user(user_id: str, token: str = Query(..., description="鉴权 
 
 @app.post("/admin/login")
 async def admin_login(req: AdminLoginRequest):
+    """管理员或子账户登录"""
     if not _is_admin_configured():
         raise HTTPException(status_code=503, detail="admin login is not configured")
 
-    if not (
-        secrets.compare_digest(req.username, _admin_username())
-        and secrets.compare_digest(req.password, _admin_password())
-    ):
+    # Step 1: 尝试管理员登录（config 中的 admin_username/admin_password）
+    if secrets.compare_digest(req.username, _admin_username()):
+        if secrets.compare_digest(req.password, _admin_password()):
+            response = JSONResponse({"status": "ok", "username": req.username, "role": "admin"})
+            _set_admin_cookie(response, req.username, "admin", req.remember)
+            _LOGGER.info("[NOCONFIG] admin login success for user=%s remember=%s", req.username, req.remember)
+            return response
         _LOGGER.warning("[NOCONFIG] admin login failed for user=%s", req.username)
         raise HTTPException(status_code=401, detail="invalid username or password")
 
-    response = JSONResponse({"status": "ok", "username": req.username})
-    _set_admin_cookie(response, req.username, req.remember)
-    _LOGGER.info("[NOCONFIG] admin login success for user=%s remember=%s", req.username, req.remember)
-    return response
+    # Step 2: 尝试子账户登录（AccountStore）
+    account = account_store.authenticate(req.username, req.password)
+    if account is not None:
+        response = JSONResponse({"status": "ok", "username": account.username, "role": "account"})
+        _set_admin_cookie(response, account.id, "account", req.remember)
+        _LOGGER.info("[NOCONFIG] account login success: id=%s user=%s", account.id, req.username)
+        return response
+
+    _LOGGER.warning("[NOCONFIG] login failed for user=%s", req.username)
+    raise HTTPException(status_code=401, detail="invalid username or password")
 
 
 @app.get("/admin/logout")
@@ -657,15 +742,35 @@ async def admin_logout():
 
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_page(request: Request):
-    """后台管理页面 — 用户列表 + 搜索 + 手牌展示"""
+    """后台管理页面 — 用户列表 + 搜索 + 手牌展示（角色感知）"""
     if not _is_admin_configured():
         return HTMLResponse(content=_build_admin_login_page(config_error="未配置后台账号密码"), status_code=503)
 
-    username = _read_admin_cookie(request)
-    if not username:
+    identity = _read_admin_cookie(request)
+    if not identity:
         return HTMLResponse(content=_build_admin_login_page())
 
-    return HTMLResponse(content=_build_admin_page(username=username, api_token=_cfg.get("api_token", "")))
+    role = identity["role"]
+    allowed_user_ids = None
+    account_display_name = identity["id"]
+
+    if role == "account":
+        account = account_store.get_account(identity["id"])
+        if account is None:
+            # 账户已被删除，清除 cookie 并提示
+            resp = RedirectResponse(url="/admin", status_code=303)
+            _clear_admin_cookie(resp)
+            return resp
+        allowed_user_ids = account.allowed_user_ids
+        account_display_name = account.username
+
+    return HTMLResponse(content=_build_admin_page(
+        identity_id=identity["id"],
+        display_name=account_display_name,
+        role=role,
+        api_token=_cfg.get("api_token", ""),
+        allowed_user_ids=allowed_user_ids,
+    ))
 
 
 def _build_admin_login_page(config_error: str = "") -> str:
@@ -751,10 +856,14 @@ document.getElementById('password').addEventListener('keydown', (e) => {{
 </html>"""
 
 
-def _build_admin_page(username: str, api_token: str) -> str:
-    """构建后台管理页面 HTML"""
-    username_json = json.dumps(username, ensure_ascii=False)
+def _build_admin_page(identity_id: str, display_name: str, role: str,
+                      api_token: str, allowed_user_ids: list[str] | None = None) -> str:
+    """构建后台管理页面 HTML（角色感知 + 标签页）"""
+    display_name_json = json.dumps(display_name, ensure_ascii=False)
     api_token_json = json.dumps(api_token)
+    role_json = json.dumps(role)
+    allowed_json = json.dumps(allowed_user_ids or [])
+    is_admin = json.dumps(role == "admin")
     return f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -762,13 +871,17 @@ def _build_admin_page(username: str, api_token: str) -> str:
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MahjongAI 多用户管理</title>
 <style>
-:root {{ --bg: #0f1115; --panel: #1a1d24; --panel2: #232733; --txt: #e8eaed; --muted: #9aa0ab; --line: #333947; --accent: #f5b301; --man: #c0392b; --pin: #2563c9; --sou: #1e9e5a; }}
+:root {{ --bg: #0f1115; --panel: #1a1d24; --panel2: #232733; --txt: #e8eaed; --muted: #9aa0ab; --line: #333947; --accent: #f5b301; --danger: #ef4444; --green: #1e9e5a; }}
 * {{ box-sizing: border-box; }}
 body {{ margin: 0; background: var(--bg); color: var(--txt); font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; }}
-header {{ display: flex; align-items: center; gap: 12px; padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--line); }}
-header h1 {{ font-size: 18px; margin: 0; font-weight: 600; }}
-header .stats {{ margin-left: auto; font-size: 13px; color: var(--muted); }}
-.container {{ display: flex; height: calc(100vh - 60px); }}
+header {{ display: flex; align-items: center; gap: 12px; padding: 8px 20px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; }}
+header h1 {{ font-size: 16px; margin: 0; font-weight: 600; }}
+header .stats {{ font-size: 12px; color: var(--muted); margin-left: auto; }}
+.tabs {{ display: flex; gap: 0; margin-top: 0; }}
+.tab {{ padding: 8px 18px; cursor: pointer; font-size: 13px; border-bottom: 2px solid transparent; color: var(--muted); user-select: none; }}
+.tab.active {{ color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }}
+.tab:hover {{ color: var(--txt); }}
+.container {{ display: flex; height: calc(100vh - 52px); }}
 .sidebar {{ width: 320px; min-width: 320px; border-right: 1px solid var(--line); display: flex; flex-direction: column; }}
 .search-box {{ padding: 12px 16px; border-bottom: 1px solid var(--line); }}
 .search-box input {{ width: 100%; background: var(--panel2); border: 1px solid var(--line); color: var(--txt); padding: 8px 12px; border-radius: 6px; font-size: 13px; }}
@@ -779,73 +892,175 @@ header .stats {{ margin-left: auto; font-size: 13px; color: var(--muted); }}
 .user-item .name {{ font-weight: 600; font-size: 14px; }}
 .user-item .id {{ font-size: 12px; color: var(--muted); }}
 .user-item .status {{ font-size: 11px; margin-top: 4px; }}
-.user-item .status.online {{ color: var(--sou); }}
+.user-item .status.online {{ color: var(--green); }}
 .user-item .status.offline {{ color: var(--muted); }}
-.main {{ flex: 1; padding: 20px; overflow-y: auto; }}
+.main {{ flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: column; }}
 .toolbar {{ padding: 8px 16px; background: var(--panel2); border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 8px; }}
 .toolbar .meta {{ font-size: 12px; color: var(--muted); }}
 .toolbar .actions {{ display: flex; gap: 8px; }}
 .toolbar button, .toolbar a {{ background: var(--accent); color: #000; border: none; padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; text-decoration: none; }}
-iframe {{ width: 100%; height: calc(100vh - 140px); border: none; }}
+iframe {{ width: 100%; flex: 1; border: none; }}
+
+/* ── 账户管理页面 ── */
+.acct-page {{ display: none; flex-direction: column; height: 100%; padding: 20px; overflow-y: auto; }}
+.acct-page.active {{ display: flex; }}
+.user-view {{ display: flex; flex-direction: column; height: 100%; }}
+.user-view.hidden {{ display: none; }}
+.acct-toolbar {{ display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }}
+.acct-toolbar h2 {{ margin: 0; font-size: 16px; }}
+.btn-primary {{ background: var(--accent); color: #000; border: none; padding: 8px 18px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; }}
+.btn-danger {{ background: var(--danger); color: #fff; border: none; padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }}
+table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
+th, td {{ text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); }}
+th {{ color: var(--muted); font-weight: 600; font-size: 12px; }}
+td {{ color: var(--txt); }}
+.acct-actions {{ display: flex; gap: 6px; }}
+.acct-actions button {{ background: var(--panel2); color: var(--txt); border: 1px solid var(--line); padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; }}
+.acct-actions button:hover {{ border-color: var(--accent); }}
+
+/* ── 模态对话框 ── */
+.modal-overlay {{ display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; align-items: center; justify-content: center; }}
+.modal-overlay.active {{ display: flex; }}
+.modal {{ background: var(--panel); border: 1px solid var(--line); border-radius: 12px; width: min(520px, 90vw); max-height: 80vh; overflow-y: auto; padding: 24px; }}
+.modal h3 {{ margin: 0 0 16px; font-size: 16px; }}
+.modal label {{ display: block; margin: 12px 0 4px; font-size: 12px; color: var(--muted); }}
+.modal input[type="text"], .modal input[type="password"] {{ width: 100%; background: var(--panel2); border: 1px solid var(--line); color: var(--txt); padding: 8px 12px; border-radius: 6px; font-size: 13px; }}
+.modal .btn-row {{ display: flex; gap: 8px; margin-top: 18px; justify-content: flex-end; }}
+.modal .btn-row button {{ padding: 8px 18px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; border: none; }}
+.modal .btn-row .btn-cancel {{ background: var(--panel2); color: var(--muted); }}
+.user-checkbox-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 4px; margin: 8px 0; max-height: 200px; overflow-y: auto; padding: 8px; background: var(--panel2); border-radius: 6px; border: 1px solid var(--line); }}
+.user-checkbox-grid label {{ display: flex; align-items: center; gap: 6px; margin: 2px 0; font-size: 12px; cursor: pointer; }}
+.user-checkbox-grid input[type="checkbox"] {{ accent-color: var(--accent); }}
+.empty {{ padding: 40px; text-align: center; color: var(--muted); font-size: 13px; }}
 </style>
 </head>
 <body>
+
 <header>
-  <h1>🀄 MahjongAI 多用户管理</h1>
-  <span class="stats">总用户: <b id="total-users">0</b> | 在线: <b id="online-users">0</b></span>
+  <h1>🀄 MahjongAI 管理</h1>
+  <div class="tabs" id="tab-bar">
+    <div class="tab active" data-tab="users" onclick="switchTab('users')">👤 用户查看</div>
+    <div class="tab" data-tab="accounts" onclick="switchTab('accounts')" id="tab-accounts">🔑 账户管理</div>
+  </div>
+  <span class="stats" id="stats-bar">总用户: <b id="total-users">0</b> | 在线: <b id="online-users">0</b></span>
 </header>
+
 <div class="container">
-  <div class="sidebar">
+  <!-- 左侧：用户列表（两个标签页共用 UI，但账户管理页隐藏侧栏） -->
+  <div class="sidebar" id="user-sidebar">
     <div class="search-box">
       <input id="search-input" placeholder="搜索用户名称..." autocomplete="off">
     </div>
-    <div class="user-list" id="user-list">
-      <!-- 用户列表由 JS 动态填充 -->
+    <div class="user-list" id="user-list"></div>
+  </div>
+
+  <!-- 右侧主区域 -->
+  <div class="main">
+    <!-- Tab 1: 用户查看 -->
+    <div class="user-view active" id="view-users">
+      <div class="toolbar">
+        <div class="meta">已登录: <span id="current-admin"></span></div>
+        <div class="actions">
+          <button onclick="refreshUsers()">刷新</button>
+          <a href="/admin/logout">退出登录</a>
+        </div>
+      </div>
+      <iframe id="hand-frame" src="about:blank"></iframe>
+    </div>
+
+    <!-- Tab 2: 账户管理 -->
+    <div class="acct-page" id="view-accounts">
+      <div class="acct-toolbar">
+        <h2>登录账户管理</h2>
+        <button class="btn-primary" onclick="showAddAccountModal()">+ 添加账户</button>
+      </div>
+      <div id="acct-table-wrap">
+        <table>
+          <thead><tr>
+            <th>用户名</th><th>描述</th><th>授权用户数</th><th>创建时间</th><th>操作</th>
+          </tr></thead>
+          <tbody id="acct-tbody"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="acct-empty">暂无登录账户，点击上方按钮添加</div>
     </div>
   </div>
-  <div class="main">
-    <div class="toolbar">
-      <div class="meta">已登录账号: <span id="current-admin"></span></div>
-      <div class="actions">
-        <button onclick="refreshUsers()">刷新</button>
-        <a href="/admin/logout">退出登录</a>
-      </div>
+</div>
+
+<!-- 模态对话框：添加/编辑账户 -->
+<div class="modal-overlay" id="acct-modal">
+  <div class="modal">
+    <h3 id="modal-title">添加登录账户</h3>
+    <input type="hidden" id="acct-edit-id">
+    <label for="acct-username">用户名</label>
+    <input id="acct-username" type="text" placeholder="输入登录用户名" autocomplete="off">
+    <label for="acct-password">密码 <span style="color:var(--muted);font-size:11px;">（编辑时留空则不修改）</span></label>
+    <input id="acct-password" type="password" placeholder="输入密码" autocomplete="new-password">
+    <label for="acct-desc">描述（可选）</label>
+    <input id="acct-desc" type="text" placeholder="例如：观察员A">
+    <label>授权查看的用户 <span style="color:var(--muted);font-size:11px;">（勾选该账户可看到哪些手机用户）</span></label>
+    <div class="user-checkbox-grid" id="acct-user-checkboxes"></div>
+    <div class="btn-row">
+      <button class="btn-cancel" onclick="closeModal()">取消</button>
+      <button class="btn-primary" onclick="saveAccount()">保存</button>
     </div>
-    <iframe id="hand-frame" src="about:blank"></iframe>
   </div>
 </div>
 
 <script>
-let currentUserId = null;
 const apiToken = {api_token_json};
-document.getElementById('current-admin').textContent = {username_json};
+const role = {role_json};
+const allowedIds = {allowed_json};
+const isAdmin = {is_admin};
+let currentUserId = null;
 
+document.getElementById('current-admin').textContent = {display_name_json};
+
+// ── 角色控制 ──
+if (!isAdmin) {{
+  document.getElementById('tab-accounts').style.display = 'none';
+  document.getElementById('stats-bar').style.display = 'none';
+}}
+
+// ── Tab 切换 ──
+let currentTab = 'users';
+function switchTab(tab) {{
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  document.getElementById('view-users').classList.toggle('hidden', tab !== 'users');
+  document.getElementById('view-accounts').classList.toggle('active', tab === 'accounts');
+  document.getElementById('user-sidebar').style.display = tab === 'accounts' ? 'none' : '';
+  document.getElementById('stats-bar').style.display = tab !== 'users' ? 'none' : '';
+  if (tab === 'accounts' && isAdmin) refreshAccounts();
+}}
+
+// ── 用户列表（同原有功能，增加子账户过滤） ──
 document.getElementById('search-input').addEventListener('input', (e) => {{
   const q = e.target.value.trim();
-  if (q) {{
-    searchUsers(q);
-  }} else {{
-    refreshUsers();
-  }}
+  if (q) searchUsers(q); else refreshUsers();
 }});
 
 async function refreshUsers() {{
   if (!apiToken) return;
   try {{
     const r = await fetch('/api/users?token=' + encodeURIComponent(apiToken));
-    if (!r.ok) {{ console.error('获取用户列表失败:', r.status); return; }}
+    if (!r.ok) return;
     const data = await r.json();
-    renderUserList(data.users || []);
+    let users = data.users || [];
+    // 子账户过滤
+    if (!isAdmin && allowedIds.length) {{
+      users = users.filter(u => allowedIds.includes(u.user_id));
+    }}
+    renderUserList(users);
     if (!currentUserId) {{
-      const preferred = (data.users || []).find(u => u.is_online && u.user_id !== 'default')
-        || (data.users || []).find(u => u.is_online)
-        || (data.users || [])[0];
+      const preferred = users.find(u => u.is_online && u.user_id !== 'default')
+        || users.find(u => u.is_online)
+        || users[0];
       if (preferred) selectUser(preferred.user_id);
     }}
-    document.getElementById('total-users').textContent = data.total || 0;
-    const online = (data.users || []).filter(u => u.is_online).length;
-    document.getElementById('online-users').textContent = online;
-  }} catch (e) {{ console.error('刷新用户失败:', e); }}
+    document.getElementById('total-users').textContent = users.length;
+    document.getElementById('online-users').textContent = users.filter(u => u.is_online).length;
+  }} catch(e) {{ console.error(e); }}
 }}
 
 async function searchUsers(q) {{
@@ -854,14 +1069,18 @@ async function searchUsers(q) {{
     const r = await fetch('/api/users/search?token=' + encodeURIComponent(apiToken) + '&q=' + encodeURIComponent(q));
     if (!r.ok) return;
     const data = await r.json();
-    renderUserList(data.users || []);
-  }} catch (e) {{ console.error('搜索用户失败:', e); }}
+    let users = data.users || [];
+    if (!isAdmin && allowedIds.length) {{
+      users = users.filter(u => allowedIds.includes(u.user_id));
+    }}
+    renderUserList(users);
+  }} catch(e) {{ console.error(e); }}
 }}
 
 function renderUserList(users) {{
-  const container = document.getElementById('user-list');
-  if (!users.length) {{ container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px;">暂无用户</div>'; return; }}
-  container.innerHTML = users.map(u => `
+  const el = document.getElementById('user-list');
+  if (!users.length) {{ el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px;">暂无用户</div>'; return; }}
+  el.innerHTML = users.map(u => `
     <div class="user-item ${{currentUserId === u.user_id ? 'active' : ''}}" data-id="${{u.user_id}}" onclick="selectUser('${{u.user_id}}')">
       <div class="name">${{escapeHtml(u.name || u.user_id)}}</div>
       <div class="id">ID: ${{escapeHtml(u.user_id)}}</div>
@@ -885,8 +1104,7 @@ function selectUser(userId) {{
   currentUserId = userId;
   document.querySelectorAll('.user-item').forEach(el => el.classList.remove('active'));
   document.querySelector('.user-item[data-id="' + userId + '"]')?.classList.add('active');
-  const frame = document.getElementById('hand-frame');
-  frame.src = '/static/index.html?token=' + encodeURIComponent(apiToken) + '&user_id=' + encodeURIComponent(userId) + '&v=' + Date.now();
+  document.getElementById('hand-frame').src = '/static/index.html?token=' + encodeURIComponent(apiToken) + '&user_id=' + encodeURIComponent(userId) + '&v=' + Date.now();
 }}
 
 function escapeHtml(text) {{
@@ -897,9 +1115,232 @@ function escapeHtml(text) {{
 
 setInterval(refreshUsers, 5000);
 refreshUsers();
+
+// ── 账户管理 CRUD ──
+async function refreshAccounts() {{
+  if (!isAdmin) return;
+  try {{
+    const r = await fetch('/api/accounts?token=' + encodeURIComponent(apiToken));
+    if (!r.ok) return;
+    const data = await r.json();
+    const accounts = data.accounts || [];
+    const tbody = document.getElementById('acct-tbody');
+    const empty = document.getElementById('acct-empty');
+    if (!accounts.length) {{
+      tbody.innerHTML = '';
+      empty.style.display = '';
+      return;
+    }}
+    empty.style.display = 'none';
+    tbody.innerHTML = accounts.map(a => `
+      <tr>
+        <td>${{escapeHtml(a.username)}}</td>
+        <td>${{escapeHtml(a.description || '-')}}</td>
+        <td>${{(a.allowed_user_ids || []).length}}</td>
+        <td>${{formatTime(a.created_at)}}</td>
+        <td class="acct-actions">
+          <button onclick="showEditAccountModal('${{a.id}}')">编辑</button>
+          <button onclick="deleteAccount('${{a.id}}')" style="color:var(--danger);">删除</button>
+        </td>
+      </tr>
+    `).join('');
+  }} catch(e) {{ console.error('加载账户失败:', e); }}
+}}
+
+function formatTime(ts) {{
+  if (!ts) return '-';
+  const d = new Date(ts * 1000);
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}}
+
+async function loadUserCheckboxes(selectedIds) {{
+  try {{
+    const r = await fetch('/api/users?token=' + encodeURIComponent(apiToken));
+    if (!r.ok) return;
+    const data = await r.json();
+    const users = data.users || [];
+    const grid = document.getElementById('acct-user-checkboxes');
+    const sel = new Set(selectedIds || []);
+    if (!users.length) {{
+      grid.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px;">暂无手机用户</div>';
+      return;
+    }}
+    grid.innerHTML = users.map(u => `
+      <label><input type="checkbox" value="${{u.user_id}}" ${{sel.has(u.user_id) ? 'checked' : ''}}>
+        ${{escapeHtml(u.name || u.user_id)}}</label>
+    `).join('');
+  }} catch(e) {{ console.error('加载用户列表失败:', e); }}
+}}
+
+function showAddAccountModal() {{
+  document.getElementById('modal-title').textContent = '添加登录账户';
+  document.getElementById('acct-edit-id').value = '';
+  document.getElementById('acct-username').value = '';
+  document.getElementById('acct-password').value = '';
+  document.getElementById('acct-password').placeholder = '输入密码';
+  document.getElementById('acct-desc').value = '';
+  loadUserCheckboxes([]);
+  document.getElementById('acct-modal').classList.add('active');
+}}
+
+function showEditAccountModal(accountId) {{
+  document.getElementById('modal-title').textContent = '编辑登录账户';
+  document.getElementById('acct-edit-id').value = accountId;
+  document.getElementById('acct-password').value = '';
+  document.getElementById('acct-password').placeholder = '留空则不修改密码';
+
+  // 获取账户数据填充表单
+  fetch('/api/accounts?token=' + encodeURIComponent(apiToken))
+    .then(r => r.json())
+    .then(data => {{
+      const acct = (data.accounts || []).find(a => a.id === accountId);
+      if (!acct) return;
+      document.getElementById('acct-username').value = acct.username || '';
+      document.getElementById('acct-desc').value = acct.description || '';
+      loadUserCheckboxes(acct.allowed_user_ids || []);
+    }})
+    .catch(e => console.error(e));
+
+  document.getElementById('acct-modal').classList.add('active');
+}}
+
+function closeModal() {{
+  document.getElementById('acct-modal').classList.remove('active');
+}}
+
+function saveAccount() {{
+  const editId = document.getElementById('acct-edit-id').value;
+  const username = document.getElementById('acct-username').value.trim();
+  const password = document.getElementById('acct-password').value;
+  const description = document.getElementById('acct-desc').value.trim();
+  const checkboxes = document.querySelectorAll('#acct-user-checkboxes input[type="checkbox"]:checked');
+  const allowedIds = Array.from(checkboxes).map(cb => cb.value);
+
+  if (!username) {{ alert('请输入用户名'); return; }}
+
+  const body = {{ username: username, description: description, allowed_user_ids: allowedIds }};
+  if (password) body.password = password;
+
+  const url = editId
+    ? '/api/accounts/' + encodeURIComponent(editId) + '?token=' + encodeURIComponent(apiToken)
+    : '/api/accounts?token=' + encodeURIComponent(apiToken);
+  const method = editId ? 'PUT' : 'POST';
+
+  fetch(url, {{
+    method: method,
+    headers: {{ 'Content-Type': 'application/json' }},
+    body: JSON.stringify(body),
+  }})
+  .then(r => r.json())
+  .then(data => {{
+    if (data.status === 'ok') {{
+      closeModal();
+      refreshAccounts();
+    }} else {{
+      alert(data.detail || '操作失败');
+    }}
+  }})
+  .catch(e => {{ alert('网络错误'); console.error(e); }});
+}}
+
+async function deleteAccount(accountId) {{
+  if (!confirm('确定要删除该登录账户吗？此操作不可撤销。')) return;
+  try {{
+    const r = await fetch('/api/accounts/' + encodeURIComponent(accountId) + '?token=' + encodeURIComponent(apiToken), {{
+      method: 'DELETE',
+    }});
+    const data = await r.json();
+    if (r.ok) {{
+      refreshAccounts();
+    }} else {{
+      alert(data.detail || '删除失败');
+    }}
+  }} catch(e) {{ alert('网络错误'); console.error(e); }}
+}}
+
+// 如果管理员登录，预加载账户数据
+if (isAdmin) {{ setTimeout(refreshAccounts, 1000); }}
 </script>
 </body>
 </html>"""
+
+
+# ─── Account Management API ─────────────────────────────────────
+
+
+@app.get("/api/accounts")
+async def list_accounts(token: str = Query(..., description="鉴权 token")):
+    """获取所有登录账户列表"""
+    _check_api_token(token)
+    return {"status": "ok", "accounts": account_store.list_accounts()}
+
+
+@app.post("/api/accounts")
+async def create_account(req: CreateAccountRequest, token: str = Query(..., description="鉴权 token")):
+    """创建登录账户"""
+    _check_api_token(token)
+
+    if not req.username.strip():
+        raise HTTPException(status_code=400, detail="用户名不能为空")
+    if not req.password:
+        raise HTTPException(status_code=400, detail="密码不能为空")
+
+    existing = account_store.get_account_by_username(req.username.strip())
+    if existing is not None:
+        raise HTTPException(status_code=409, detail="用户名已存在")
+    if secrets.compare_digest(req.username.strip(), _admin_username()):
+        raise HTTPException(status_code=409, detail="用户名与管理员账号冲突")
+
+    account = account_store.add_account(
+        username=req.username.strip(),
+        password=req.password,
+        description=req.description.strip(),
+        allowed_user_ids=req.allowed_user_ids,
+    )
+    _LOGGER.info("[NOCONFIG] 管理员创建了登录账户: %s", account.id)
+    return {"status": "ok", "account": account.to_safe_dict()}
+
+
+@app.put("/api/accounts/{account_id}")
+async def update_account(
+    account_id: str,
+    req: UpdateAccountRequest,
+    token: str = Query(..., description="鉴权 token"),
+):
+    """编辑登录账户"""
+    _check_api_token(token)
+
+    existing = account_store.get_account(account_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="账户不存在")
+
+    if req.username is not None and req.username.strip() != existing.username:
+        conflict = account_store.get_account_by_username(req.username.strip())
+        if conflict is not None and conflict.id != account_id:
+            raise HTTPException(status_code=409, detail="用户名已被使用")
+        if secrets.compare_digest(req.username.strip(), _admin_username()):
+            raise HTTPException(status_code=409, detail="用户名与管理员账号冲突")
+
+    account = account_store.update_account(
+        account_id=account_id,
+        username=req.username.strip() if req.username is not None else None,
+        password=req.password if req.password else None,
+        description=req.description,
+        allowed_user_ids=req.allowed_user_ids,
+    )
+    _LOGGER.info("[NOCONFIG] 管理员更新了登录账户: %s", account_id)
+    return {"status": "ok", "account": account.to_safe_dict()}
+
+
+@app.delete("/api/accounts/{account_id}")
+async def delete_account(account_id: str, token: str = Query(..., description="鉴权 token")):
+    """删除登录账户"""
+    _check_api_token(token)
+
+    if account_store.delete_account(account_id):
+        _LOGGER.info("[NOCONFIG] 管理员删除了登录账户: %s", account_id)
+        return {"status": "ok", "message": f"账户 {account_id} 已删除"}
+    raise HTTPException(status_code=404, detail="账户不存在")
 
 
 # ─── Static Files ──────────────────────────────────────────────
